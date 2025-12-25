@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { ToastProvider } from './contexts/ToastContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import DashboardLayout from './components/dashboard/DashboardLayout'
 
@@ -15,17 +16,24 @@ import Expenses from './pages/Expenses'
 import Calculator from './pages/Calculator'
 import Goals from './pages/Goals'
 import Reports from './pages/Reports'
+import ComprehensiveReports from './pages/ComprehensiveReports'
 import Budget from './pages/Budget'
 import Settings from './pages/Settings'
 import Subscriptions from './pages/Subscriptions'
 import NetWorth from './pages/NetWorth'
+import Lending from './pages/Lending'
+import BillReminders from './pages/BillReminders'
+import Accounts from './pages/Accounts'
+import AccountHistory from './pages/AccountHistory'
+import SavingsInvestments from './pages/SavingsInvestments'
 
 function App() {
   return (
     <Router>
       <ThemeProvider>
-        <AuthProvider>
-          <Routes>
+        <ToastProvider>
+          <AuthProvider>
+            <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
@@ -92,6 +100,16 @@ function App() {
               }
             />
             <Route
+              path="/reports/comprehensive"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <ComprehensiveReports />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/budget"
               element={
                 <ProtectedRoute>
@@ -131,14 +149,65 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/lending"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <Lending />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/bills"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <BillReminders />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/accounts"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <Accounts />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/account-history"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <AccountHistory />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/savings-investments"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <SavingsInvestments />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
 
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
             {/* 404 redirect */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </AuthProvider>
+            </Routes>
+          </AuthProvider>
+        </ToastProvider>
       </ThemeProvider>
     </Router>
   )

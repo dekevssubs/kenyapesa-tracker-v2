@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
-import { 
-  calculateNetSalary, 
+import {
+  calculateNetSalary,
   formatCurrency,
   TAX_BANDS,
   PERSONAL_RELIEF,
@@ -14,6 +15,7 @@ import { Calculator as CalcIcon, Info, Save, Download, Eye, EyeOff } from 'lucid
 
 export default function Calculator() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [grossSalary, setGrossSalary] = useState('')
   const [result, setResult] = useState(null)
   const [showBreakdown, setShowBreakdown] = useState(false)
@@ -22,7 +24,7 @@ export default function Calculator() {
 
   const handleCalculate = () => {
     if (!grossSalary || parseFloat(grossSalary) <= 0) {
-      alert('Please enter a valid gross salary')
+      showToast('Validation Error', 'Please enter a valid gross salary', 'warning')
       return
     }
 
@@ -151,24 +153,24 @@ ${new Date().toLocaleString('en-KE')}
       {/* Header */}
       <div className="card">
         <div className="flex items-center space-x-3 mb-4">
-          <div className="bg-blue-100 rounded-lg p-3">
-            <CalcIcon className="h-8 w-8 text-blue-600" />
+          <div className="bg-blue-100 dark:bg-blue-900/30 rounded-lg p-3">
+            <CalcIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Salary Calculator</h2>
-            <p className="text-sm text-gray-600">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Salary Calculator</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               Calculate your net salary with accurate KRA deductions
             </p>
           </div>
         </div>
 
         {/* Info Box */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
           <div className="flex items-start space-x-3">
-            <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-            <div className="text-sm text-blue-900">
+            <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-blue-900 dark:text-blue-100">
               <p className="font-semibold mb-1">2024/2025 Tax Rates Applied:</p>
-              <ul className="list-disc list-inside space-y-1 text-blue-800">
+              <ul className="list-disc list-inside space-y-1 text-blue-800 dark:text-blue-200">
                 <li>NSSF: KES 1,080 (fixed)</li>
                 <li>Housing Levy: 1.5% of gross salary</li>
                 <li>SHIF: 2.75% of gross salary</li>
@@ -218,109 +220,109 @@ ${new Date().toLocaleString('en-KE')}
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="card">
-              <p className="text-sm text-gray-600 mb-1">Gross Salary</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(result.grossSalary)}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Gross Salary</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(result.grossSalary)}</p>
             </div>
             <div className="card">
-              <p className="text-sm text-gray-600 mb-1">Total Deductions</p>
-              <p className="text-2xl font-bold text-red-600">{formatCurrency(result.totalDeductions)}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Deductions</p>
+              <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(result.totalDeductions)}</p>
             </div>
             <div className="card">
-              <p className="text-sm text-gray-600 mb-1">Net Salary</p>
-              <p className="text-2xl font-bold text-green-600">{formatCurrency(result.netSalary)}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Net Salary</p>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(result.netSalary)}</p>
             </div>
           </div>
 
           {/* Deductions Breakdown */}
           <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
               Statutory Deductions Breakdown
             </h3>
 
             <div className="space-y-3">
               {/* NSSF */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div>
-                  <p className="font-medium text-gray-900">NSSF</p>
-                  <p className="text-xs text-gray-600">Fixed monthly contribution</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">NSSF</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Fixed monthly contribution</p>
                 </div>
-                <p className="text-lg font-semibold text-gray-900">{formatCurrency(result.nssf)}</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(result.nssf)}</p>
               </div>
 
               {/* Housing Levy */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div>
-                  <p className="font-medium text-gray-900">Housing Levy</p>
-                  <p className="text-xs text-gray-600">1.5% of gross salary</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">Housing Levy</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">1.5% of gross salary</p>
                 </div>
-                <p className="text-lg font-semibold text-gray-900">{formatCurrency(result.housingLevy)}</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(result.housingLevy)}</p>
               </div>
 
               {/* SHIF */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div>
-                  <p className="font-medium text-gray-900">SHIF (Social Health Insurance)</p>
-                  <p className="text-xs text-gray-600">2.75% of gross salary</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">SHIF (Social Health Insurance)</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">2.75% of gross salary</p>
                 </div>
-                <p className="text-lg font-semibold text-gray-900">{formatCurrency(result.shif)}</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(result.shif)}</p>
               </div>
 
               {/* Taxable Income */}
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
                 <div>
-                  <p className="font-medium text-gray-900">Taxable Income</p>
-                  <p className="text-xs text-gray-600">After NSSF & Housing Levy</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">Taxable Income</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">After NSSF & Housing Levy</p>
                 </div>
-                <p className="text-lg font-semibold text-blue-600">{formatCurrency(result.taxableIncome)}</p>
+                <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(result.taxableIncome)}</p>
               </div>
 
               {/* PAYE */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="font-medium text-gray-900">PAYE (Income Tax)</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">PAYE (Income Tax)</p>
                     <button
                       onClick={() => setShowBreakdown(!showBreakdown)}
-                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center"
                     >
                       {showBreakdown ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
                       {showBreakdown ? 'Hide' : 'Show'} breakdown
                     </button>
                   </div>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
                     Tax before relief: {formatCurrency(result.paye + result.personalRelief)}
                     <br />
                     Personal relief: -{formatCurrency(result.personalRelief)}
                   </p>
                 </div>
-                <p className="text-lg font-semibold text-gray-900 ml-4">{formatCurrency(result.paye)}</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 ml-4">{formatCurrency(result.paye)}</p>
               </div>
 
               {/* PAYE Band Breakdown */}
               {showBreakdown && (
-                <div className="ml-4 p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-2">
-                  <p className="text-sm font-semibold text-gray-900 mb-3">PAYE Tax Band Breakdown:</p>
+                <div className="ml-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">PAYE Tax Band Breakdown:</p>
                   {getTaxBandBreakdown().map((band, index) => (
                     <div key={index} className="flex items-center justify-between text-sm">
                       <div>
-                        <span className="text-gray-700">KES {band.range}</span>
-                        <span className="text-gray-500 ml-2">@ {band.rate}</span>
+                        <span className="text-gray-700 dark:text-gray-300">KES {band.range}</span>
+                        <span className="text-gray-500 dark:text-gray-400 ml-2">@ {band.rate}</span>
                       </div>
                       <div className="text-right">
-                        <p className="text-gray-600">On {formatCurrency(band.taxableAmount)}</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(band.tax)}</p>
+                        <p className="text-gray-600 dark:text-gray-400">On {formatCurrency(band.taxableAmount)}</p>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(band.tax)}</p>
                       </div>
                     </div>
                   ))}
-                  <div className="pt-2 border-t border-blue-300 flex justify-between font-semibold">
+                  <div className="pt-2 border-t border-blue-300 dark:border-blue-700 flex justify-between font-semibold text-gray-900 dark:text-gray-100">
                     <span>Total PAYE (before relief):</span>
                     <span>{formatCurrency(result.paye + result.personalRelief)}</span>
                   </div>
-                  <div className="flex justify-between text-green-700">
+                  <div className="flex justify-between text-green-700 dark:text-green-400">
                     <span>Less: Personal Relief</span>
                     <span>-{formatCurrency(result.personalRelief)}</span>
                   </div>
-                  <div className="flex justify-between font-bold text-lg">
+                  <div className="flex justify-between font-bold text-lg text-gray-900 dark:text-gray-100">
                     <span>PAYE Payable:</span>
                     <span>{formatCurrency(result.paye)}</span>
                   </div>
@@ -360,7 +362,9 @@ ${new Date().toLocaleString('en-KE')}
 
           {saveMessage && (
             <div className={`text-center p-3 rounded-lg ${
-              saveMessage.includes('✓') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+              saveMessage.includes('✓')
+                ? 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                : 'bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-400'
             }`}>
               {saveMessage}
             </div>
@@ -370,27 +374,27 @@ ${new Date().toLocaleString('en-KE')}
 
       {/* Tax Rate Reference */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           KRA Tax Rates Reference (2024/2025)
         </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-2 px-4">Monthly Income (KES)</th>
-                <th className="text-right py-2 px-4">Tax Rate</th>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <th className="text-left py-2 px-4 text-gray-900 dark:text-gray-100">Monthly Income (KES)</th>
+                <th className="text-right py-2 px-4 text-gray-900 dark:text-gray-100">Tax Rate</th>
               </tr>
             </thead>
             <tbody>
               {TAX_BANDS.map((band, index) => (
-                <tr key={index} className="border-b border-gray-100">
-                  <td className="py-2 px-4">
-                    {band.max === Infinity 
+                <tr key={index} className="border-b border-gray-100 dark:border-gray-800">
+                  <td className="py-2 px-4 text-gray-700 dark:text-gray-300">
+                    {band.max === Infinity
                       ? `${band.min.toLocaleString()} and above`
                       : `${band.min.toLocaleString()} - ${band.max.toLocaleString()}`
                     }
                   </td>
-                  <td className="text-right py-2 px-4 font-semibold">
+                  <td className="text-right py-2 px-4 font-semibold text-gray-900 dark:text-gray-100">
                     {(band.rate * 100)}%
                   </td>
                 </tr>
@@ -398,7 +402,7 @@ ${new Date().toLocaleString('en-KE')}
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-600 mt-4">
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-4">
           * Personal relief of KES 2,400 per month is automatically applied to PAYE
         </p>
       </div>

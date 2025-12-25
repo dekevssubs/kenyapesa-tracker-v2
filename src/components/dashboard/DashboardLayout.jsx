@@ -20,7 +20,10 @@ import {
   CreditCard,
   RefreshCw,
   ChevronRight,
-  Bell
+  Bell,
+  HandCoins,
+  History,
+  PiggyBank
 } from 'lucide-react'
 
 export default function DashboardLayout({ children }) {
@@ -64,14 +67,20 @@ export default function DashboardLayout({ children }) {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, color: 'text-blue-500' },
+    { name: 'Accounts', href: '/accounts', icon: Wallet, color: 'text-teal-500' },
+    { name: 'Account History', href: '/account-history', icon: History, color: 'text-slate-500' },
+    { name: 'Savings & Investments', href: '/savings-investments', icon: PiggyBank, color: 'text-emerald-600' },
     { name: 'Income', href: '/income', icon: DollarSign, color: 'text-green-500' },
     { name: 'Expenses', href: '/expenses', icon: TrendingDown, color: 'text-red-500' },
     { name: 'Calculator', href: '/calculator', icon: Calculator, color: 'text-purple-500' },
     { name: 'Goals', href: '/goals', icon: Target, color: 'text-orange-500' },
-    { name: 'Budget', href: '/budget', icon: Wallet, color: 'text-cyan-500' },
+    { name: 'Budget', href: '/budget', icon: CreditCard, color: 'text-cyan-500' },
     { name: 'Reports', href: '/reports', icon: BarChart3, color: 'text-indigo-500' },
+    { name: 'Comprehensive Reports', href: '/reports/comprehensive', icon: FileText, color: 'text-blue-600' },
     { name: 'Subscriptions', href: '/subscriptions', icon: RefreshCw, color: 'text-pink-500' },
-    { name: 'Net Worth', href: '/networth', icon: CreditCard, color: 'text-emerald-500' },
+    { name: 'Net Worth', href: '/networth', icon: FileText, color: 'text-emerald-500' },
+    { name: 'Lending', href: '/lending', icon: HandCoins, color: 'text-amber-500' },
+    { name: 'Bill Reminders', href: '/bills', icon: Bell, color: 'text-violet-500' },
   ]
 
   const bottomNav = [

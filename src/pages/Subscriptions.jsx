@@ -235,7 +235,7 @@ export default function Subscriptions() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-8 text-white shadow-lg">
+      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 dark:from-indigo-600 dark:to-purple-700 rounded-2xl p-8 text-white shadow-lg">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center space-x-4">
             <div className="bg-white bg-opacity-20 rounded-xl p-4">
@@ -271,19 +271,19 @@ export default function Subscriptions() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 dark:from-purple-600 dark:to-purple-700 rounded-2xl p-6 text-white shadow-lg">
           <p className="text-purple-100 font-medium mb-2">Total Monthly Cost</p>
           <p className="text-4xl font-bold">{formatCurrency(totalMonthly)}</p>
           <p className="text-purple-100 text-sm mt-2">{subscriptions.filter(s => s.is_active).length} active subscriptions</p>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-2xl p-6 text-white shadow-lg">
           <p className="text-blue-100 font-medium mb-2">Active Subscriptions</p>
           <p className="text-4xl font-bold">{subscriptions.filter(s => s.is_active).length}</p>
           <p className="text-blue-100 text-sm mt-2">of {subscriptions.length} total</p>
         </div>
 
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="bg-gradient-to-br from-green-500 to-green-600 dark:from-green-600 dark:to-green-700 rounded-2xl p-6 text-white shadow-lg">
           <p className="text-green-100 font-medium mb-2">Yearly Cost</p>
           <p className="text-4xl font-bold">{formatCurrency(totalMonthly * 12)}</p>
           <p className="text-green-100 text-sm mt-2">projected annual spending</p>
@@ -291,13 +291,13 @@ export default function Subscriptions() {
       </div>
 
       {/* Subscriptions List */}
-      <div className="card">
-        <h3 className="text-xl font-bold text-gray-900 mb-6">Your Subscriptions</h3>
+      <div className="card bg-white dark:bg-gray-800">
+        <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Your Subscriptions</h3>
 
         {subscriptions.length === 0 ? (
           <div className="text-center py-16">
-            <RefreshCw className="h-20 w-20 text-gray-300 mx-auto mb-6" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No subscriptions yet</h3>
+            <RefreshCw className="h-20 w-20 text-gray-300 dark:text-gray-600 mx-auto mb-6" />
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">No subscriptions yet</h3>
             <p className="text-gray-500 mb-6">Track your recurring expenses like Netflix, rent, or bundles</p>
             <button onClick={() => setShowModal(true)} className="btn btn-primary px-8 py-3">
               Add Your First Subscription
@@ -311,9 +311,9 @@ export default function Subscriptions() {
                 <div
                   key={sub.id}
                   className={`p-6 rounded-2xl border-2 transition-all ${
-                    sub.is_active 
-                      ? 'bg-white border-gray-200 hover:border-indigo-300' 
-                      : 'bg-gray-50 border-gray-300 opacity-60'
+                    sub.is_active
+                      ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600'
+                      : 'bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 opacity-60'
                   }`}
                 >
                   <div className="flex items-start justify-between">
@@ -321,7 +321,7 @@ export default function Subscriptions() {
                       <div className="text-4xl">{getFrequencyIcon(sub.frequency)}</div>
                       <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-2">
-                          <h4 className="text-xl font-bold text-gray-900">{sub.name}</h4>
+                          <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100">{sub.name}</h4>
                           {!sub.is_active && (
                             <span className="badge badge-danger">Paused</span>
                           )}
@@ -329,11 +329,11 @@ export default function Subscriptions() {
                             <span className="badge badge-success">Auto-add</span>
                           )}
                         </div>
-                        <p className="text-sm text-gray-600 mb-3 capitalize">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 capitalize">
                           {sub.frequency} • {sub.category}
                         </p>
                         {sub.description && (
-                          <p className="text-sm text-gray-500 mb-3">{sub.description}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{sub.description}</p>
                         )}
                         <div className="flex items-center space-x-4 text-sm">
                           <div className="flex items-center text-gray-600">
@@ -349,7 +349,7 @@ export default function Subscriptions() {
                     <div className="flex items-start space-x-4 ml-6">
                       <div className="text-right">
                         <p className="text-2xl font-bold text-indigo-600">{formatCurrency(sub.amount)}</p>
-                        <p className="text-sm text-gray-500">per {sub.frequency.slice(0, -2)}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-500">per {sub.frequency.slice(0, -2)}</p>
                       </div>
                       <div className="flex flex-col space-y-2">
                         <button
@@ -391,7 +391,7 @@ export default function Subscriptions() {
           <div className="flex items-start space-x-4">
             <AlertCircle className="h-6 w-6 text-orange-600 flex-shrink-0 mt-1" />
             <div>
-              <h4 className="font-bold text-gray-900 mb-2">Upcoming Payments</h4>
+              <h4 className="font-bold text-gray-900 dark:text-gray-100 mb-2">Upcoming Payments</h4>
               <div className="space-y-2">
                 {subscriptions
                   .filter(s => s.is_active && getDaysUntilNext(s.next_date) <= 3)
@@ -408,7 +408,7 @@ export default function Subscriptions() {
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-8 animate-slideIn max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-2xl font-bold text-gray-900">
@@ -419,7 +419,7 @@ export default function Subscriptions() {
                   setShowModal(false)
                   setEditingItem(null)
                 }}
-                className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg"
+                className="text-gray-400 hover:text-gray-600 dark:text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-700 rounded-lg"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -527,11 +527,11 @@ export default function Subscriptions() {
                     type="checkbox"
                     checked={formData.auto_add}
                     onChange={(e) => setFormData({ ...formData, auto_add: e.target.checked })}
-                    className="mt-1 h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    className="mt-1 h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                   />
                   <div>
                     <span className="text-base font-semibold text-gray-900">Auto-add to expenses</span>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                       Automatically create expense entries when due (coming soon)
                     </p>
                   </div>

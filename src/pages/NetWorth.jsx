@@ -228,7 +228,7 @@ export default function NetWorth() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl p-8 text-white shadow-lg">
+      <div className="bg-gradient-to-r from-emerald-500 to-teal-600 dark:from-emerald-600 dark:to-teal-700 rounded-2xl p-8 text-white shadow-lg">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center space-x-4">
             <div className="bg-white bg-opacity-20 rounded-xl p-4">
@@ -261,17 +261,17 @@ export default function NetWorth() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="bg-gradient-to-br from-green-500 to-green-600 dark:from-green-600 dark:to-green-700 rounded-2xl p-6 text-white shadow-lg">
           <p className="text-green-100 font-medium mb-2">Total Assets</p>
           <p className="text-4xl font-bold">{formatCurrency(summary.totalAssets)}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="bg-gradient-to-br from-red-500 to-red-600 dark:from-red-600 dark:to-red-700 rounded-2xl p-6 text-white shadow-lg">
           <p className="text-red-100 font-medium mb-2">Total Liabilities</p>
           <p className="text-4xl font-bold">{formatCurrency(summary.totalLiabilities)}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-2xl p-6 text-white shadow-lg">
           <p className="text-blue-100 font-medium mb-2">Net Worth</p>
           <p className={`text-4xl font-bold ${summary.netWorth >= 0 ? 'text-white' : 'text-red-200'}`}>
             {formatCurrency(summary.netWorth)}
@@ -281,15 +281,23 @@ export default function NetWorth() {
 
       {/* Net Worth Trend */}
       {netWorthHistory.length > 0 && (
-        <div className="card">
-          <h3 className="text-xl font-bold text-gray-900 mb-8">Net Worth Trend (Last 6 Months)</h3>
-          <div className="bg-gray-50 rounded-xl p-6">
+        <div className="card bg-white dark:bg-gray-800">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-8">Net Worth Trend (Last 6 Months)</h3>
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-6">
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={netWorthHistory}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="month" stroke="#6B7280" />
-                <YAxis stroke="#6B7280" />
-                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
+                <XAxis dataKey="month" stroke="var(--text-secondary)" />
+                <YAxis stroke="var(--text-secondary)" />
+                <Tooltip
+                  formatter={(value) => formatCurrency(value)}
+                  contentStyle={{
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-primary)',
+                    backgroundColor: 'var(--card-bg)',
+                    color: 'var(--text-primary)'
+                  }}
+                />
                 <Legend />
                 <Line type="monotone" dataKey="netWorth" stroke="#3B82F6" strokeWidth={3} name="Net Worth" />
                 <Line type="monotone" dataKey="assets" stroke="#10B981" strokeWidth={2} name="Assets" />
@@ -303,8 +311,8 @@ export default function NetWorth() {
       {/* Assets & Liabilities Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Assets */}
-        <div className="card">
-          <h3 className="text-xl font-bold text-gray-900 mb-6">Assets</h3>
+        <div className="card bg-white dark:bg-gray-800">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Assets</h3>
           {getAssetsByType(false).length > 0 ? (
             <div className="space-y-4">
               {getAssetsByType(false).map((asset, index) => (
@@ -320,8 +328,8 @@ export default function NetWorth() {
         </div>
 
         {/* Liabilities */}
-        <div className="card">
-          <h3 className="text-xl font-bold text-gray-900 mb-6">Liabilities</h3>
+        <div className="card bg-white dark:bg-gray-800">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Liabilities</h3>
           {getAssetsByType(true).length > 0 ? (
             <div className="space-y-4">
               {getAssetsByType(true).map((liability, index) => (
@@ -338,12 +346,12 @@ export default function NetWorth() {
       </div>
 
       {/* All Items List */}
-      <div className="card">
-        <h3 className="text-xl font-bold text-gray-900 mb-6">All Items</h3>
+      <div className="card bg-white dark:bg-gray-800">
+        <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">All Items</h3>
         {items.length === 0 ? (
           <div className="text-center py-16">
-            <DollarSign className="h-20 w-20 text-gray-300 mx-auto mb-6" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No items yet</h3>
+            <DollarSign className="h-20 w-20 text-gray-300 dark:text-gray-600 mx-auto mb-6" />
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">No items yet</h3>
             <p className="text-gray-500 mb-6">Start tracking your assets and liabilities</p>
             <button onClick={() => setShowModal(true)} className="btn btn-primary px-8 py-3">
               Add Your First Item
@@ -365,7 +373,7 @@ export default function NetWorth() {
                     </span>
                     <h4 className="font-bold text-gray-900">{item.asset_name}</h4>
                   </div>
-                  <p className="text-sm text-gray-600 ml-9">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 ml-9">
                     {ASSET_TYPES.find(t => t.value === item.asset_type)?.label.slice(2) || item.asset_type}
                     {' • '}
                     {new Date(item.date).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -401,7 +409,7 @@ export default function NetWorth() {
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-8 animate-slideIn max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-2xl font-bold text-gray-900">
@@ -412,7 +420,7 @@ export default function NetWorth() {
                   setShowModal(false)
                   setEditingItem(null)
                 }}
-                className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg"
+                className="text-gray-400 hover:text-gray-600 dark:text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-700 rounded-lg"
               >
                 <X className="h-6 w-6" />
               </button>

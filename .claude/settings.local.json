@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "Bash(supabase --version:*)",
+      "Bash(psql:*)",
+      "Bash(dir \"C:\\\\Users\\\\kelvin.ruttoh\\\\Downloads\\\\kenyapesa-tracker2\\\\kenyapesa-tracker\\\\src\\\\components\")",
+      "Bash(dir \"C:\\\\Users\\\\kelvin.ruttoh\\\\Downloads\\\\kenyapesa-tracker2\\\\kenyapesa-tracker\\\\src\\\\components\\\\dashboard\")",
+      "Bash(dir \"C:\\\\Users\\\\kelvin.ruttoh\\\\Downloads\\\\kenyapesa-tracker2\\\\kenyapesa-tracker\\\\supabase\\\\migrations\" /B /O:N)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(dir \"C:\\\\Users\\\\kelvin.ruttoh\\\\Downloads\\\\kenyapesa-tracker2\\\\kenyapesa-tracker\\\\docs\" /B /O:N)",
+      "Bash(dir:*)"
     ]
   }
 }
