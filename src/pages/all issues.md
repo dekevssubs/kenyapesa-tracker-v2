@@ -58,7 +58,7 @@ I cannot create budgets error below from browser inspect dev tool
 ###Dark mode issues 
 Pages not in dark mode 
 
-###Unfixed
+###Unfixed - Comment: You have not Addressed the below issues
     ![dasboard](image-10.png)
 
     ![dasboard](image-11.png)
@@ -82,4 +82,4 @@ Pages not in dark mode
     - Let's do proper form update on expenses for instance If I select MPesa Wallet it should by default have method of payment as MPesa and Fee calculations should provide the available MPesa options same to any other bank. Also have a look at 
 
 
-
+#### Vercel Is not allowing automated updates pushed to vessel
