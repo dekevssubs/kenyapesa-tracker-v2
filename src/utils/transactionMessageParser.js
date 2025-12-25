@@ -46,10 +46,17 @@ export function parseMpesaMessage(message) {
       amounts.push(parseFloat(match[1].replace(/,/g, '')))
     }
 
-    // Explicitly extract transaction cost/fee
-    const feeMatch = cleanMessage.match(/(?:Transaction cost|Transaction fee|Fee|Charge)[,:\s]*(?:Ksh|KES)\s*([\d,]+(?:\.\d{2})?)/i)
+    // Explicitly extract transaction cost/fee - improved pattern
+    const feeMatch = cleanMessage.match(/(?:Transaction cost|Transaction fee|Transaction charge|Fee|Charge)[,:\s]*(?:Ksh|KES)?\s*([\d,]+(?:\.\d{2})?)/i)
     if (feeMatch) {
       result.transactionCost = parseFloat(feeMatch[1].replace(/,/g, ''))
+    }
+
+    // Also try to extract from "New M-PESA balance" context to avoid confusion
+    // Extract balance FIRST to remove it from consideration for fee
+    const balanceMatch = cleanMessage.match(/(?:balance is|M-PESA balance is|New M-PESA balance is|New balance is)\s*(?:Ksh|KES)\s*([\d,]+(?:\.\d{2})?)/i)
+    if (balanceMatch) {
+      result.newBalance = parseFloat(balanceMatch[1].replace(/,/g, ''))
     }
 
     // Determine transaction type
@@ -65,9 +72,15 @@ export function parseMpesaMessage(message) {
       // Extract payment amount (first amount in message)
       if (amounts.length >= 1) {
         result.amount = amounts[0]
+
         // Only use amounts[1] as fee if we didn't already extract it explicitly
+        // AND make sure it's not the balance amount
         if (result.transactionCost === null && amounts.length >= 2) {
-          result.transactionCost = amounts[1]
+          // Filter out the balance if we extracted it
+          const feeCandidate = amounts[1]
+          if (result.newBalance === null || feeCandidate !== result.newBalance) {
+            result.transactionCost = feeCandidate
+          }
         }
       }
 
@@ -92,9 +105,14 @@ export function parseMpesaMessage(message) {
 
       if (amounts.length >= 1) {
         result.amount = amounts[0]
+
         // Only use amounts[1] as fee if we didn't already extract it explicitly
+        // AND make sure it's not the balance amount
         if (result.transactionCost === null && amounts.length >= 2) {
-          result.transactionCost = amounts[1]
+          const feeCandidate = amounts[1]
+          if (result.newBalance === null || feeCandidate !== result.newBalance) {
+            result.transactionCost = feeCandidate
+          }
         }
       }
 
@@ -126,9 +144,14 @@ export function parseMpesaMessage(message) {
 
       if (amounts.length >= 1) {
         result.amount = amounts[0]
+
         // Only use amounts[1] as fee if we didn't already extract it explicitly
+        // AND make sure it's not the balance amount
         if (result.transactionCost === null && amounts.length >= 2) {
-          result.transactionCost = amounts[1]
+          const feeCandidate = amounts[1]
+          if (result.newBalance === null || feeCandidate !== result.newBalance) {
+            result.transactionCost = feeCandidate
+          }
         }
       }
 
@@ -138,13 +161,14 @@ export function parseMpesaMessage(message) {
       }
     }
 
-    // Extract new balance (last amount mentioned)
-    const balanceMatch = cleanMessage.match(/(?:balance is|M-PESA balance is|New M-PESA balance is)\s*(?:Ksh|KES)\s*([\d,]+(?:\.\d{2})?)/i)
-    if (balanceMatch) {
-      result.newBalance = parseFloat(balanceMatch[1].replace(/,/g, ''))
-    } else if (amounts.length > 0) {
-      // If no explicit balance, assume last amount is balance
-      result.newBalance = amounts[amounts.length - 1]
+    // Balance was already extracted at the top (lines 57-60)
+    // If still not set, try last amount as fallback (but be careful)
+    if (result.newBalance === null && amounts.length > 0) {
+      // Only use last amount if we have at least 3 amounts (amount, fee, balance)
+      // Otherwise it might be the fee
+      if (amounts.length >= 3) {
+        result.newBalance = amounts[amounts.length - 1]
+      }
     }
 
     // Extract date
