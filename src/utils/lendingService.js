@@ -7,7 +7,9 @@
  * - Account selection for repayment (destination account)
  * - Integration with account_transactions table
  * - Automatic balance updates via database triggers
- * - Status tracking (pending, partial, complete)
+ * - Status tracking (pending, partial, complete, forgiven)
+ * - Counterparty-centric views
+ * - Forgiveness with bad debt tracking
  */
 
 export class LendingService {
@@ -22,7 +24,8 @@ export class LendingService {
   static STATUS = {
     PENDING: 'pending',
     PARTIAL: 'partial',
-    COMPLETE: 'complete'
+    COMPLETE: 'complete',
+    FORGIVEN: 'forgiven'
   }
 
   /**
@@ -542,6 +545,453 @@ export class LendingService {
       console.error('Error deleting lending:', error)
       return {
         success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Get lendings grouped by counterparty (person)
+   * This is the counterparty-centric view
+   * @returns {Promise<object>} - {success, counterparties, summary, error}
+   */
+  async getLendingsByCounterparty() {
+    try {
+      // Get all active lendings (not complete, not forgiven)
+      const { data: lendings, error } = await this.supabase
+        .from('lending_tracker')
+        .select('*')
+        .eq('user_id', this.userId)
+        .order('date_lent', { ascending: false })
+
+      if (error) throw error
+
+      // Group by person_name
+      const counterpartyMap = new Map()
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      for (const lending of lendings || []) {
+        const personName = lending.person_name
+        const amount = parseFloat(lending.amount) || 0
+        const repaid = parseFloat(lending.amount_repaid) || 0
+        const outstanding = amount - repaid
+
+        // Calculate overdue status
+        let isOverdue = false
+        let daysOverdue = 0
+        if (lending.due_date && lending.status !== LendingService.STATUS.COMPLETE && lending.status !== LendingService.STATUS.FORGIVEN) {
+          const dueDate = new Date(lending.due_date)
+          dueDate.setHours(0, 0, 0, 0)
+          if (today > dueDate) {
+            isOverdue = true
+            daysOverdue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24))
+          }
+        }
+
+        if (!counterpartyMap.has(personName)) {
+          counterpartyMap.set(personName, {
+            personName,
+            loans: [],
+            totalLent: 0,
+            totalRepaid: 0,
+            totalOutstanding: 0,
+            activeLoans: 0,
+            overdueLoans: 0,
+            oldestLoanDate: null,
+            nearestDueDate: null,
+            isOverdue: false,
+            maxDaysOverdue: 0
+          })
+        }
+
+        const counterparty = counterpartyMap.get(personName)
+        counterparty.loans.push({
+          ...lending,
+          outstanding,
+          isOverdue,
+          daysOverdue
+        })
+        counterparty.totalLent += amount
+        counterparty.totalRepaid += repaid
+        counterparty.totalOutstanding += outstanding
+
+        if (lending.status !== LendingService.STATUS.COMPLETE && lending.status !== LendingService.STATUS.FORGIVEN) {
+          counterparty.activeLoans++
+          if (isOverdue) {
+            counterparty.overdueLoans++
+            counterparty.isOverdue = true
+            counterparty.maxDaysOverdue = Math.max(counterparty.maxDaysOverdue, daysOverdue)
+          }
+        }
+
+        // Track oldest loan date
+        const loanDate = new Date(lending.date_lent || lending.date)
+        if (!counterparty.oldestLoanDate || loanDate < counterparty.oldestLoanDate) {
+          counterparty.oldestLoanDate = loanDate
+        }
+
+        // Track nearest due date for active loans
+        if (lending.due_date && lending.status !== LendingService.STATUS.COMPLETE && lending.status !== LendingService.STATUS.FORGIVEN) {
+          const dueDate = new Date(lending.due_date)
+          if (!counterparty.nearestDueDate || dueDate < counterparty.nearestDueDate) {
+            counterparty.nearestDueDate = dueDate
+          }
+        }
+      }
+
+      // Convert to array and calculate status
+      const counterparties = Array.from(counterpartyMap.values()).map(cp => ({
+        ...cp,
+        status: this.calculateCounterpartyStatus(cp)
+      }))
+
+      // Sort by: overdue first, then by outstanding amount
+      counterparties.sort((a, b) => {
+        if (a.isOverdue && !b.isOverdue) return -1
+        if (!a.isOverdue && b.isOverdue) return 1
+        return b.totalOutstanding - a.totalOutstanding
+      })
+
+      // Calculate overall summary
+      const summary = {
+        totalCounterparties: counterparties.length,
+        activeCounterparties: counterparties.filter(c => c.activeLoans > 0).length,
+        totalLent: counterparties.reduce((sum, c) => sum + c.totalLent, 0),
+        totalRepaid: counterparties.reduce((sum, c) => sum + c.totalRepaid, 0),
+        totalOutstanding: counterparties.reduce((sum, c) => sum + c.totalOutstanding, 0),
+        overdueCounterparties: counterparties.filter(c => c.isOverdue).length,
+        totalOverdueAmount: counterparties
+          .filter(c => c.isOverdue)
+          .reduce((sum, c) => sum + c.totalOutstanding, 0)
+      }
+
+      return {
+        success: true,
+        counterparties,
+        summary
+      }
+    } catch (error) {
+      console.error('Error getting lendings by counterparty:', error)
+      return {
+        success: false,
+        counterparties: [],
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Calculate counterparty status based on their loans
+   * @param {object} counterparty - Counterparty data
+   * @returns {string} - Status (on-track, partial, overdue, complete)
+   */
+  calculateCounterpartyStatus(counterparty) {
+    if (counterparty.totalOutstanding <= 0) {
+      return 'complete'
+    }
+    if (counterparty.isOverdue) {
+      return 'overdue'
+    }
+    if (counterparty.totalRepaid > 0) {
+      return 'partial'
+    }
+    return 'pending'
+  }
+
+  /**
+   * Get ledger timeline for a lending record
+   * @param {string} lendingId - Lending ID
+   * @returns {Promise<object>} - {success, timeline, lending, error}
+   */
+  async getLedgerTimeline(lendingId) {
+    try {
+      // Get the lending record
+      const { data: lending, error: lendingError } = await this.supabase
+        .from('lending_tracker')
+        .select('*')
+        .eq('id', lendingId)
+        .eq('user_id', this.userId)
+        .single()
+
+      if (lendingError) throw lendingError
+
+      if (!lending) {
+        return {
+          success: false,
+          error: 'Lending record not found'
+        }
+      }
+
+      // Get all account transactions for this lending
+      const { data: transactions, error: txError } = await this.supabase
+        .from('account_transactions')
+        .select(`
+          *,
+          from_account:accounts!account_transactions_from_account_id_fkey(id, name),
+          to_account:accounts!account_transactions_to_account_id_fkey(id, name)
+        `)
+        .eq('reference_id', lendingId)
+        .eq('reference_type', 'lending')
+        .order('date', { ascending: true })
+
+      if (txError) {
+        // Fallback without joins if foreign key doesn't exist
+        const { data: txSimple, error: txSimpleError } = await this.supabase
+          .from('account_transactions')
+          .select('*')
+          .eq('reference_id', lendingId)
+          .eq('reference_type', 'lending')
+          .order('date', { ascending: true })
+
+        if (txSimpleError) throw txSimpleError
+
+        return {
+          success: true,
+          lending,
+          timeline: txSimple || []
+        }
+      }
+
+      return {
+        success: true,
+        lending,
+        timeline: transactions || []
+      }
+    } catch (error) {
+      console.error('Error getting ledger timeline:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Forgive a lending (write off as bad debt)
+   * This creates a bad_debt expense entry and marks lending as forgiven
+   * @param {string} lendingId - Lending ID
+   * @param {string} reason - Reason for forgiveness
+   * @returns {Promise<object>} - {success, badDebtTransactionId, error}
+   */
+  async forgiveLending(lendingId, reason = '') {
+    try {
+      // Get the lending record
+      const { data: lending, error: fetchError } = await this.supabase
+        .from('lending_tracker')
+        .select('*')
+        .eq('id', lendingId)
+        .eq('user_id', this.userId)
+        .single()
+
+      if (fetchError) throw fetchError
+
+      if (!lending) {
+        return {
+          success: false,
+          error: 'Lending record not found'
+        }
+      }
+
+      // Check if already complete or forgiven
+      if (lending.status === LendingService.STATUS.COMPLETE) {
+        return {
+          success: false,
+          error: 'This lending has already been fully repaid'
+        }
+      }
+
+      if (lending.status === LendingService.STATUS.FORGIVEN) {
+        return {
+          success: false,
+          error: 'This lending has already been forgiven'
+        }
+      }
+
+      // Calculate outstanding amount to write off
+      const originalAmount = parseFloat(lending.amount)
+      const repaidAmount = parseFloat(lending.amount_repaid || 0)
+      const writeOffAmount = originalAmount - repaidAmount
+
+      if (writeOffAmount <= 0) {
+        return {
+          success: false,
+          error: 'No outstanding amount to forgive'
+        }
+      }
+
+      // Step 1: Create bad_debt expense transaction in ledger
+      // This reduces assets (the receivable) and records the loss
+      const { data: badDebtTx, error: txError } = await this.supabase
+        .from('account_transactions')
+        .insert({
+          user_id: this.userId,
+          transaction_type: 'bad_debt',
+          amount: writeOffAmount,
+          date: new Date().toISOString().split('T')[0],
+          category: 'Bad Debt',
+          description: `Debt forgiven: ${lending.person_name}${reason ? ` - ${reason}` : ''}`,
+          reference_id: lendingId,
+          reference_type: 'lending'
+        })
+        .select('id')
+        .single()
+
+      if (txError) throw txError
+
+      // Step 2: Update lending record to forgiven status
+      const { error: updateError } = await this.supabase
+        .from('lending_tracker')
+        .update({
+          status: LendingService.STATUS.FORGIVEN,
+          forgiven_at: new Date().toISOString(),
+          forgiven_reason: reason || null,
+          notes: lending.notes
+            ? `${lending.notes}\n[Forgiven] ${new Date().toLocaleDateString()}: ${writeOffAmount} written off${reason ? ` - ${reason}` : ''}`
+            : `[Forgiven] ${new Date().toLocaleDateString()}: ${writeOffAmount} written off${reason ? ` - ${reason}` : ''}`
+        })
+        .eq('id', lendingId)
+        .eq('user_id', this.userId)
+
+      if (updateError) throw updateError
+
+      return {
+        success: true,
+        writeOffAmount,
+        badDebtTransactionId: badDebtTx.id
+      }
+    } catch (error) {
+      console.error('Error forgiving lending:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Get all lendings for a specific counterparty
+   * @param {string} personName - The counterparty's name
+   * @returns {Promise<object>} - {success, lendings, summary, error}
+   */
+  async getLendingsForPerson(personName) {
+    try {
+      const { data: lendings, error } = await this.supabase
+        .from('lending_tracker')
+        .select('*')
+        .eq('user_id', this.userId)
+        .eq('person_name', personName)
+        .order('date_lent', { ascending: false })
+
+      if (error) throw error
+
+      // Get account info for each lending
+      const lendingsWithAccounts = await Promise.all(
+        (lendings || []).map(async (lending) => {
+          let lendFromAccount = null
+          let repayToAccount = null
+
+          if (lending.lend_from_account_id) {
+            const { data: account } = await this.supabase
+              .from('accounts')
+              .select('id, name, account_type')
+              .eq('id', lending.lend_from_account_id)
+              .single()
+            lendFromAccount = account
+          }
+
+          if (lending.repay_to_account_id) {
+            const { data: account } = await this.supabase
+              .from('accounts')
+              .select('id, name, account_type')
+              .eq('id', lending.repay_to_account_id)
+              .single()
+            repayToAccount = account
+          }
+
+          const outstanding = parseFloat(lending.amount) - parseFloat(lending.amount_repaid || 0)
+
+          return {
+            ...lending,
+            lend_from_account: lendFromAccount,
+            repay_to_account: repayToAccount,
+            outstanding
+          }
+        })
+      )
+
+      // Calculate summary for this person
+      const summary = {
+        totalLent: lendingsWithAccounts.reduce((sum, l) => sum + parseFloat(l.amount), 0),
+        totalRepaid: lendingsWithAccounts.reduce((sum, l) => sum + parseFloat(l.amount_repaid || 0), 0),
+        totalOutstanding: lendingsWithAccounts.reduce((sum, l) => sum + l.outstanding, 0),
+        loanCount: lendingsWithAccounts.length,
+        activeLoans: lendingsWithAccounts.filter(l =>
+          l.status !== LendingService.STATUS.COMPLETE &&
+          l.status !== LendingService.STATUS.FORGIVEN
+        ).length
+      }
+
+      return {
+        success: true,
+        lendings: lendingsWithAccounts,
+        summary
+      }
+    } catch (error) {
+      console.error('Error getting lendings for person:', error)
+      return {
+        success: false,
+        lendings: [],
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Get overdue lendings
+   * @returns {Promise<object>} - {success, lendings, error}
+   */
+  async getOverdueLendings() {
+    try {
+      const today = new Date().toISOString().split('T')[0]
+
+      const { data: lendings, error } = await this.supabase
+        .from('lending_tracker')
+        .select('*')
+        .eq('user_id', this.userId)
+        .in('status', [LendingService.STATUS.PENDING, LendingService.STATUS.PARTIAL])
+        .lt('due_date', today)
+        .not('due_date', 'is', null)
+        .order('due_date', { ascending: true })
+
+      if (error) throw error
+
+      // Add days overdue calculation
+      const todayDate = new Date()
+      todayDate.setHours(0, 0, 0, 0)
+
+      const overdueWithDays = (lendings || []).map(lending => {
+        const dueDate = new Date(lending.due_date)
+        dueDate.setHours(0, 0, 0, 0)
+        const daysOverdue = Math.floor((todayDate - dueDate) / (1000 * 60 * 60 * 24))
+        const outstanding = parseFloat(lending.amount) - parseFloat(lending.amount_repaid || 0)
+
+        return {
+          ...lending,
+          daysOverdue,
+          outstanding
+        }
+      })
+
+      return {
+        success: true,
+        lendings: overdueWithDays
+      }
+    } catch (error) {
+      console.error('Error getting overdue lendings:', error)
+      return {
+        success: false,
+        lendings: [],
         error: error.message
       }
     }

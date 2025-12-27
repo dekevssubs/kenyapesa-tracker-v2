@@ -3,26 +3,81 @@ import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency } from '../utils/calculations'
-import { HandCoins, Plus, Edit2, Trash2, UserCheck, Clock, CheckCircle, DollarSign, X, AlertCircle, Wallet } from 'lucide-react'
+import {
+  HandCoins,
+  Plus,
+  User,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  X,
+  Wallet,
+  DollarSign,
+  Users,
+  Ban,
+  ChevronRight,
+  Calendar
+} from 'lucide-react'
 import { LendingService } from '../utils/lendingService'
 import ConfirmationModal from '../components/ConfirmationModal'
 import { useConfirmation } from '../hooks/useConfirmation'
+import LendingDetailDrawer from '../components/lending/LendingDetailDrawer'
+import ForgivenessModal from '../components/lending/ForgivenessModal'
 
-const REPAYMENT_STATUSES = ['pending', 'partial', 'complete']
+const STATUS_CONFIG = {
+  pending: {
+    label: 'Pending',
+    color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    icon: Clock
+  },
+  partial: {
+    label: 'Partial',
+    color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    icon: DollarSign
+  },
+  complete: {
+    label: 'Complete',
+    color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    icon: CheckCircle
+  },
+  overdue: {
+    label: 'Overdue',
+    color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    icon: AlertTriangle
+  },
+  forgiven: {
+    label: 'Forgiven',
+    color: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+    icon: Ban
+  }
+}
 
 export default function Lending() {
   const { user } = useAuth()
   const { showToast } = useToast()
   const { isOpen: confirmOpen, config: confirmConfig, confirm, close: closeConfirm } = useConfirmation()
-  const [lendingRecords, setLendingRecords] = useState([])
+
+  // State
+  const [counterparties, setCounterparties] = useState([])
+  const [summary, setSummary] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [showRepaymentModal, setShowRepaymentModal] = useState(false)
-  const [editingRecord, setEditingRecord] = useState(null)
-  const [repayingRecord, setRepayingRecord] = useState(null)
-  const [filterStatus, setFilterStatus] = useState('all')
 
+  // Modals
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showRepaymentModal, setShowRepaymentModal] = useState(false)
+  const [showForgivenessModal, setShowForgivenessModal] = useState(false)
+  const [forgivingLoading, setForgivingLoading] = useState(false)
+
+  // Selected items
+  const [selectedCounterparty, setSelectedCounterparty] = useState(null)
+  const [selectedLending, setSelectedLending] = useState(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  // Filter
+  const [filterStatus, setFilterStatus] = useState('active') // active, complete, all
+
+  // Form data
   const [formData, setFormData] = useState({
     person_name: '',
     amount: '',
@@ -41,26 +96,27 @@ export default function Lending() {
 
   useEffect(() => {
     if (user) {
-      fetchLendingRecords()
+      fetchCounterparties()
       fetchAccounts()
     }
   }, [user])
 
-  const fetchLendingRecords = async () => {
+  const fetchCounterparties = async () => {
     try {
+      setLoading(true)
       const lendingService = new LendingService(supabase, user.id)
-      const result = await lendingService.getAllLendings()
+      const result = await lendingService.getLendingsByCounterparty()
 
       if (result.success) {
-        setLendingRecords(result.lendings)
+        setCounterparties(result.counterparties)
+        setSummary(result.summary)
       } else {
         throw new Error(result.error)
       }
-
-      setLoading(false)
     } catch (error) {
-      console.error('Error fetching lending records:', error)
+      console.error('Error fetching counterparties:', error)
       showToast('Error', 'Failed to fetch lending records', 'error')
+    } finally {
       setLoading(false)
     }
   }
@@ -72,7 +128,6 @@ export default function Lending() {
 
       if (result.success) {
         setAccounts(result.accounts)
-        // Auto-select primary account
         const primaryAccount = result.accounts.find(a => a.is_primary)
         if (primaryAccount) {
           setFormData(prev => ({ ...prev, lend_from_account_id: primaryAccount.id }))
@@ -84,7 +139,7 @@ export default function Lending() {
     }
   }
 
-  const handleSubmit = async (e) => {
+  const handleAddLending = async (e) => {
     e.preventDefault()
 
     if (!formData.person_name.trim()) {
@@ -104,50 +159,27 @@ export default function Lending() {
 
     try {
       const lendingService = new LendingService(supabase, user.id)
+      const result = await lendingService.createLending({
+        lend_from_account_id: formData.lend_from_account_id,
+        person_name: formData.person_name.trim(),
+        amount: parseFloat(formData.amount),
+        date: formData.date,
+        due_date: formData.due_date || null,
+        notes: formData.notes,
+        interest_rate: formData.interest_rate ? parseFloat(formData.interest_rate) : null
+      })
 
-      if (editingRecord) {
-        // Simple update (editing doesn't change accounts for now)
-        const { error } = await supabase
-          .from('lending_tracker')
-          .update({
-            person_name: formData.person_name,
-            amount: parseFloat(formData.amount),
-            date: formData.date,
-            due_date: formData.due_date || null,
-            notes: formData.notes,
-            interest_rate: formData.interest_rate ? parseFloat(formData.interest_rate) : null
-          })
-          .eq('id', editingRecord.id)
-          .eq('user_id', user.id)
-
-        if (error) throw error
-        showToast('Success', 'Lending record updated successfully', 'success')
-      } else {
-        // Create new lending with service
-        const result = await lendingService.createLending({
-          lend_from_account_id: formData.lend_from_account_id,
-          person_name: formData.person_name,
-          amount: parseFloat(formData.amount),
-          date: formData.date,
-          due_date: formData.due_date || null,
-          notes: formData.notes,
-          interest_rate: formData.interest_rate ? parseFloat(formData.interest_rate) : null
-        })
-
-        if (!result.success) {
-          throw new Error(result.error)
-        }
-
-        showToast('Success', `Lent ${formatCurrency(formData.amount)} to ${formData.person_name}`, 'success')
+      if (!result.success) {
+        throw new Error(result.error)
       }
 
+      showToast('Success', `Lent ${formatCurrency(formData.amount)} to ${formData.person_name}`, 'success')
       resetForm()
-      setShowModal(false)
-      setEditingRecord(null)
-      fetchLendingRecords()
-      fetchAccounts() // Refresh account balances
+      setShowAddModal(false)
+      fetchCounterparties()
+      fetchAccounts()
     } catch (error) {
-      console.error('Error saving lending record:', error)
+      console.error('Error adding lending:', error)
       showToast('Error', error.message || 'Failed to save lending record', 'error')
     }
   }
@@ -169,9 +201,8 @@ export default function Lending() {
 
     try {
       const lendingService = new LendingService(supabase, user.id)
-
       const result = await lendingService.recordRepayment(
-        repayingRecord.id,
+        selectedLending.id,
         repaymentAmount,
         repaymentData.repay_to_account_id,
         repaymentData.date
@@ -181,65 +212,54 @@ export default function Lending() {
         throw new Error(result.error)
       }
 
-      showToast('Success', `Repayment of ${formatCurrency(repaymentAmount)} recorded. Status: ${result.newStatus}`, 'success')
+      showToast('Success', `Repayment of ${formatCurrency(repaymentAmount)} recorded`, 'success')
       setShowRepaymentModal(false)
-      setRepayingRecord(null)
-      setRepaymentData({
-        amount: '',
-        repay_to_account_id: accounts.find(a => a.is_primary)?.id || '',
-        date: new Date().toISOString().split('T')[0]
-      })
-      fetchLendingRecords()
-      fetchAccounts() // Refresh account balances
+      setSelectedLending(null)
+      resetRepaymentData()
+      fetchCounterparties()
+      fetchAccounts()
+
+      // Refresh drawer if open
+      if (drawerOpen && selectedCounterparty) {
+        // Drawer will auto-refresh via its own useEffect
+      }
     } catch (error) {
       console.error('Error recording repayment:', error)
       showToast('Error', error.message || 'Failed to record repayment', 'error')
     }
   }
 
-  const handleEdit = (record) => {
-    setEditingRecord(record)
-    setFormData({
-      person_name: record.person_name,
-      amount: record.amount,
-      lend_from_account_id: record.lend_from_account_id || '',
-      date: record.date,
-      due_date: record.due_date || '',
-      notes: record.notes || '',
-      interest_rate: record.interest_rate?.toString() || ''
-    })
-    setShowModal(true)
-  }
+  const handleForgiveness = async (lendingId, reason) => {
+    try {
+      setForgivingLoading(true)
+      const lendingService = new LendingService(supabase, user.id)
+      const result = await lendingService.forgiveLending(lendingId, reason)
 
-  const handleDelete = (id) => {
-    confirm({
-      title: 'Delete Lending Record',
-      message: 'Are you sure you want to delete this lending record? This action cannot be undone.',
-      confirmText: 'Delete',
-      variant: 'danger',
-      onConfirm: async () => {
-        try {
-          const { error } = await supabase
-            .from('lending_tracker')
-            .delete()
-            .eq('id', id)
-            .eq('user_id', user.id)
-
-          if (error) throw error
-
-          showToast('Deleted', 'Lending record deleted successfully', 'info')
-          fetchLendingRecords()
-        } catch (error) {
-          console.error('Error deleting lending record:', error)
-          showToast('Error', 'Failed to delete lending record', 'error')
-        }
+      if (!result.success) {
+        throw new Error(result.error)
       }
-    })
+
+      showToast('Debt Forgiven', `${formatCurrency(result.writeOffAmount)} written off as bad debt`, 'info')
+      setShowForgivenessModal(false)
+      setSelectedLending(null)
+      fetchCounterparties()
+
+      // Close drawer and reopen to refresh
+      if (drawerOpen) {
+        setDrawerOpen(false)
+        setTimeout(() => setDrawerOpen(true), 100)
+      }
+    } catch (error) {
+      console.error('Error forgiving lending:', error)
+      showToast('Error', error.message || 'Failed to forgive lending', 'error')
+    } finally {
+      setForgivingLoading(false)
+    }
   }
 
-  const openRepaymentModal = (record) => {
-    setRepayingRecord(record)
-    const remaining = parseFloat(record.amount) - parseFloat(record.amount_repaid)
+  const openRepaymentModal = (lending) => {
+    setSelectedLending(lending)
+    const remaining = parseFloat(lending.amount) - parseFloat(lending.amount_repaid || 0)
     const primaryAccount = accounts.find(a => a.is_primary)
     setRepaymentData({
       amount: remaining.toString(),
@@ -247,6 +267,16 @@ export default function Lending() {
       date: new Date().toISOString().split('T')[0]
     })
     setShowRepaymentModal(true)
+  }
+
+  const openForgivenessModal = (lending) => {
+    setSelectedLending(lending)
+    setShowForgivenessModal(true)
+  }
+
+  const openCounterpartyDrawer = (counterparty) => {
+    setSelectedCounterparty(counterparty)
+    setDrawerOpen(true)
   }
 
   const resetForm = () => {
@@ -262,20 +292,25 @@ export default function Lending() {
     })
   }
 
-  const filteredRecords = lendingRecords.filter(record => {
-    if (filterStatus === 'all') return true
-    return record.status === filterStatus
-  })
-
-  const totalLent = lendingRecords.reduce((sum, r) => sum + parseFloat(r.amount), 0)
-  const totalRepaid = lendingRecords.reduce((sum, r) => sum + parseFloat(r.amount_repaid), 0)
-  const totalOutstanding = totalLent - totalRepaid
-
-  const statusCounts = {
-    pending: lendingRecords.filter(r => r.status === 'pending').length,
-    partial: lendingRecords.filter(r => r.status === 'partial').length,
-    complete: lendingRecords.filter(r => r.status === 'complete').length
+  const resetRepaymentData = () => {
+    const primaryAccount = accounts.find(a => a.is_primary)
+    setRepaymentData({
+      amount: '',
+      repay_to_account_id: primaryAccount?.id || '',
+      date: new Date().toISOString().split('T')[0]
+    })
   }
+
+  // Filter counterparties
+  const filteredCounterparties = counterparties.filter(cp => {
+    if (filterStatus === 'active') {
+      return cp.activeLoans > 0
+    }
+    if (filterStatus === 'complete') {
+      return cp.activeLoans === 0 && cp.totalOutstanding <= 0
+    }
+    return true // 'all'
+  })
 
   if (loading) {
     return (
@@ -288,38 +323,41 @@ export default function Lending() {
   return (
     <div className="space-y-6">
       {/* Header Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-r from-amber-500 to-amber-600 dark:from-amber-600 dark:to-amber-700 rounded-xl p-6 text-white">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-amber-500 to-amber-600 dark:from-amber-600 dark:to-amber-700 rounded-xl p-5 text-white">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-amber-100">Total Lent</p>
-            <HandCoins className="h-6 w-6 text-amber-200" />
+            <p className="text-amber-100 text-sm">Total Lent</p>
+            <HandCoins className="h-5 w-5 text-amber-200" />
           </div>
-          <p className="text-4xl font-bold">{formatCurrency(totalLent)}</p>
-          <p className="text-sm text-amber-100 mt-2">
-            {lendingRecords.length} {lendingRecords.length === 1 ? 'record' : 'records'}
-          </p>
+          <p className="text-3xl font-bold">{formatCurrency(summary?.totalLent || 0)}</p>
+          <p className="text-xs text-amber-100 mt-1">Lifetime lending</p>
         </div>
 
-        <div className="bg-gradient-to-r from-green-500 to-green-600 dark:from-green-600 dark:to-green-700 rounded-xl p-6 text-white">
+        <div className="bg-gradient-to-br from-red-500 to-red-600 dark:from-red-600 dark:to-red-700 rounded-xl p-5 text-white">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-green-100">Total Repaid</p>
-            <CheckCircle className="h-6 w-6 text-green-200" />
+            <p className="text-red-100 text-sm">Outstanding</p>
+            <AlertTriangle className="h-5 w-5 text-red-200" />
           </div>
-          <p className="text-4xl font-bold">{formatCurrency(totalRepaid)}</p>
-          <p className="text-sm text-green-100 mt-2">
-            {statusCounts.complete} completed
-          </p>
+          <p className="text-3xl font-bold">{formatCurrency(summary?.totalOutstanding || 0)}</p>
+          <p className="text-xs text-red-100 mt-1">Open receivables</p>
         </div>
 
-        <div className="bg-gradient-to-r from-red-500 to-red-600 dark:from-red-600 dark:to-red-700 rounded-xl p-6 text-white">
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 dark:from-orange-600 dark:to-orange-700 rounded-xl p-5 text-white">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-red-100">Outstanding</p>
-            <AlertCircle className="h-6 w-6 text-red-200" />
+            <p className="text-orange-100 text-sm">Overdue</p>
+            <Clock className="h-5 w-5 text-orange-200" />
           </div>
-          <p className="text-4xl font-bold">{formatCurrency(totalOutstanding)}</p>
-          <p className="text-sm text-red-100 mt-2">
-            {statusCounts.pending + statusCounts.partial} active
-          </p>
+          <p className="text-3xl font-bold">{formatCurrency(summary?.totalOverdueAmount || 0)}</p>
+          <p className="text-xs text-orange-100 mt-1">{summary?.overdueCounterparties || 0} borrower(s)</p>
+        </div>
+
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-xl p-5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-blue-100 text-sm">Active Borrowers</p>
+            <Users className="h-5 w-5 text-blue-200" />
+          </div>
+          <p className="text-3xl font-bold">{summary?.activeCounterparties || 0}</p>
+          <p className="text-xs text-blue-100 mt-1">of {summary?.totalCounterparties || 0} total</p>
         </div>
       </div>
 
@@ -328,49 +366,28 @@ export default function Lending() {
         <button
           onClick={() => {
             resetForm()
-            setEditingRecord(null)
-            setShowModal(true)
+            setShowAddModal(true)
           }}
           className="btn btn-primary w-full flex items-center justify-center py-4"
         >
           <Plus className="h-5 w-5 mr-2" />
-          Add New Lending Record
+          Lend Money to Someone
         </button>
       </div>
 
       {/* Filters */}
       <div className="card bg-white dark:bg-gray-800">
-        <label className="label">Filter by Status</label>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <label className="label">Filter Borrowers</label>
+        <div className="grid grid-cols-3 gap-3">
           <button
-            onClick={() => setFilterStatus('all')}
+            onClick={() => setFilterStatus('active')}
             className={`py-3 px-4 rounded-lg font-medium transition-colors ${
-              filterStatus === 'all'
+              filterStatus === 'active'
                 ? 'bg-blue-500 text-white'
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}
           >
-            All ({lendingRecords.length})
-          </button>
-          <button
-            onClick={() => setFilterStatus('pending')}
-            className={`py-3 px-4 rounded-lg font-medium transition-colors ${
-              filterStatus === 'pending'
-                ? 'bg-red-500 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
-          >
-            Pending ({statusCounts.pending})
-          </button>
-          <button
-            onClick={() => setFilterStatus('partial')}
-            className={`py-3 px-4 rounded-lg font-medium transition-colors ${
-              filterStatus === 'partial'
-                ? 'bg-amber-500 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
-          >
-            Partial ({statusCounts.partial})
+            Active ({counterparties.filter(c => c.activeLoans > 0).length})
           </button>
           <button
             onClick={() => setFilterStatus('complete')}
@@ -380,150 +397,123 @@ export default function Lending() {
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}
           >
-            Complete ({statusCounts.complete})
+            Complete ({counterparties.filter(c => c.activeLoans === 0 && c.totalOutstanding <= 0).length})
+          </button>
+          <button
+            onClick={() => setFilterStatus('all')}
+            className={`py-3 px-4 rounded-lg font-medium transition-colors ${
+              filterStatus === 'all'
+                ? 'bg-gray-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            All ({counterparties.length})
           </button>
         </div>
       </div>
 
-      {/* Lending Records List */}
+      {/* Borrowers List (Counterparty-Centric) */}
       <div className="card bg-white dark:bg-gray-800">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          Lending Records {filterStatus !== 'all' && `(${filteredRecords.length} filtered)`}
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+          <Users className="h-5 w-5 mr-2 text-gray-600 dark:text-gray-400" />
+          Borrowers
         </h3>
 
-        {filteredRecords.length === 0 ? (
+        {filteredCounterparties.length === 0 ? (
           <div className="text-center py-12">
             <HandCoins className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400 mb-4">
-              {lendingRecords.length === 0
+              {counterparties.length === 0
                 ? 'No lending records yet'
-                : 'No records match your filter'}
+                : 'No borrowers match your filter'}
             </p>
-            {lendingRecords.length === 0 && (
+            {counterparties.length === 0 && (
               <button
-                onClick={() => setShowModal(true)}
+                onClick={() => setShowAddModal(true)}
                 className="btn btn-primary"
               >
-                Add Your First Record
+                Lend Money
               </button>
             )}
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredRecords.map((record) => {
-              const lentAmount = parseFloat(record.amount)
-              const repaidAmount = parseFloat(record.amount_repaid)
-              const remaining = lentAmount - repaidAmount
-              const repaidPercentage = (repaidAmount / lentAmount) * 100
-
-              const statusColors = {
-                pending: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-                partial: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-                complete: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-              }
+            {filteredCounterparties.map((cp) => {
+              const StatusIcon = STATUS_CONFIG[cp.status]?.icon || Clock
+              const statusConfig = STATUS_CONFIG[cp.status]
 
               return (
                 <div
-                  key={record.id}
-                  className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  key={cp.personName}
+                  onClick={() => openCounterpartyDrawer(cp)}
+                  className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <UserCheck className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                          {record.person_name}
-                        </p>
-                        <span className={`badge ${statusColors[record.status]}`}>
-                          {record.status}
-                        </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center flex-shrink-0">
+                        <User className="h-6 w-6 text-white" />
                       </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <div className="flex items-center space-x-2">
-                          <DollarSign className="h-4 w-4" />
-                          <span>Lent: {formatCurrency(lentAmount)}</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Clock className="h-4 w-4" />
-                          <span>
-                            Date: {new Date(record.date).toLocaleDateString('en-KE', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
+                      <div>
+                        <div className="flex items-center space-x-2 mb-1">
+                          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                            {cp.personName}
+                          </p>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig?.color}`}>
+                            <StatusIcon className="h-3 w-3 mr-1" />
+                            {statusConfig?.label}
                           </span>
                         </div>
-                        {record.due_date && (
-                          <div className="flex items-center space-x-2">
-                            <AlertCircle className="h-4 w-4" />
-                            <span>
-                              Due: {new Date(record.due_date).toLocaleDateString('en-KE', {
-                                year: 'numeric',
+                        <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                          <span>{cp.activeLoans} active loan{cp.activeLoans !== 1 ? 's' : ''}</span>
+                          {cp.nearestDueDate && (
+                            <span className="flex items-center">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              Due: {new Date(cp.nearestDueDate).toLocaleDateString('en-KE', {
                                 month: 'short',
                                 day: 'numeric'
                               })}
                             </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {record.notes && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                          Note: {record.notes}
-                        </p>
-                      )}
-
-                      {/* Repayment Progress */}
-                      {record.status !== 'pending' && (
-                        <div className="mt-3">
-                          <div className="flex items-center justify-between text-sm mb-1">
-                            <span className="text-gray-600 dark:text-gray-400">Repaid: {formatCurrency(repaidAmount)}</span>
-                            <span className="text-gray-600 dark:text-gray-400">{repaidPercentage.toFixed(1)}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full transition-all duration-300 ${
-                                record.status === 'complete' ? 'bg-green-500' : 'bg-amber-500'
-                              }`}
-                              style={{ width: `${Math.min(repaidPercentage, 100)}%` }}
-                            />
-                          </div>
+                          )}
+                          {cp.isOverdue && (
+                            <span className="text-red-600 dark:text-red-400">
+                              {cp.maxDaysOverdue} days overdue
+                            </span>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
 
-                    <div className="flex flex-col items-end space-y-2 ml-4">
-                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                        {formatCurrency(remaining)}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-500">remaining</p>
-
-                      <div className="flex space-x-2 mt-2">
-                        {record.status !== 'complete' && (
-                          <button
-                            onClick={() => openRepaymentModal(record)}
-                            className="px-3 py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors flex items-center"
-                          >
-                            <DollarSign className="h-4 w-4 mr-1" />
-                            Record Payment
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleEdit(record)}
-                          className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(record.id)}
-                          className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                          {formatCurrency(cp.totalOutstanding)}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          outstanding
+                        </p>
                       </div>
+                      <ChevronRight className="h-5 w-5 text-gray-400" />
                     </div>
                   </div>
+
+                  {/* Progress Bar */}
+                  {cp.totalRepaid > 0 && (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                        <span>Repaid: {formatCurrency(cp.totalRepaid)}</span>
+                        <span>{((cp.totalRepaid / cp.totalLent) * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-300 ${
+                            cp.status === 'complete' ? 'bg-green-500' :
+                            cp.status === 'overdue' ? 'bg-red-500' : 'bg-amber-500'
+                          }`}
+                          style={{ width: `${Math.min((cp.totalRepaid / cp.totalLent) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -531,27 +521,23 @@ export default function Lending() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
-      {showModal && (
+      {/* Add Lending Modal */}
+      {showAddModal && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 animate-slideIn">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 animate-slideIn max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                {editingRecord ? 'Edit Lending Record' : 'Add New Lending Record'}
+                Lend Money
               </h3>
               <button
-                onClick={() => {
-                  setShowModal(false)
-                  setEditingRecord(null)
-                }}
+                onClick={() => setShowAddModal(false)}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-6 w-6" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Account Selector */}
+            <form onSubmit={handleAddLending} className="space-y-4">
               <div className="form-group">
                 <label className="label flex items-center">
                   <Wallet className="h-4 w-4 mr-1" />
@@ -567,7 +553,6 @@ export default function Lending() {
                   {accounts.map((account) => (
                     <option key={account.id} value={account.id}>
                       {account.name} - {formatCurrency(account.current_balance)}
-                      {account.is_primary && ' (Primary)'}
                     </option>
                   ))}
                 </select>
@@ -586,7 +571,7 @@ export default function Lending() {
               </div>
 
               <div className="form-group">
-                <label className="label">Amount Lent (KES) *</label>
+                <label className="label">Amount (KES) *</label>
                 <input
                   type="number"
                   step="0.01"
@@ -610,7 +595,7 @@ export default function Lending() {
               </div>
 
               <div className="form-group">
-                <label className="label">Due Date (Optional)</label>
+                <label className="label">Expected Return Date</label>
                 <input
                   type="date"
                   className="input"
@@ -620,7 +605,7 @@ export default function Lending() {
               </div>
 
               <div className="form-group">
-                <label className="label">Interest Rate % (Optional)</label>
+                <label className="label">Interest Rate %</label>
                 <input
                   type="number"
                   step="0.01"
@@ -632,10 +617,10 @@ export default function Lending() {
               </div>
 
               <div className="form-group">
-                <label className="label">Notes (Optional)</label>
+                <label className="label">Notes</label>
                 <textarea
                   className="textarea"
-                  placeholder="Add any notes or details..."
+                  placeholder="Add any notes..."
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
@@ -645,19 +630,13 @@ export default function Lending() {
               <div className="flex space-x-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowModal(false)
-                    setEditingRecord(null)
-                  }}
+                  onClick={() => setShowAddModal(false)}
                   className="flex-1 btn btn-secondary py-3"
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 btn btn-primary py-3"
-                >
-                  {editingRecord ? 'Update' : 'Add'} Record
+                <button type="submit" className="flex-1 btn btn-primary py-3">
+                  Lend Money
                 </button>
               </div>
             </form>
@@ -666,7 +645,7 @@ export default function Lending() {
       )}
 
       {/* Repayment Modal */}
-      {showRepaymentModal && repayingRecord && (
+      {showRepaymentModal && selectedLending && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 animate-slideIn">
             <div className="flex items-center justify-between mb-6">
@@ -676,7 +655,7 @@ export default function Lending() {
               <button
                 onClick={() => {
                   setShowRepaymentModal(false)
-                  setRepayingRecord(null)
+                  setSelectedLending(null)
                 }}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
@@ -685,10 +664,20 @@ export default function Lending() {
             </div>
 
             <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Lending to: <span className="font-semibold text-gray-900 dark:text-gray-100">{repayingRecord.person_name}</span></p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Total Lent: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(repayingRecord.amount)}</span></p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Already Repaid: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(repayingRecord.amount_repaid)}</span></p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Remaining: <span className="font-semibold text-red-600 dark:text-red-400">{formatCurrency(parseFloat(repayingRecord.amount) - parseFloat(repayingRecord.amount_repaid))}</span></p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                From: <span className="font-semibold text-gray-900 dark:text-gray-100">{selectedLending.person_name}</span>
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                Total Lent: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(selectedLending.amount)}</span>
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                Already Repaid: <span className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(selectedLending.amount_repaid || 0)}</span>
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Remaining: <span className="font-semibold text-red-600 dark:text-red-400">
+                  {formatCurrency(parseFloat(selectedLending.amount) - parseFloat(selectedLending.amount_repaid || 0))}
+                </span>
+              </p>
             </div>
 
             <form onSubmit={handleRepayment} className="space-y-4">
@@ -709,7 +698,7 @@ export default function Lending() {
               <div className="form-group">
                 <label className="label flex items-center">
                   <Wallet className="h-4 w-4 mr-1" />
-                  Deposit Repayment To *
+                  Deposit To *
                 </label>
                 <select
                   className="select"
@@ -721,13 +710,9 @@ export default function Lending() {
                   {accounts.map((account) => (
                     <option key={account.id} value={account.id}>
                       {account.name} - {formatCurrency(account.current_balance)}
-                      {account.is_primary && ' (Primary)'}
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Choose which account will receive this repayment
-                </p>
               </div>
 
               <div className="form-group">
@@ -746,16 +731,13 @@ export default function Lending() {
                   type="button"
                   onClick={() => {
                     setShowRepaymentModal(false)
-                    setRepayingRecord(null)
+                    setSelectedLending(null)
                   }}
                   className="flex-1 btn btn-secondary py-3"
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 btn btn-primary py-3"
-                >
+                <button type="submit" className="flex-1 btn btn-primary py-3">
                   Record Repayment
                 </button>
               </div>
@@ -763,6 +745,31 @@ export default function Lending() {
           </div>
         </div>
       )}
+
+      {/* Counterparty Detail Drawer */}
+      <LendingDetailDrawer
+        isOpen={drawerOpen}
+        onClose={() => {
+          setDrawerOpen(false)
+          setSelectedCounterparty(null)
+        }}
+        counterparty={selectedCounterparty}
+        onRecordRepayment={openRepaymentModal}
+        onForgive={openForgivenessModal}
+        onRefresh={fetchCounterparties}
+      />
+
+      {/* Forgiveness Modal */}
+      <ForgivenessModal
+        isOpen={showForgivenessModal}
+        onClose={() => {
+          setShowForgivenessModal(false)
+          setSelectedLending(null)
+        }}
+        lending={selectedLending}
+        onConfirm={handleForgiveness}
+        isLoading={forgivingLoading}
+      />
 
       {/* Confirmation Modal */}
       <ConfirmationModal
