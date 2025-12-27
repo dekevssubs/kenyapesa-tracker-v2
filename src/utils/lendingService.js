@@ -391,10 +391,14 @@ export class LendingService {
         summary.totalRepaid += repaid
         summary.totalOutstanding += outstanding
 
-        summary.byStatus[lending.status].count++
-        summary.byStatus[lending.status].amount += amount
-        if (lending.status === LendingService.STATUS.PARTIAL) {
-          summary.byStatus[lending.status].repaid += repaid
+        // Ensure status exists in byStatus object before accessing
+        const status = lending.status || LendingService.STATUS.PENDING
+        if (summary.byStatus[status]) {
+          summary.byStatus[status].count++
+          summary.byStatus[status].amount += amount
+          if (status === LendingService.STATUS.PARTIAL) {
+            summary.byStatus[status].repaid += repaid
+          }
         }
       })
 
