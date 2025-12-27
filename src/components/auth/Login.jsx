@@ -2,7 +2,24 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
-import { DollarSign, Mail, Lock, Sun, Moon, Eye, EyeOff } from 'lucide-react'
+import { useToast } from '../../contexts/ToastContext'
+import {
+  Wallet,
+  Mail,
+  Lock,
+  Sun,
+  Moon,
+  Eye,
+  EyeOff,
+  TrendingUp,
+  PieChart,
+  Target,
+  Bell,
+  Shield,
+  Smartphone,
+  ArrowRight,
+  CheckCircle2
+} from 'lucide-react'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -13,6 +30,7 @@ export default function Login() {
 
   const { signIn } = useAuth()
   const { toggleTheme, isDark } = useTheme()
+  const { showToast } = useToast()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
@@ -26,149 +44,256 @@ export default function Login() {
     setError('')
     setLoading(true)
 
-    const { error } = await signIn(email, password)
+    const { error, data } = await signIn(email, password)
 
     if (error) {
       setError(error.message)
       setLoading(false)
     } else {
+      const userName = data?.user?.user_metadata?.full_name?.split(' ')[0] || 'there'
+      showToast('Welcome Back!', `Welcome back, ${userName}! Good to see you again.`, 'success', 5000)
       navigate('/dashboard')
     }
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-primary-500/10 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-accent-blue/10 blur-3xl" />
-      </div>
+  const features = [
+    { icon: TrendingUp, title: 'Track Expenses', desc: 'See exactly where your money goes' },
+    { icon: PieChart, title: 'Smart Budgets', desc: 'Set limits and get alerts' },
+    { icon: Target, title: 'Savings Goals', desc: 'Build your financial future' },
+    { icon: Bell, title: 'Bill Reminders', desc: 'Never miss a payment' },
+  ]
 
-      {/* Theme toggle */}
+  return (
+    <div className="min-h-screen flex bg-[var(--bg-primary)] transition-colors duration-300">
+      {/* Theme toggle - floating */}
       <button
         onClick={toggleTheme}
-        className="absolute top-6 right-6 p-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all duration-200 shadow-soft"
+        className="fixed top-6 right-6 z-50 p-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all duration-200 shadow-lg"
         aria-label="Toggle theme"
       >
         {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
       </button>
 
-      <div className="max-w-md w-full relative z-10">
-        {/* Card */}
-        <div className="bg-[var(--card-bg)] rounded-2xl shadow-xl border border-[var(--border-primary)] p-8 animate-fade-in-up">
-          {/* Logo */}
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              <div className="relative">
-                <div className="bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl p-4 shadow-lg">
-                  <DollarSign className="h-10 w-10 text-white" />
-                </div>
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-[var(--card-bg)] animate-pulse" />
-              </div>
-            </div>
-            <h2 className="text-2xl font-bold text-[var(--text-primary)]">Welcome Back</h2>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              Sign in to your KenyaPesa account
-            </p>
-          </div>
-
-          {/* Error message */}
-          {error && (
-            <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm animate-fade-in">
-              {error}
-            </div>
-          )}
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="form-group">
-              <label htmlFor="email" className="label">
-                Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-[var(--text-muted)]" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="input pl-12"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="password" className="label">
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-[var(--text-muted)]" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  required
-                  className="input pl-12 pr-12"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-                >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full btn-primary py-3.5 text-base flex items-center justify-center"
-            >
-              {loading ? (
-                <>
-                  <span className="spinner-sm mr-2" />
-                  Signing in...
-                </>
-              ) : (
-                'Sign In'
-              )}
-            </button>
-          </form>
-
-          {/* Sign up link */}
-          <div className="mt-6 text-center">
-            <p className="text-sm text-[var(--text-secondary)]">
-              Don't have an account?{' '}
-              <Link
-                to="/signup"
-                className="font-semibold text-primary-500 hover:text-primary-600 transition-colors"
-              >
-                Sign up for free
-              </Link>
-            </p>
-          </div>
+      {/* Left side - Hero Section */}
+      <div className="hidden lg:flex lg:w-1/2 xl:w-3/5 bg-gradient-to-br from-green-600 via-green-700 to-emerald-800 relative overflow-hidden">
+        {/* Background patterns */}
+        <div className="absolute inset-0">
+          <div className="absolute top-20 left-20 w-72 h-72 bg-white/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-20 right-20 w-96 h-96 bg-emerald-400/20 rounded-full blur-3xl" />
+          <div className="absolute top-1/2 left-1/3 w-64 h-64 bg-green-300/10 rounded-full blur-2xl" />
+          {/* Grid pattern overlay */}
+          <div className="absolute inset-0 opacity-10" style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+          }} />
         </div>
 
-        {/* Footer */}
-        <div className="mt-8 text-center">
-          <p className="text-sm text-[var(--text-muted)]">
-            Built for Kenyan employees
-          </p>
+        {/* Content */}
+        <div className="relative z-10 flex flex-col justify-center px-12 xl:px-20 py-12 w-full">
+          {/* Logo & Brand */}
+          <div className="mb-12">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-3">
+                <Wallet className="h-10 w-10 text-white" />
+              </div>
+              <span className="text-3xl font-bold text-white">KenyaPesa</span>
+            </div>
+
+            {/* Tagline with thought bubble effect */}
+            <div className="relative">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+                <p className="text-2xl xl:text-3xl font-bold text-white leading-relaxed">
+                  "Where does all my money go?"
+                </p>
+                <p className="text-lg text-green-100 mt-3">
+                  We've all been there. Now you can finally find out.
+                </p>
+              </div>
+              {/* Thought bubble tail */}
+              <div className="absolute -bottom-3 left-8 w-6 h-6 bg-white/10 rounded-full border border-white/20" />
+              <div className="absolute -bottom-6 left-4 w-4 h-4 bg-white/10 rounded-full border border-white/20" />
+            </div>
+          </div>
+
+          {/* Features Grid */}
+          <div className="grid grid-cols-2 gap-4 mb-12">
+            {features.map((feature, index) => (
+              <div
+                key={index}
+                className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/10 hover:bg-white/15 transition-all duration-300 group"
+              >
+                <feature.icon className="h-8 w-8 text-green-200 mb-3 group-hover:scale-110 transition-transform" />
+                <h3 className="text-white font-semibold mb-1">{feature.title}</h3>
+                <p className="text-green-100 text-sm">{feature.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Trust indicators */}
+          <div className="flex items-center space-x-6 text-green-100">
+            <div className="flex items-center space-x-2">
+              <Shield className="h-5 w-5" />
+              <span className="text-sm">Bank-level Security</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Smartphone className="h-5 w-5" />
+              <span className="text-sm">M-Pesa Integration</span>
+            </div>
+          </div>
+
+          {/* Kenya-specific value props */}
+          <div className="mt-8 space-y-3">
+            <div className="flex items-center space-x-3 text-green-50">
+              <CheckCircle2 className="h-5 w-5 text-green-300 flex-shrink-0" />
+              <span className="text-sm">Accurate PAYE, NSSF, SHIF & Housing Levy calculations</span>
+            </div>
+            <div className="flex items-center space-x-3 text-green-50">
+              <CheckCircle2 className="h-5 w-5 text-green-300 flex-shrink-0" />
+              <span className="text-sm">Parse M-Pesa messages automatically</span>
+            </div>
+            <div className="flex items-center space-x-3 text-green-50">
+              <CheckCircle2 className="h-5 w-5 text-green-300 flex-shrink-0" />
+              <span className="text-sm">Track loans, SACCOs, and chamas</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right side - Login Form */}
+      <div className="w-full lg:w-1/2 xl:w-2/5 flex items-center justify-center px-6 py-12 relative">
+        {/* Background decoration for mobile */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none lg:hidden">
+          <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-green-500/10 blur-3xl" />
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-emerald-500/10 blur-3xl" />
+        </div>
+
+        <div className="max-w-md w-full relative z-10">
+          {/* Mobile logo */}
+          <div className="lg:hidden text-center mb-8">
+            <div className="flex justify-center mb-4">
+              <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-4 shadow-lg">
+                <Wallet className="h-10 w-10 text-white" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">KenyaPesa</h1>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">
+              Track your money, build your future
+            </p>
+          </div>
+
+          {/* Card */}
+          <div className="bg-[var(--card-bg)] rounded-2xl shadow-xl border border-[var(--border-primary)] p-8 animate-fade-in-up">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold text-[var(--text-primary)]">Welcome Back</h2>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                Sign in to continue managing your finances
+              </p>
+            </div>
+
+            {/* Error message */}
+            {error && (
+              <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm animate-fade-in">
+                {error}
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="form-group">
+                <label htmlFor="email" className="label">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Mail className="h-5 w-5 text-[var(--text-muted)]" />
+                  </div>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    className="input pl-12"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="password" className="label">
+                  Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-[var(--text-muted)]" />
+                  </div>
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    className="input pl-12 pr-12"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full btn-primary py-3.5 text-base flex items-center justify-center group"
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner-sm mr-2" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    Sign In
+                    <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Sign up link */}
+            <div className="mt-6 text-center">
+              <p className="text-sm text-[var(--text-secondary)]">
+                Don't have an account?{' '}
+                <Link
+                  to="/signup"
+                  className="font-semibold text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
+                >
+                  Sign up for free
+                </Link>
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="mt-8 text-center space-y-2">
+            <p className="text-xs text-[var(--text-muted)]">
+              Your data is encrypted and securely stored
+            </p>
+            <p className="text-xs text-[var(--text-muted)]">
+              Made with care for Kenyans, by Kenyans
+            </p>
+          </div>
         </div>
       </div>
     </div>

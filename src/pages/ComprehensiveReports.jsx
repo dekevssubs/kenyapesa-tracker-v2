@@ -9,26 +9,43 @@ import {
   PieChart as PieChartIcon,
   Download,
   ArrowLeftRight,
-  DollarSign
+  DollarSign,
+  Receipt,
+  List,
+  Target,
+  Briefcase,
+  Flag
 } from 'lucide-react'
+import QuickOverviewTab from '../components/reports/QuickOverviewTab'
 import MonthToMonthTab from '../components/reports/MonthToMonthTab'
 import YearToYearTab from '../components/reports/YearToYearTab'
 import CategoryAnalysisTab from '../components/reports/CategoryAnalysisTab'
 import CashFlowTab from '../components/reports/CashFlowTab'
 import OverviewTab from '../components/reports/OverviewTab'
+import TransactionExplorerTab from '../components/reports/TransactionExplorerTab'
+import BudgetVsActualTab from '../components/reports/BudgetVsActualTab'
+import PortfolioSummaryTab from '../components/reports/PortfolioSummaryTab'
+import GoalsProgressTab from '../components/reports/GoalsProgressTab'
+import MpesaFeeAnalytics from '../components/MpesaFeeAnalytics'
 
 const TABS = [
-  { id: 'overview', label: 'Overview', icon: FileText },
+  { id: 'quick', label: 'Quick Overview', icon: TrendingUp },
+  { id: 'overview', label: 'Detailed Overview', icon: FileText },
+  { id: 'explorer', label: 'Transaction Explorer', icon: List },
   { id: 'monthly', label: 'Month-to-Month', icon: Calendar },
   { id: 'yearly', label: 'Year-to-Year', icon: TrendingUp },
   { id: 'category', label: 'Category Analysis', icon: PieChartIcon },
-  { id: 'cashflow', label: 'Cash Flow', icon: ArrowLeftRight }
+  { id: 'cashflow', label: 'Cash Flow', icon: ArrowLeftRight },
+  { id: 'budget', label: 'Budget vs Actual', icon: Target },
+  { id: 'portfolio', label: 'Portfolio Summary', icon: Briefcase },
+  { id: 'goals', label: 'Goals Progress', icon: Flag },
+  { id: 'mpesa-fees', label: 'M-Pesa Fees', icon: Receipt }
 ]
 
 export default function ComprehensiveReports() {
   const { user } = useAuth()
   const { showToast } = useToast()
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState('quick')
   const [loading, setLoading] = useState(false)
   const [dateRange, setDateRange] = useState({
     from: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0], // Jan 1
@@ -47,6 +64,8 @@ export default function ComprehensiveReports() {
 
   const renderActiveTab = () => {
     switch (activeTab) {
+      case 'quick':
+        return <QuickOverviewTab dateRange={dateRange} />
       case 'overview':
         return <OverviewTab dateRange={dateRange} />
       case 'monthly':
@@ -57,8 +76,18 @@ export default function ComprehensiveReports() {
         return <CategoryAnalysisTab dateRange={dateRange} />
       case 'cashflow':
         return <CashFlowTab dateRange={dateRange} />
+      case 'explorer':
+        return <TransactionExplorerTab dateRange={dateRange} />
+      case 'budget':
+        return <BudgetVsActualTab dateRange={dateRange} />
+      case 'portfolio':
+        return <PortfolioSummaryTab />
+      case 'goals':
+        return <GoalsProgressTab />
+      case 'mpesa-fees':
+        return <MpesaFeeAnalytics period="month" />
       default:
-        return <OverviewTab dateRange={dateRange} />
+        return <QuickOverviewTab />
     }
   }
 
@@ -69,10 +98,10 @@ export default function ComprehensiveReports() {
         <div>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
             <FileText className="h-8 w-8 mr-3 text-blue-500 dark:text-blue-400" />
-            Comprehensive Financial Reports
+            Financial Reports
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Detailed analysis of your financial data with month-to-month and year-to-year comparisons
+            Complete financial analytics with quick overview, detailed insights, and trend analysis
           </p>
         </div>
 

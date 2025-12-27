@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../utils/supabase'
 
 const AuthContext = createContext({})
@@ -14,20 +14,48 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [authError, setAuthError] = useState(null)
+
+  // Initialize auth state
+  const initializeAuth = useCallback(async () => {
+    try {
+      // Set a timeout to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        console.warn('Auth initialization timeout - proceeding without session')
+        setLoading(false)
+      }, 10000) // 10 second timeout
+
+      const { data: { session }, error } = await supabase.auth.getSession()
+
+      clearTimeout(timeoutId)
+
+      if (error) {
+        console.error('Error getting session:', error)
+        setAuthError(error.message)
+        setUser(null)
+      } else {
+        setUser(session?.user ?? null)
+      }
+    } catch (error) {
+      console.error('Auth initialization error:', error)
+      setAuthError(error.message)
+      setUser(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    initializeAuth()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      setAuthError(null)
       setLoading(false)
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [initializeAuth])
 
   const signUp = async (email, password, fullName) => {
     try {
@@ -90,14 +118,16 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     loading,
+    authError,
     signUp,
     signIn,
     signOut,
+    refreshAuth: initializeAuth,
   }
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   )
 }

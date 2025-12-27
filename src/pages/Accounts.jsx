@@ -8,6 +8,7 @@ import AddAccountModal from '../components/accounts/AddAccountModal'
 import EditAccountModal from '../components/accounts/EditAccountModal'
 import TransferMoneyModal from '../components/accounts/TransferMoneyModal'
 import RecordInvestmentReturnModal from '../components/accounts/RecordInvestmentReturnModal'
+import ConfirmationModal from '../components/ConfirmationModal'
 import {
   Wallet,
   TrendingUp,
@@ -24,8 +25,14 @@ import {
   Filter,
   Edit2,
   Trash2,
-  History
+  History,
+  MoreVertical,
+  CheckCircle,
+  XCircle,
+  PauseCircle,
+  CreditCard
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 export default function Accounts() {
   const { user } = useAuth()
@@ -44,7 +51,16 @@ export default function Accounts() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingAccount, setEditingAccount] = useState(null)
   const [showTransferModal, setShowTransferModal] = useState(false)
+  const [transferFromAccount, setTransferFromAccount] = useState(null) // Pre-selected source account
+  const [pendingDeleteAccount, setPendingDeleteAccount] = useState(null) // Account to delete after transfer
   const [showReturnModal, setShowReturnModal] = useState(false)
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    variant: 'danger',
+    onConfirm: () => {}
+  })
 
   useEffect(() => {
     if (user) {
@@ -55,7 +71,8 @@ export default function Accounts() {
   const fetchAccounts = async () => {
     try {
       const service = new AccountService(supabase, user.id)
-      const accountsData = await service.getAccounts()
+      // Pass false to include inactive accounts in the list
+      const accountsData = await service.getAccounts(false)
       const balancesData = await service.getBalanceByType()
 
       setAccounts(accountsData)
@@ -92,7 +109,40 @@ export default function Accounts() {
 
       if (result.success) {
         showToast('Success', `Transferred ${formatCurrency(amount)} successfully!`, 'success')
-        fetchAccounts()
+        await fetchAccounts()
+
+        // Check if this was a transfer before deletion
+        if (pendingDeleteAccount && pendingDeleteAccount.id === fromAccountId) {
+          const accountToDelete = pendingDeleteAccount
+          setPendingDeleteAccount(null)
+          setTransferFromAccount(null)
+          setShowTransferModal(false)
+
+          // Prompt to delete the now-empty account
+          setConfirmModal({
+            isOpen: true,
+            title: 'Delete Account Now?',
+            message: `Funds transferred successfully!\n\nDo you want to delete ${accountToDelete.name} now?`,
+            variant: 'warning',
+            onConfirm: async () => {
+              try {
+                const { error: deleteError } = await supabase
+                  .from('accounts')
+                  .delete()
+                  .eq('id', accountToDelete.id)
+                  .eq('user_id', user.id)
+
+                if (deleteError) throw deleteError
+
+                showToast('Success', `${accountToDelete.name} deleted successfully`, 'success')
+                fetchAccounts()
+              } catch (err) {
+                console.error('Error deleting account:', err)
+                showToast('Error', 'Failed to delete account', 'error')
+              }
+            }
+          })
+        }
       } else {
         showToast('Error', result.error || 'Failed to transfer money', 'error')
       }
@@ -161,6 +211,39 @@ export default function Accounts() {
   }
 
   const handleDeleteAccount = async (account) => {
+    // Prevent deleting the only primary account
+    if (account.is_primary) {
+      const otherAccountsOfType = accounts.filter(
+        a => a.account_type === account.account_type && a.id !== account.id
+      )
+
+      if (otherAccountsOfType.length === 0) {
+        showToast('Error', 'Cannot delete the only account of this type. Add another account first.', 'error')
+        return
+      }
+    }
+
+    // Check if account has balance - must transfer first
+    const balance = parseFloat(account.current_balance || 0)
+    if (balance > 0) {
+      showToast(
+        'Transfer Required',
+        `${account.name} has ${formatCurrency(balance)}. Please transfer the funds to another account before deleting.`,
+        'warning',
+        6000
+      )
+      // Open transfer modal with this account pre-selected as source
+      // Mark account as pending deletion so we can auto-delete after transfer
+      // Include account name in description so history shows it after account is deleted
+      setTransferFromAccount({
+        ...account,
+        pendingDeleteDescription: `Transfer from ${account.name} (account closing)`
+      })
+      setPendingDeleteAccount(account)
+      setShowTransferModal(true)
+      return
+    }
+
     // Check if account has transactions
     try {
       const { data: transactions, error } = await supabase
@@ -171,50 +254,36 @@ export default function Accounts() {
 
       if (error) throw error
 
-      if (transactions && transactions.length > 0) {
-        const confirmDelete = confirm(
-          `⚠️ Warning: ${account.name} has transaction history.\n\n` +
-          `Deleting this account will:\n` +
-          `• Remove all transaction history\n` +
-          `• This action cannot be undone\n\n` +
-          `Are you sure you want to delete this account?`
-        )
+      const hasTransactions = transactions && transactions.length > 0
 
-        if (!confirmDelete) return
-      } else {
-        const confirmDelete = confirm(
-          `Are you sure you want to delete ${account.name}?`
-        )
+      setConfirmModal({
+        isOpen: true,
+        title: hasTransactions ? 'Delete Account with History?' : 'Delete Account?',
+        message: hasTransactions
+          ? `${account.name} has transaction history.\n\nDeleting this account will:\n• Remove all transaction history\n• This action cannot be undone`
+          : `Are you sure you want to delete ${account.name}?`,
+        variant: 'danger',
+        onConfirm: async () => {
+          try {
+            const { error: deleteError } = await supabase
+              .from('accounts')
+              .delete()
+              .eq('id', account.id)
+              .eq('user_id', user.id)
 
-        if (!confirmDelete) return
-      }
+            if (deleteError) throw deleteError
 
-      // Prevent deleting the only primary account
-      if (account.is_primary) {
-        const otherAccountsOfType = accounts.filter(
-          a => a.account_type === account.account_type && a.id !== account.id
-        )
-
-        if (otherAccountsOfType.length === 0) {
-          showToast('Error', 'Cannot delete the only account of this type. Add another account first.', 'error')
-          return
+            showToast('Success', `${account.name} deleted successfully`, 'success')
+            fetchAccounts()
+          } catch (err) {
+            console.error('Error deleting account:', err)
+            showToast('Error', 'Failed to delete account', 'error')
+          }
         }
-      }
-
-      // Delete the account (cascade will delete transactions)
-      const { error: deleteError } = await supabase
-        .from('accounts')
-        .delete()
-        .eq('id', account.id)
-        .eq('user_id', user.id)
-
-      if (deleteError) throw deleteError
-
-      showToast('Success', `${account.name} deleted successfully`, 'success')
-      fetchAccounts()
+      })
     } catch (error) {
-      console.error('Error deleting account:', error)
-      showToast('Error', 'Failed to delete account', 'error')
+      console.error('Error checking transactions:', error)
+      showToast('Error', 'Failed to check account transactions', 'error')
     }
   }
 
@@ -245,6 +314,42 @@ export default function Accounts() {
       virtual: 'from-purple-500 to-purple-600'
     }
     return colorMap[accountType] || 'from-gray-500 to-gray-600'
+  }
+
+  const getStatusConfig = (isActive) => {
+    if (isActive === false) {
+      return { color: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30', icon: XCircle, label: 'Inactive' }
+    }
+    return { color: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30', icon: CheckCircle, label: 'Active' }
+  }
+
+  const handleStatusChange = async (account, newIsActive) => {
+    const actionText = newIsActive ? 'activate' : 'deactivate'
+    const statusText = newIsActive ? 'active' : 'inactive'
+
+    setConfirmModal({
+      isOpen: true,
+      title: `${newIsActive ? 'Activate' : 'Deactivate'} Account?`,
+      message: `Are you sure you want to ${actionText} ${account.name}?${!newIsActive ? '\n\nInactive accounts cannot be used for transactions.' : ''}`,
+      variant: newIsActive ? 'info' : 'warning',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('accounts')
+            .update({ is_active: newIsActive })
+            .eq('id', account.id)
+            .eq('user_id', user.id)
+
+          if (error) throw error
+
+          showToast('Success', `${account.name} is now ${statusText}`, 'success')
+          fetchAccounts()
+        } catch (err) {
+          console.error('Error updating account status:', err)
+          showToast('Error', 'Failed to update account status', 'error')
+        }
+      }
+    })
   }
 
   const filteredAccounts = accounts.filter(account => {
@@ -443,72 +548,129 @@ export default function Accounts() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAccounts.map((account) => {
               const Icon = getAccountIcon(account.category)
               const gradient = getAccountColor(account.account_type)
+              const statusConfig = getStatusConfig(account.is_active)
+              const StatusIcon = statusConfig.icon
+              const isInactive = account.is_active === false
 
               return (
                 <div
                   key={account.id}
-                  className="p-6 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border-2 border-transparent hover:border-blue-200 dark:hover:border-blue-600"
+                  className={`relative overflow-hidden rounded-2xl bg-white dark:bg-gray-800 shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 ${isInactive ? 'opacity-75' : ''}`}
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className={`p-3 rounded-xl bg-gradient-to-br ${gradient} text-white`}>
-                      <Icon className="h-6 w-6" />
+                  {/* Gradient Header */}
+                  <div className={`h-24 bg-gradient-to-br ${gradient} relative`}>
+                    <div className="absolute inset-0 bg-black/10" />
+                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white/20 to-transparent" />
+
+                    {/* Icon Badge */}
+                    <div className="absolute -bottom-6 left-6">
+                      <div className={`p-4 rounded-2xl bg-gradient-to-br ${gradient} shadow-lg border-4 border-white dark:border-gray-800`}>
+                        <Icon className="h-7 w-7 text-white" />
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+
+                    {/* Status & Actions */}
+                    <div className="absolute top-3 right-3 flex items-center space-x-2">
                       {account.is_primary && (
-                        <span className="badge bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs">
+                        <span className="px-2 py-1 rounded-full bg-white/20 backdrop-blur-sm text-white text-xs font-medium">
                           Primary
                         </span>
                       )}
-                      <button
-                        onClick={() => handleEditAccount(account)}
-                        className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                        title="Edit account"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAccount(account)}
-                        className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                        title="Delete account"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="relative group">
+                        <button className="p-1.5 rounded-lg bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-colors">
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                        {/* Dropdown Menu */}
+                        <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                          <button
+                            onClick={() => handleEditAccount(account)}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center"
+                          >
+                            <Edit2 className="h-4 w-4 mr-2" /> Edit
+                          </button>
+                          <Link
+                            to={`/account-history?account=${account.id}`}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center"
+                          >
+                            <History className="h-4 w-4 mr-2" /> View History
+                          </Link>
+                          <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                          {account.is_active === false ? (
+                            <button
+                              onClick={() => handleStatusChange(account, true)}
+                              className="w-full px-3 py-2 text-left text-sm text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 flex items-center"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" /> Activate
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleStatusChange(account, false)}
+                              className="w-full px-3 py-2 text-left text-sm text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 flex items-center"
+                            >
+                              <PauseCircle className="h-4 w-4 mr-2" /> Deactivate
+                            </button>
+                          )}
+                          <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                          <button
+                            onClick={() => handleDeleteAccount(account)}
+                            className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" /> Delete
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                    {account.name}
-                  </h4>
-
-                  {account.institution_name && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                      {account.institution_name}
-                    </p>
-                  )}
-
-                  <div className="mb-3">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Current Balance</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                      {showBalances ? formatCurrency(account.current_balance) : '••••••'}
-                    </p>
-                  </div>
-
-                  {account.interest_rate && (
-                    <div className="flex items-center text-sm text-green-600">
-                      <TrendingUp className="h-4 w-4 mr-1" />
-                      {account.interest_rate}% p.a.
+                  {/* Card Content */}
+                  <div className="pt-10 px-6 pb-6">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                          {account.name}
+                        </h4>
+                        {account.institution_name && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {account.institution_name}
+                          </p>
+                        )}
+                      </div>
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color}`}>
+                        <StatusIcon className="h-3 w-3 mr-1" />
+                        {statusConfig.label}
+                      </span>
                     </div>
-                  )}
 
-                  {account.account_number && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      A/C: •••• {account.account_number.slice(-4)}
-                    </p>
-                  )}
+                    {/* Balance */}
+                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 mb-4">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium uppercase tracking-wider">Current Balance</p>
+                      <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                        {showBalances ? formatCurrency(account.current_balance) : '••••••'}
+                      </p>
+                    </div>
+
+                    {/* Meta Info */}
+                    <div className="flex items-center justify-between text-sm">
+                      {account.interest_rate ? (
+                        <div className="flex items-center text-green-600 dark:text-green-400 font-medium">
+                          <TrendingUp className="h-4 w-4 mr-1" />
+                          {account.interest_rate}% p.a.
+                        </div>
+                      ) : (
+                        <div></div>
+                      )}
+                      {account.account_number && (
+                        <div className="flex items-center text-gray-500 dark:text-gray-400">
+                          <CreditCard className="h-4 w-4 mr-1" />
+                          •••• {account.account_number.slice(-4)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )
             })}
@@ -537,9 +699,14 @@ export default function Accounts() {
       {/* Transfer Money Modal */}
       <TransferMoneyModal
         isOpen={showTransferModal}
-        onClose={() => setShowTransferModal(false)}
+        onClose={() => {
+          setShowTransferModal(false)
+          setTransferFromAccount(null)
+          setPendingDeleteAccount(null)
+        }}
         onSubmit={handleTransfer}
         accounts={accounts}
+        preSelectedFromAccount={transferFromAccount}
       />
 
       {/* Record Investment Return Modal */}
@@ -548,6 +715,17 @@ export default function Accounts() {
         onClose={() => setShowReturnModal(false)}
         onSubmit={handleRecordReturn}
         accounts={accounts}
+      />
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        variant={confirmModal.variant}
+        confirmText={confirmModal.variant === 'danger' ? 'Delete' : 'Confirm'}
       />
     </div>
   )

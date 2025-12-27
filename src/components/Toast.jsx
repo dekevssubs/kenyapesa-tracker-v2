@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react'
 
-export default function Toast({ message, type = 'info', onClose, duration = 4000 }) {
+export default function Toast({ title, message, type = 'info', onClose, duration = 4000 }) {
   const [isVisible, setIsVisible] = useState(false)
   const [isExiting, setIsExiting] = useState(false)
 
@@ -53,7 +53,7 @@ export default function Toast({ message, type = 'info', onClose, duration = 4000
     }
   }
 
-  const getTitle = () => {
+  const getDefaultTitle = () => {
     switch (type) {
       case 'success':
         return 'Success'
@@ -67,6 +67,9 @@ export default function Toast({ message, type = 'info', onClose, duration = 4000
     }
   }
 
+  // Use custom title if provided, otherwise use default based on type
+  const displayTitle = title || getDefaultTitle()
+
   return (
     <div className={getToastStyles()}>
       <div className="flex-shrink-0 mt-0.5">
@@ -75,7 +78,7 @@ export default function Toast({ message, type = 'info', onClose, duration = 4000
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-0.5">
-          {getTitle()}
+          {displayTitle}
         </p>
         <p className="text-sm text-gray-600 dark:text-gray-300 break-words">
           {message}

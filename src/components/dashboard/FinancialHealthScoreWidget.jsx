@@ -54,13 +54,13 @@ export default function FinancialHealthScoreWidget({ stats, comparisons }) {
       else emergencyFundScore = 0
 
       // 3. Debt Management Score (0-25 points)
-      // Check lending tracker for outstanding loans
+      // Check lending tracker for outstanding loans (money lent out, not yet fully repaid)
+      // Note: lending_tracker uses 'repayment_status' column, not 'status'
       const { data: lendingData } = await supabase
         .from('lending_tracker')
         .select('amount, amount_repaid')
         .eq('user_id', user.id)
-        .eq('type', 'borrowed')
-        .neq('status', 'complete')
+        .neq('repayment_status', 'complete')
 
       const totalDebt = lendingData?.reduce((sum, loan) => {
         return sum + (parseFloat(loan.amount) - parseFloat(loan.amount_repaid))
@@ -118,11 +118,11 @@ export default function FinancialHealthScoreWidget({ stats, comparisons }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-xl font-bold text-gray-900 flex items-center">
-            <Heart className="h-5 w-5 mr-2 text-red-500" />
+          <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
+            <Heart className="h-5 w-5 mr-2 text-red-500 dark:text-red-400" />
             Financial Health Score
           </h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Overall assessment of your financial wellbeing
           </p>
         </div>
@@ -137,7 +137,7 @@ export default function FinancialHealthScoreWidget({ stats, comparisons }) {
               cx="96"
               cy="96"
               r="70"
-              stroke="#E5E7EB"
+              className="stroke-gray-200 dark:stroke-gray-700"
               strokeWidth="12"
               fill="none"
             />
@@ -157,10 +157,10 @@ export default function FinancialHealthScoreWidget({ stats, comparisons }) {
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-5xl font-bold text-gray-900">
+            <span className="text-5xl font-bold text-gray-900 dark:text-gray-100">
               {healthMetrics.overallScore}
             </span>
-            <span className="text-sm text-gray-600 mt-1">out of 100</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400 mt-1">out of 100</span>
             <span className="text-2xl mt-2">{scoreColor.emoji}</span>
             <span className={`text-sm font-semibold mt-1 ${scoreColor.text}`}>
               {scoreColor.label}
@@ -175,20 +175,20 @@ export default function FinancialHealthScoreWidget({ stats, comparisons }) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
-              <PiggyBank className="h-4 w-4 text-blue-500 mr-2" />
-              <span className="text-sm font-medium text-gray-700">Savings Rate</span>
+              <PiggyBank className="h-4 w-4 text-blue-500 dark:text-blue-400 mr-2" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Savings Rate</span>
             </div>
-            <span className="text-sm font-semibold text-gray-900">
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {healthMetrics.savingsRateScore}/30
             </span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
-              className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+              className="bg-blue-500 dark:bg-blue-400 h-2 rounded-full transition-all duration-500"
               style={{ width: `${(healthMetrics.savingsRateScore / 30) * 100}%` }}
             ></div>
           </div>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             Current: {stats.savingsRate}% (Target: 20%+)
           </p>
         </div>
@@ -197,20 +197,20 @@ export default function FinancialHealthScoreWidget({ stats, comparisons }) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
-              <Shield className="h-4 w-4 text-green-500 mr-2" />
-              <span className="text-sm font-medium text-gray-700">Emergency Fund</span>
+              <Shield className="h-4 w-4 text-green-500 dark:text-green-400 mr-2" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Emergency Fund</span>
             </div>
-            <span className="text-sm font-semibold text-gray-900">
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {healthMetrics.emergencyFundScore}/25
             </span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
-              className="bg-green-500 h-2 rounded-full transition-all duration-500"
+              className="bg-green-500 dark:bg-green-400 h-2 rounded-full transition-all duration-500"
               style={{ width: `${(healthMetrics.emergencyFundScore / 25) * 100}%` }}
             ></div>
           </div>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             Current: {emergencyFundMonths.toFixed(1)} months (Target: 6 months)
           </p>
         </div>
@@ -219,20 +219,20 @@ export default function FinancialHealthScoreWidget({ stats, comparisons }) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
-              <TrendingUp className="h-4 w-4 text-purple-500 mr-2" />
-              <span className="text-sm font-medium text-gray-700">Debt Management</span>
+              <TrendingUp className="h-4 w-4 text-purple-500 dark:text-purple-400 mr-2" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Debt Management</span>
             </div>
-            <span className="text-sm font-semibold text-gray-900">
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {healthMetrics.debtManagementScore}/25
             </span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
-              className="bg-purple-500 h-2 rounded-full transition-all duration-500"
+              className="bg-purple-500 dark:bg-purple-400 h-2 rounded-full transition-all duration-500"
               style={{ width: `${(healthMetrics.debtManagementScore / 25) * 100}%` }}
             ></div>
           </div>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {healthMetrics.debtManagementScore === 25 ? 'No debt - Excellent!' : 'Keep debt under 15% of income'}
           </p>
         </div>
@@ -241,32 +241,32 @@ export default function FinancialHealthScoreWidget({ stats, comparisons }) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
-              <Target className="h-4 w-4 text-orange-500 mr-2" />
-              <span className="text-sm font-medium text-gray-700">Budget Adherence</span>
+              <Target className="h-4 w-4 text-orange-500 dark:text-orange-400 mr-2" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Budget Adherence</span>
             </div>
-            <span className="text-sm font-semibold text-gray-900">
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {healthMetrics.budgetAdherenceScore}/20
             </span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
-              className="bg-orange-500 h-2 rounded-full transition-all duration-500"
+              className="bg-orange-500 dark:bg-orange-400 h-2 rounded-full transition-all duration-500"
               style={{ width: `${(healthMetrics.budgetAdherenceScore / 20) * 100}%` }}
             ></div>
           </div>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             Expense volatility: {Math.abs(comparisons?.mom?.expenseChange || 0).toFixed(1)}% (Lower is better)
           </p>
         </div>
       </div>
 
       {/* Recommendations */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <p className="text-sm font-semibold text-blue-900 mb-3 flex items-center">
+      <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-3 flex items-center">
           <AlertTriangle className="h-4 w-4 mr-2" />
           Recommendations to Improve Your Score
         </p>
-        <ul className="space-y-2 text-sm text-blue-800">
+        <ul className="space-y-2 text-sm text-blue-800 dark:text-blue-200">
           {healthMetrics.savingsRateScore < 20 && (
             <li className="flex items-start">
               <span className="mr-2">•</span>

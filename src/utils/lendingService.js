@@ -336,14 +336,14 @@ export class LendingService {
       }
 
       if (filters.startDate) {
-        query = query.gte('date', filters.startDate)
+        query = query.gte('date_lent', filters.startDate)
       }
 
       if (filters.endDate) {
-        query = query.lte('date', filters.endDate)
+        query = query.lte('date_lent', filters.endDate)
       }
 
-      const { data: lendings, error } = await query.order('date', { ascending: false })
+      const { data: lendings, error } = await query.order('date_lent', { ascending: false })
 
       if (error) throw error
 

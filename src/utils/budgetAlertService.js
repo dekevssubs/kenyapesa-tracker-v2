@@ -35,7 +35,8 @@ export class BudgetAlertService {
 
       for (const budget of budgets) {
         const spent = await this.calculateCategorySpent(budget.category, budget.month)
-        const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0
+        const budgetLimit = parseFloat(budget.monthly_limit || 0)
+        const percentage = budgetLimit > 0 ? (spent / budgetLimit) * 100 : 0
 
         // Check thresholds: 75%, 90%, 100%
         let alertType = null
@@ -44,7 +45,7 @@ export class BudgetAlertService {
 
         if (percentage >= 100) {
           alertType = 'exceeded'
-          alertMessage = `Budget exceeded for ${budget.category}! You've spent KES ${spent.toFixed(2)} of KES ${budget.amount}`
+          alertMessage = `Budget exceeded for ${budget.category}! You've spent KES ${spent.toFixed(2)} of KES ${budgetLimit.toFixed(2)}`
           toastType = 'error'
         } else if (percentage >= 90) {
           alertType = 'warning_90'
@@ -75,7 +76,7 @@ export class BudgetAlertService {
               category: budget.category,
               alertType,
               spent,
-              budgetAmount: budget.amount,
+              budgetAmount: budgetLimit,
               percentage
             })
           }
@@ -94,12 +95,28 @@ export class BudgetAlertService {
    */
   async calculateCategorySpent(category, month) {
     try {
+      // Validate inputs
+      if (!category) {
+        return 0
+      }
+
+      // Get the start date for the query
+      let startDate = month
+      if (!month || typeof month !== 'string') {
+        // Default to first of current month
+        const now = new Date()
+        startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+      } else if (month.length === 7) {
+        // Format: "YYYY-MM" - add day
+        startDate = month + '-01'
+      }
+
       const { data: expenses, error } = await this.supabase
         .from('expenses')
         .select('amount')
         .eq('user_id', this.userId)
         .eq('category', category)
-        .gte('date', month)
+        .gte('date', startDate)
         .lt('date', this.getNextMonth(month))
 
       if (error) {
@@ -107,7 +124,7 @@ export class BudgetAlertService {
         return 0
       }
 
-      const total = (expenses || []).reduce((sum, e) => sum + parseFloat(e.amount), 0)
+      const total = (expenses || []).reduce((sum, e) => sum + parseFloat(e.amount || 0), 0)
       return total
     } catch (error) {
       console.error('Error in calculateCategorySpent:', error)
@@ -123,20 +140,21 @@ export class BudgetAlertService {
       const twentyFourHoursAgo = new Date()
       twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24)
 
+      // Use limit(1) instead of maybeSingle() to avoid error when multiple rows exist
       const { data, error } = await this.supabase
         .from('budget_alerts')
         .select('id')
         .eq('budget_id', budgetId)
         .eq('alert_type', alertType)
         .gte('created_at', twentyFourHoursAgo.toISOString())
-        .maybeSingle()
+        .limit(1)
 
       if (error) {
         console.error('Error checking alert history:', error)
         return true // Default to sending alert if check fails
       }
 
-      return data === null // Send alert if no recent alert found
+      return !data || data.length === 0 // Send alert if no recent alert found
     } catch (error) {
       console.error('Error in shouldSendAlert:', error)
       return true
@@ -238,8 +256,9 @@ export class BudgetAlertService {
       }
 
       const spent = await this.calculateCategorySpent(budget.category, budget.month)
-      const remaining = budget.amount - spent
-      const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0
+      const budgetLimit = parseFloat(budget.monthly_limit || 0)
+      const remaining = budgetLimit - spent
+      const percentage = budgetLimit > 0 ? (spent / budgetLimit) * 100 : 0
 
       let status = 'good'
       if (percentage >= 100) {
@@ -280,8 +299,9 @@ export class BudgetAlertService {
       const statuses = await Promise.all(
         budgets.map(async (budget) => {
           const spent = await this.calculateCategorySpent(budget.category, budget.month)
-          const remaining = budget.amount - spent
-          const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0
+          const budgetLimit = parseFloat(budget.monthly_limit || 0)
+          const remaining = budgetLimit - spent
+          const percentage = budgetLimit > 0 ? (spent / budgetLimit) * 100 : 0
 
           let status = 'good'
           if (percentage >= 100) {
@@ -313,7 +333,34 @@ export class BudgetAlertService {
    * Helper: Get next month date string
    */
   getNextMonth(monthStr) {
-    const date = new Date(monthStr + '-01')
+    // Handle null/undefined/empty month strings
+    if (!monthStr || typeof monthStr !== 'string') {
+      // Default to current month if no valid month provided
+      const now = new Date()
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      return nextMonth.toISOString().split('T')[0].slice(0, 7) + '-01'
+    }
+
+    // Handle different date formats
+    let dateStr = monthStr
+    if (monthStr.length === 7) {
+      // Format: "YYYY-MM" - add day
+      dateStr = monthStr + '-01'
+    } else if (monthStr.length === 10) {
+      // Format: "YYYY-MM-DD" - use as is
+      dateStr = monthStr
+    }
+
+    const date = new Date(dateStr)
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      // Default to next month from now if invalid
+      const now = new Date()
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      return nextMonth.toISOString().split('T')[0].slice(0, 7) + '-01'
+    }
+
     date.setMonth(date.getMonth() + 1)
     return date.toISOString().split('T')[0].slice(0, 7) + '-01'
   }

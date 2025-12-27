@@ -77,39 +77,21 @@ export default function AccountHistory() {
     try {
       setLoading(true)
 
-      // If no accounts yet, fetch all user transactions
-      if (accounts.length === 0) {
-        const { data: userTransactions, error: txError } = await supabase
-          .from('account_transactions')
-          .select(`
-            *,
-            from_account:accounts!account_transactions_from_account_id_fkey(id, name, account_type),
-            to_account:accounts!account_transactions_to_account_id_fkey(id, name, account_type)
-          `)
-          .eq('user_id', user.id)
-          .order('transaction_date', { ascending: false })
-          .limit(500)
+      // Fetch all user transactions with account details
+      const { data, error } = await supabase
+        .from('account_transactions')
+        .select(`
+          *,
+          from_account:accounts!account_transactions_from_account_id_fkey(id, name, account_type),
+          to_account:accounts!account_transactions_to_account_id_fkey(id, name, account_type)
+        `)
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(500)
 
-        if (txError) throw txError
-        setTransactions(userTransactions || [])
-      } else {
-        // Fetch transactions for specific accounts
-        const accountIds = accounts.map(a => a.id)
-        const { data, error } = await supabase
-          .from('account_transactions')
-          .select(`
-            *,
-            from_account:accounts!account_transactions_from_account_id_fkey(id, name, account_type),
-            to_account:accounts!account_transactions_to_account_id_fkey(id, name, account_type)
-          `)
-          .or(`from_account_id.in.(${accountIds.join(',')}),to_account_id.in.(${accountIds.join(',')})`)
-          .order('transaction_date', { ascending: false })
-          .limit(500)
-
-        if (error) throw error
-        setTransactions(data || [])
-      }
-
+      if (error) throw error
+      setTransactions(data || [])
       setLoading(false)
     } catch (error) {
       console.error('Error fetching transactions:', error)
@@ -134,10 +116,10 @@ export default function AccountHistory() {
 
     // Date range filter
     if (dateRange.from) {
-      filtered = filtered.filter(tx => tx.transaction_date >= dateRange.from)
+      filtered = filtered.filter(tx => tx.date >= dateRange.from)
     }
     if (dateRange.to) {
-      filtered = filtered.filter(tx => tx.transaction_date <= dateRange.to)
+      filtered = filtered.filter(tx => tx.date <= dateRange.to)
     }
 
     // Search filter
@@ -164,6 +146,22 @@ export default function AccountHistory() {
       text: txType?.color || 'text-gray-600',
       bg: txType?.bg || 'bg-gray-50'
     }
+  }
+
+  // Extract account name from description for deleted accounts
+  const getAccountDisplayName = (account, description, isFromAccount = true) => {
+    if (account?.name) return account.name
+
+    // Try to extract from description if account was deleted
+    if (description) {
+      // Pattern: "Transfer from [AccountName] (account closing)"
+      const fromMatch = description.match(/Transfer from (.+?) \(account closing\)/)
+      if (fromMatch && isFromAccount) {
+        return `${fromMatch[1]} (Deleted)`
+      }
+    }
+
+    return null
   }
 
   const calculateRunningBalance = () => {
@@ -198,10 +196,10 @@ export default function AccountHistory() {
     const txWithBalance = calculateRunningBalance() || filteredTransactions
 
     const rows = txWithBalance.map(tx => [
-      new Date(tx.transaction_date).toLocaleDateString('en-KE'),
+      new Date(tx.date).toLocaleDateString('en-KE'),
       tx.transaction_type,
-      tx.from_account?.name || '-',
-      tx.to_account?.name || '-',
+      getAccountDisplayName(tx.from_account, tx.description, true) || '-',
+      getAccountDisplayName(tx.to_account, tx.description, false) || '-',
       tx.amount,
       tx.description || '',
       tx.running_balance || ''
@@ -430,7 +428,7 @@ export default function AccountHistory() {
                   return (
                     <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-900">
                       <td className="px-4 py-4 text-sm text-gray-900 dark:text-gray-100">
-                        {new Date(tx.transaction_date).toLocaleDateString('en-KE', {
+                        {new Date(tx.date).toLocaleDateString('en-KE', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric'
@@ -448,10 +446,14 @@ export default function AccountHistory() {
                         {tx.description || '-'}
                       </td>
                       <td className="px-4 py-4 text-sm text-gray-900 dark:text-gray-100">
-                        {tx.from_account?.name || '-'}
+                        {getAccountDisplayName(tx.from_account, tx.description, true) || (
+                          <span className="text-gray-400 dark:text-gray-500">-</span>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-sm text-gray-900 dark:text-gray-100">
-                        {tx.to_account?.name || '-'}
+                        {getAccountDisplayName(tx.to_account, tx.description, false) || (
+                          <span className="text-gray-400 dark:text-gray-500">-</span>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-right">
                         <span className={`font-semibold ${

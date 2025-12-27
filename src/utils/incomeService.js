@@ -114,6 +114,7 @@ export class IncomeService {
         account_id,
         amount,
         source,
+        source_name, // Who paid - employer name, client, etc.
         date,
         description,
         tax_amount,
@@ -155,6 +156,7 @@ export class IncomeService {
           account_id,
           amount: grossAmount,
           source,
+          source_name: source_name || null, // Store source of funds
           date,
           description,
           tax_amount: taxAmount,
@@ -192,6 +194,12 @@ export class IncomeService {
 
       // Step 3: Create account_transaction (income flows TO account)
       // Use NET amount (after all deductions)
+      // Build description that includes source of funds for account history
+      const sourceLabel = source.replace('_', ' ').charAt(0).toUpperCase() + source.replace('_', ' ').slice(1)
+      const transactionDescription = source_name
+        ? `${sourceLabel} from ${source_name}${description ? ` - ${description}` : ''}`
+        : description || `Income from ${sourceLabel}`
+
       const { data: accountTransaction, error: txError } = await this.supabase
         .from('account_transactions')
         .insert({
@@ -201,7 +209,7 @@ export class IncomeService {
           amount: netAmount, // Net amount after deductions
           date,
           category: source,
-          description: description || `Income from ${source}`,
+          description: transactionDescription,
           reference_id: income.id,
           reference_type: 'income'
         })

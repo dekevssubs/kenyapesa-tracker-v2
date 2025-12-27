@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, ArrowRight } from 'lucide-react'
 import { formatCurrency } from '../../utils/calculations'
 
-export default function TransferMoneyModal({ isOpen, onClose, onSubmit, accounts }) {
+export default function TransferMoneyModal({ isOpen, onClose, onSubmit, accounts, preSelectedFromAccount }) {
   const [formData, setFormData] = useState({
     from_account_id: '',
     to_account_id: '',
@@ -11,6 +11,22 @@ export default function TransferMoneyModal({ isOpen, onClose, onSubmit, accounts
   })
   const [selectedFromAccount, setSelectedFromAccount] = useState(null)
   const [selectedToAccount, setSelectedToAccount] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Pre-select source account when provided (e.g., from delete with balance)
+  useEffect(() => {
+    if (preSelectedFromAccount && isOpen) {
+      setFormData(prev => ({
+        ...prev,
+        from_account_id: preSelectedFromAccount.id,
+        // Pre-fill amount with full balance for easy "transfer all" before delete
+        amount: preSelectedFromAccount.current_balance?.toString() || '',
+        // Use pending delete description if provided (includes account name for history)
+        description: preSelectedFromAccount.pendingDeleteDescription || prev.description
+      }))
+      setSelectedFromAccount(preSelectedFromAccount)
+    }
+  }, [preSelectedFromAccount, isOpen])
 
   useEffect(() => {
     if (formData.from_account_id) {
@@ -32,6 +48,8 @@ export default function TransferMoneyModal({ isOpen, onClose, onSubmit, accounts
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    if (isSubmitting) return // Prevent duplicate submissions
 
     if (!formData.from_account_id) {
       alert('Please select a source account')
@@ -59,14 +77,24 @@ export default function TransferMoneyModal({ isOpen, onClose, onSubmit, accounts
       return
     }
 
-    await onSubmit(
-      formData.from_account_id,
-      formData.to_account_id,
-      amount,
-      formData.description
-    )
+    try {
+      setIsSubmitting(true)
 
-    handleClose()
+      await onSubmit(
+        formData.from_account_id,
+        formData.to_account_id,
+        amount,
+        formData.description
+      )
+
+      // Close modal only after successful transfer
+      handleClose()
+    } catch (error) {
+      console.error('Transfer error:', error)
+      alert('Transfer failed. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleClose = () => {
@@ -94,24 +122,24 @@ export default function TransferMoneyModal({ isOpen, onClose, onSubmit, accounts
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-2xl w-full p-6 animate-slideIn">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] flex flex-col animate-slideIn">
+        {/* Header - Fixed */}
+        <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">Transfer Money</h3>
-            <p className="text-sm text-gray-600 mt-1">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Transfer Money</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               Move funds between your accounts
             </p>
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           >
             <X className="h-6 w-6" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* From Account */}
           <div className="form-group">
             <label className="label">From Account *</label>
@@ -234,24 +262,36 @@ export default function TransferMoneyModal({ isOpen, onClose, onSubmit, accounts
             </div>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex-1 btn btn-secondary py-3"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 btn btn-primary py-3"
-              disabled={!formData.from_account_id || !formData.to_account_id || !formData.amount}
-            >
-              Transfer Money
-            </button>
-          </div>
         </form>
+
+        {/* Action Buttons - Fixed at bottom */}
+        <div className="flex space-x-3 p-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="flex-1 btn btn-secondary py-3"
+            disabled={isSubmitting}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="flex-1 btn btn-primary py-3 relative"
+            disabled={!formData.from_account_id || !formData.to_account_id || !formData.amount || isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <span className="opacity-0">Transfer Money</span>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              </>
+            ) : (
+              'Transfer Money'
+            )}
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -120,29 +120,24 @@ ${new Date().toLocaleString('en-KE')}
     if (!result) return []
 
     const breakdown = []
-    let remainingIncome = result.taxableIncome
-    let totalTax = 0
+    let previousThreshold = 0
+    const taxableIncome = result.taxableIncome
 
     for (const band of TAX_BANDS) {
-      if (remainingIncome <= 0) break
+      if (taxableIncome <= previousThreshold) break
 
-      const bandSize = band.max === Infinity 
-        ? remainingIncome 
-        : Math.min(band.max - band.min + 1, remainingIncome)
-      
-      const taxInBand = bandSize * band.rate
+      const upperLimit = band.threshold === Infinity ? taxableIncome : Math.min(taxableIncome, band.threshold)
+      const taxableInBand = upperLimit - previousThreshold
+      const taxInBand = taxableInBand * band.rate
 
       breakdown.push({
-        range: band.max === Infinity 
-          ? `${band.min.toLocaleString()}+`
-          : `${band.min.toLocaleString()} - ${band.max.toLocaleString()}`,
+        range: band.label,
         rate: `${(band.rate * 100)}%`,
-        taxableAmount: bandSize,
+        taxableAmount: taxableInBand,
         tax: taxInBand
       })
 
-      totalTax += taxInBand
-      remainingIncome -= bandSize
+      previousThreshold = band.threshold
     }
 
     return breakdown
@@ -271,7 +266,7 @@ ${new Date().toLocaleString('en-KE')}
               <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-gray-100">Taxable Income</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">After NSSF & Housing Levy</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">After NSSF, Housing Levy & SHIF</p>
                 </div>
                 <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(result.taxableIncome)}</p>
               </div>
@@ -389,10 +384,7 @@ ${new Date().toLocaleString('en-KE')}
               {TAX_BANDS.map((band, index) => (
                 <tr key={index} className="border-b border-gray-100 dark:border-gray-800">
                   <td className="py-2 px-4 text-gray-700 dark:text-gray-300">
-                    {band.max === Infinity
-                      ? `${band.min.toLocaleString()} and above`
-                      : `${band.min.toLocaleString()} - ${band.max.toLocaleString()}`
-                    }
+                    {band.label}
                   </td>
                   <td className="text-right py-2 px-4 font-semibold text-gray-900 dark:text-gray-100">
                     {(band.rate * 100)}%

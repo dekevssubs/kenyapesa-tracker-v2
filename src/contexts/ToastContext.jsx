@@ -14,17 +14,21 @@ export function useToast() {
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
 
-  const addToast = useCallback((message, type = 'info', duration = 4000) => {
+  const addToast = useCallback((title, message, type = 'info', duration = 4000) => {
     const id = Date.now() + Math.random()
-    const toast = { id, message, type, duration }
+    // Support both (message, type, duration) and (title, message, type, duration) patterns
+    const toastData = typeof message === 'string' && ['success', 'error', 'warning', 'info'].includes(type)
+      ? { id, title, message, type, duration }
+      : { id, title: null, message: title, type: message || 'info', duration: type || 4000 }
 
-    setToasts(prev => [...prev, toast])
+    setToasts(prev => [...prev, toastData])
 
     // Auto-remove after duration
-    if (duration > 0) {
+    const finalDuration = toastData.duration
+    if (finalDuration > 0) {
       setTimeout(() => {
         removeToast(id)
-      }, duration)
+      }, finalDuration)
     }
 
     return id
@@ -34,23 +38,40 @@ export function ToastProvider({ children }) {
     setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
 
+  // showToast(title, message, type, duration) - full format with title
+  const showToast = useCallback((title, message, type = 'info', duration = 4000) => {
+    return addToast(title, message, type, duration)
+  }, [addToast])
+
+  // Short-hand methods for simple toasts (message only)
   const toast = {
-    success: (message, duration) => addToast(message, 'success', duration),
-    error: (message, duration) => addToast(message, 'error', duration),
-    warning: (message, duration) => addToast(message, 'warning', duration),
-    info: (message, duration) => addToast(message, 'info', duration)
+    success: (message, duration) => addToast(null, message, 'success', duration || 4000),
+    error: (message, duration) => addToast(null, message, 'error', duration || 4000),
+    warning: (message, duration) => addToast(null, message, 'warning', duration || 4000),
+    info: (message, duration) => addToast(null, message, 'info', duration || 4000)
+  }
+
+  const contextValue = {
+    showToast,
+    toast,
+    // Also expose individual methods for backwards compatibility
+    success: toast.success,
+    error: toast.error,
+    warning: toast.warning,
+    info: toast.info
   }
 
   return (
-    <ToastContext.Provider value={toast}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       <div className="fixed top-4 right-4 z-[9999] space-y-2 pointer-events-none">
-        {toasts.map(toast => (
+        {toasts.map(t => (
           <Toast
-            key={toast.id}
-            message={toast.message}
-            type={toast.type}
-            onClose={() => removeToast(toast.id)}
+            key={t.id}
+            title={t.title}
+            message={t.message}
+            type={t.type}
+            onClose={() => removeToast(t.id)}
           />
         ))}
       </div>

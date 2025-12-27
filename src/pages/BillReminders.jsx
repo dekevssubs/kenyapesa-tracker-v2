@@ -4,9 +4,12 @@ import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency } from '../utils/calculations'
 import { getCategoryIcon, getPaymentIcon } from '../utils/iconMappings'
-import { Bell, Plus, Edit2, Trash2, Calendar, AlertCircle, Clock, CheckCircle, X, DollarSign } from 'lucide-react'
+import { Bell, Plus, Edit2, Trash2, Calendar, AlertCircle, Clock, CheckCircle, X, DollarSign, Filter, ChevronDown } from 'lucide-react'
 
 const BILL_FREQUENCIES = ['once', 'weekly', 'monthly', 'quarterly', 'yearly']
+
+// Payment window: bills can only be marked as paid up to 3 days before due date
+const PAYMENT_WINDOW_DAYS = 3
 
 const EXPENSE_CATEGORIES = [
   'rent', 'transport', 'food', 'utilities', 'airtime',
@@ -22,6 +25,12 @@ export default function BillReminders() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingBill, setEditingBill] = useState(null)
+  const [showFilters, setShowFilters] = useState(false)
+
+  // Filter states
+  const [filterCategory, setFilterCategory] = useState('all')
+  const [filterDueDays, setFilterDueDays] = useState('all') // 'all', 'overdue', 'today', 'week', 'month'
+  const [sortBy, setSortBy] = useState('due_date') // 'due_date', 'amount', 'name'
 
   const [formData, setFormData] = useState({
     name: '',
@@ -119,7 +128,28 @@ export default function BillReminders() {
     }
   }
 
+  /**
+   * Check if a bill is within the payment window (can be marked as paid)
+   * Bills can be marked as paid from 3 days before due date onwards (including overdue)
+   */
+  const isWithinPaymentWindow = (bill) => {
+    const daysUntil = getDaysUntilDue(bill.due_date)
+    // Can pay if overdue (negative) or within 3 days of due date
+    return daysUntil <= PAYMENT_WINDOW_DAYS
+  }
+
   const handleMarkAsPaid = async (bill) => {
+    // Check payment window
+    const daysUntil = getDaysUntilDue(bill.due_date)
+    if (daysUntil > PAYMENT_WINDOW_DAYS) {
+      showToast(
+        'Too Early',
+        `You can only mark this bill as paid ${PAYMENT_WINDOW_DAYS} days before the due date (${new Date(bill.due_date).toLocaleDateString()})`,
+        'warning'
+      )
+      return
+    }
+
     if (!confirm(`Mark "${bill.name}" as paid and create expense entry?`)) return
 
     try {
@@ -267,6 +297,54 @@ export default function BillReminders() {
   const totalUpcoming = upcomingBills.reduce((sum, b) => sum + parseFloat(b.amount), 0)
   const totalOverdue = overdueBills.reduce((sum, b) => sum + parseFloat(b.amount), 0)
 
+  // Apply filters
+  const filteredBills = bills.filter(bill => {
+    // Category filter
+    if (filterCategory !== 'all' && bill.category !== filterCategory) return false
+
+    // Due days filter
+    const daysUntil = getDaysUntilDue(bill.due_date)
+    switch (filterDueDays) {
+      case 'overdue':
+        if (daysUntil >= 0) return false
+        break
+      case 'today':
+        if (daysUntil !== 0) return false
+        break
+      case 'week':
+        if (daysUntil < 0 || daysUntil > 7) return false
+        break
+      case 'month':
+        if (daysUntil < 0 || daysUntil > 30) return false
+        break
+      default:
+        break
+    }
+
+    return true
+  })
+
+  // Apply sorting
+  const sortedBills = [...filteredBills].sort((a, b) => {
+    switch (sortBy) {
+      case 'amount':
+        return parseFloat(b.amount) - parseFloat(a.amount)
+      case 'name':
+        return a.name.localeCompare(b.name)
+      case 'due_date':
+      default:
+        return new Date(a.due_date) - new Date(b.due_date)
+    }
+  })
+
+  const hasActiveFilters = filterCategory !== 'all' || filterDueDays !== 'all'
+
+  const resetFilters = () => {
+    setFilterCategory('all')
+    setFilterDueDays('all')
+    setSortBy('due_date')
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -313,19 +391,111 @@ export default function BillReminders() {
         </div>
       </div>
 
-      {/* Add New Button */}
-      <div className="card">
-        <button
-          onClick={() => {
-            resetForm()
-            setEditingBill(null)
-            setShowModal(true)
-          }}
-          className="btn btn-primary w-full flex items-center justify-center py-4"
-        >
-          <Plus className="h-5 w-5 mr-2" />
-          Add New Bill Reminder
-        </button>
+      {/* Add New Button & Filters */}
+      <div className="card space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => {
+              resetForm()
+              setEditingBill(null)
+              setShowModal(true)
+            }}
+            className="btn btn-primary flex items-center justify-center py-3 flex-1"
+          >
+            <Plus className="h-5 w-5 mr-2" />
+            Add New Bill Reminder
+          </button>
+
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`btn flex items-center justify-center py-3 ${
+              showFilters || hasActiveFilters
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                : 'btn-secondary'
+            }`}
+          >
+            <Filter className="h-5 w-5 mr-2" />
+            Filters
+            {hasActiveFilters && (
+              <span className="ml-2 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                Active
+              </span>
+            )}
+            <ChevronDown className={`h-4 w-4 ml-2 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Category
+                </label>
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="input w-full"
+                >
+                  <option value="all">All Categories</option>
+                  {EXPENSE_CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>
+                      {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Due Date
+                </label>
+                <select
+                  value={filterDueDays}
+                  onChange={(e) => setFilterDueDays(e.target.value)}
+                  className="input w-full"
+                >
+                  <option value="all">All Bills</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="today">Due Today</option>
+                  <option value="week">Due This Week</option>
+                  <option value="month">Due This Month</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Sort By
+                </label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="input w-full"
+                >
+                  <option value="due_date">Due Date</option>
+                  <option value="amount">Amount (High to Low)</option>
+                  <option value="name">Name (A-Z)</option>
+                </select>
+              </div>
+            </div>
+
+            {hasActiveFilters && (
+              <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-600">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Showing {sortedBills.length} of {bills.length} bills
+                  {filteredBills.length > 0 && ` • Total: ${formatCurrency(filteredBills.reduce((sum, b) => sum + parseFloat(b.amount), 0))}`}
+                </p>
+                <button
+                  onClick={resetFilters}
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Reset Filters
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Overdue Bills Alert */}
@@ -373,24 +543,29 @@ export default function BillReminders() {
 
       {/* Bills List */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          All Bill Reminders
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          {hasActiveFilters ? 'Filtered Bill Reminders' : 'All Bill Reminders'}
         </h3>
 
-        {bills.length === 0 ? (
+        {sortedBills.length === 0 ? (
           <div className="text-center py-12">
-            <Bell className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 mb-4">No bill reminders yet</p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="btn btn-primary"
-            >
-              Add Your First Bill Reminder
-            </button>
+            <Bell className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400 mb-4">
+              {hasActiveFilters ? 'No bills match your filters' : 'No bill reminders yet'}
+            </p>
+            {hasActiveFilters ? (
+              <button onClick={resetFilters} className="btn btn-secondary">
+                Clear Filters
+              </button>
+            ) : (
+              <button onClick={() => setShowModal(true)} className="btn btn-primary">
+                Add Your First Bill Reminder
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
-            {bills.map((bill) => {
+            {sortedBills.map((bill) => {
               const CategoryIcon = getCategoryIcon(bill.category)
               const PaymentIcon = getPaymentIcon(bill.payment_method)
               const daysUntil = getDaysUntilDue(bill.due_date)
@@ -473,22 +648,33 @@ export default function BillReminders() {
                       </p>
 
                       <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleMarkAsPaid(bill)}
-                          className="px-3 py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors flex items-center"
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Mark Paid
-                        </button>
+                        {isWithinPaymentWindow(bill) ? (
+                          <button
+                            onClick={() => handleMarkAsPaid(bill)}
+                            className="px-3 py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors flex items-center"
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Mark Paid
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className="px-3 py-2 bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 text-sm rounded-lg cursor-not-allowed flex items-center"
+                            title={`Available ${PAYMENT_WINDOW_DAYS} days before due date`}
+                          >
+                            <Clock className="h-4 w-4 mr-1" />
+                            Not Yet
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEdit(bill)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(bill.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

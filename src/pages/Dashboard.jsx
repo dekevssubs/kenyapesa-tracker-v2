@@ -6,7 +6,6 @@ import { formatCurrency } from '../utils/calculations'
 import { useBudgetAlerts } from '../hooks/useBudgetAlerts'
 import { useRecurringExpenses } from '../hooks/useRecurringExpenses'
 import PendingExpensesReview from '../components/expenses/PendingExpensesReview'
-import BillRemindersWidget from '../components/dashboard/BillRemindersWidget'
 import PeriodSelector from '../components/dashboard/PeriodSelector'
 import TwelveMonthTrendWidget from '../components/dashboard/TwelveMonthTrendWidget'
 import YTDProgressWidget from '../components/dashboard/YTDProgressWidget'
@@ -30,8 +29,13 @@ import {
   ArrowDownRight,
   Calendar,
   AlertCircle,
-  TrendingUp as TrendIcon
+  TrendingUp as TrendIcon,
+  Trophy,
+  Medal,
+  Award,
+  BarChart3
 } from 'lucide-react'
+import { getCategoryIcon } from '../utils/iconMappings'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 
 const COLORS = ['#006B3F', '#BB0000', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899']
@@ -284,9 +288,6 @@ export default function Dashboard() {
       {/* Pending Expenses Review */}
       <PendingExpensesReview onUpdate={refreshPendingCount} />
 
-      {/* Bill Reminders Widget */}
-      <BillRemindersWidget />
-
       {/* Key Metrics - Enhanced Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Income Card */}
@@ -517,30 +518,39 @@ export default function Dashboard() {
             </Link>
           </div>
           <div className="space-y-4">
-            {topExpenses.map((expense, index) => (
-              <div key={expense.name} className="flex items-center p-4 bg-gray-50 dark:bg-gray-900 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                <div className="flex items-center space-x-4 flex-1">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm">
-                    <span className="text-2xl">
-                      {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '📊'}
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-900 dark:text-gray-100">{expense.name}</p>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-2">
-                      <div
-                        className="bg-kenya-green h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${expense.percentage}%` }}
-                      />
+            {topExpenses.map((expense, index) => {
+              const CategoryIcon = getCategoryIcon(expense.name.toLowerCase())
+              const RankIcon = index === 0 ? Trophy : index === 1 ? Medal : index === 2 ? Award : BarChart3
+              const rankColor = index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-amber-600' : 'text-blue-500'
+
+              return (
+                <div key={expense.name} className="flex items-center p-4 bg-gray-50 dark:bg-gray-900 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  <div className="flex items-center space-x-4 flex-1">
+                    <div className="relative">
+                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm">
+                        <CategoryIcon className="h-6 w-6 text-gray-700 dark:text-gray-300" />
+                      </div>
+                      <div className={`absolute -top-1 -right-1 bg-white dark:bg-gray-800 rounded-full p-0.5 shadow`}>
+                        <RankIcon className={`h-4 w-4 ${rankColor}`} />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">{expense.name}</p>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-2">
+                        <div
+                          className="bg-kenya-green h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${expense.percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(expense.value)}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{expense.percentage}%</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(expense.value)}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-500">{expense.percentage}%</p>
-                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

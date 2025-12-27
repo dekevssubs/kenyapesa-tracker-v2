@@ -157,7 +157,7 @@ export default function SavingsInvestments() {
         `)
         .eq('user_id', user.id)
         .or(`from_account_id.in.(${accountIds.join(',')}),to_account_id.in.(${accountIds.join(',')})`)
-        .order('transaction_date', { ascending: false })
+        .order('date', { ascending: false })
         .limit(10)
 
       if (error) throw error
@@ -271,13 +271,17 @@ export default function SavingsInvestments() {
                   <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-gray-700" />
-              <XAxis dataKey="date" stroke="#6b7280" className="dark:stroke-gray-400" />
-              <YAxis stroke="#6b7280" className="dark:stroke-gray-400" tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
+              <XAxis dataKey="date" stroke="var(--text-secondary)" />
+              <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`} />
               <Tooltip
                 formatter={(value) => formatCurrency(value)}
-                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb' }}
-                className="dark:bg-gray-800 dark:border-gray-700"
+                contentStyle={{
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-primary)',
+                  backgroundColor: 'var(--card-bg)',
+                  color: 'var(--text-primary)'
+                }}
               />
               <Area type="monotone" dataKey="balance" stroke="#10b981" fillOpacity={1} fill="url(#colorBalance)" />
             </AreaChart>
