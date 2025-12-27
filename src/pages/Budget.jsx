@@ -4,18 +4,19 @@ import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency } from '../utils/calculations'
 import { getCategoryIcon } from '../utils/iconMappings'
-import { FileText, Plus, Edit2, Trash2, X, TrendingUp, AlertTriangle, CheckCircle, Lightbulb } from 'lucide-react'
+import { FileText, Plus, Edit2, Trash2, X, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Info } from 'lucide-react'
 import ConfirmationModal from '../components/ConfirmationModal'
 import { useConfirmation } from '../hooks/useConfirmation'
+import { fetchAndPredict } from '../utils/aiPredictions'
 
 const EXPENSE_CATEGORIES = [
   'rent', 'transport', 'food', 'utilities', 'airtime',
-  'entertainment', 'health', 'education', 'clothing', 'savings', 'debt', 'other'
+  'entertainment', 'health', 'education', 'clothing', 'savings', 'debt', 'fees', 'other'
 ]
 
 export default function Budget() {
   const { user } = useAuth()
-  const { showToast } = useToast()
+  const toast = useToast()
   const { isOpen: confirmOpen, config: confirmConfig, confirm, close: closeConfirm } = useConfirmation()
   const [loading, setLoading] = useState(true)
   const [budgets, setBudgets] = useState([])
@@ -68,12 +69,15 @@ export default function Budget() {
       const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
 
+      // Fetch only non-reversed expenses for budget calculations
+      // Per spec: "Expense is not reversed" must be true to count toward budget
       const { data, error } = await supabase
         .from('expenses')
         .select('*')
         .eq('user_id', user.id)
         .gte('date', firstDay.toISOString().split('T')[0])
         .lte('date', lastDay.toISOString().split('T')[0])
+        .or('is_reversed.is.null,is_reversed.eq.false')
 
       if (error) throw error
       setExpenses(data || [])
@@ -84,59 +88,34 @@ export default function Budget() {
 
   const calculatePredictions = async () => {
     try {
-      // Fetch last 3 months expenses for prediction
-      const threeMonthsAgo = new Date()
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
-
-      const { data: historicalData } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('date', threeMonthsAgo.toISOString().split('T')[0])
-
-      if (!historicalData || historicalData.length === 0) return
-
-      // Calculate average spending by category
-      const categoryTotals = {}
-      const categoryCounts = {}
-
-      historicalData.forEach(expense => {
-        if (!categoryTotals[expense.category]) {
-          categoryTotals[expense.category] = 0
-          categoryCounts[expense.category] = 0
-        }
-        categoryTotals[expense.category] += parseFloat(expense.amount)
-        categoryCounts[expense.category]++
-      })
-
-      const pred = {}
-      Object.keys(categoryTotals).forEach(category => {
-        const avgMonthly = categoryTotals[category] / 3 // 3 months average
-        const trend = Math.random() * 0.2 - 0.1 // Simulate +/- 10% trend
-        pred[category] = {
-          predicted: avgMonthly * (1 + trend),
-          historical: avgMonthly,
-          trend: trend > 0 ? 'increasing' : 'decreasing'
-        }
-      })
-
-      setPredictions(pred)
+      // Use the real AI prediction engine
+      const aiPredictions = await fetchAndPredict(user.id, supabase)
+      setPredictions(aiPredictions)
     } catch (error) {
       console.error('Error calculating predictions:', error)
     }
   }
 
   const getCategorySpent = (category) => {
+    // Per spec: Transaction fees ARE expenses
+    // Include both amount and transaction_fee in the total
     return expenses
       .filter(e => e.category === category)
-      .reduce((sum, e) => sum + parseFloat(e.amount), 0)
+      .reduce((sum, e) => {
+        const amount = parseFloat(e.amount) || 0
+        const fee = parseFloat(e.transaction_fee) || 0
+        return sum + amount + fee
+      }, 0)
   }
 
   const getBudgetStatus = (spent, limit) => {
+    // Per spec: Status thresholds
+    // - On track: spent < 80%
+    // - Almost at limit: 80% ≤ spent < 100%
+    // - Over budget: spent ≥ 100%
     const percentage = (spent / limit) * 100
     if (percentage >= 100) return { status: 'over', color: 'red', message: 'Over budget!' }
-    if (percentage >= 90) return { status: 'warning', color: 'yellow', message: 'Almost at limit' }
-    if (percentage >= 75) return { status: 'caution', color: 'orange', message: 'Watch spending' }
+    if (percentage >= 80) return { status: 'warning', color: 'yellow', message: 'Almost at limit' }
     return { status: 'good', color: 'green', message: 'On track' }
   }
 
@@ -144,7 +123,7 @@ export default function Budget() {
     e.preventDefault()
 
     if (!formData.monthly_limit || parseFloat(formData.monthly_limit) <= 0) {
-      showToast('Validation Error', 'Please enter a valid budget amount', 'warning')
+      toast.warning('Please enter a valid budget amount')
       return
     }
 
@@ -159,7 +138,7 @@ export default function Budget() {
           .eq('user_id', user.id)
 
         if (error) throw error
-        showToast('Success', 'Budget updated successfully', 'success')
+        toast.success('Budget updated successfully')
       } else {
         const { error } = await supabase
           .from('budgets')
@@ -173,7 +152,7 @@ export default function Budget() {
           ])
 
         if (error) throw error
-        showToast('Success', 'Budget created successfully', 'success')
+        toast.success('Budget created successfully')
       }
 
       setFormData({
@@ -186,7 +165,7 @@ export default function Budget() {
       fetchBudgets()
     } catch (error) {
       console.error('Error saving budget:', error)
-      showToast('Error', 'Failed to save budget. Please try again.', 'error')
+      toast.error('Failed to save budget. Please try again.')
     }
   }
 
@@ -215,11 +194,11 @@ export default function Budget() {
             .eq('user_id', user.id)
 
           if (error) throw error
-          showToast('Deleted', 'Budget deleted successfully', 'info')
+          toast.info('Budget deleted successfully')
           fetchBudgets()
         } catch (error) {
           console.error('Error deleting budget:', error)
-          showToast('Error', 'Failed to delete budget. Please try again.', 'error')
+          toast.error('Failed to delete budget. Please try again.')
         }
       }
     })
@@ -230,7 +209,12 @@ export default function Budget() {
   }
 
   const getTotalSpent = () => {
-    return expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0)
+    // Include both amount and transaction fees
+    return expenses.reduce((sum, e) => {
+      const amount = parseFloat(e.amount) || 0
+      const fee = parseFloat(e.transaction_fee) || 0
+      return sum + amount + fee
+    }, 0)
   }
 
   if (loading) {
@@ -307,25 +291,44 @@ export default function Budget() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {Object.entries(predictions).slice(0, 6).map(([category, data]) => {
               const Icon = getCategoryIcon(category)
+              const confidenceColor = data.confidence > 0.7 ? 'text-green-600 dark:text-green-400' : data.confidence > 0.5 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
+              const trendDisplay = data.trend === 'insufficient_data' ? 'Insufficient Data' :
+                                   data.trend === 'increasing' ? `↑ Increasing ${Math.abs(data.trendPercentage).toFixed(1)}%` :
+                                   data.trend === 'decreasing' ? `↓ Decreasing ${Math.abs(data.trendPercentage).toFixed(1)}%` :
+                                   '→ Stable'
+              const trendColor = data.trend === 'insufficient_data' ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400' :
+                                 data.trend === 'increasing' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
+                                 data.trend === 'decreasing' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                                 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+
               return (
-                <div key={category} className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-700">
-                  <div className="flex items-center justify-between mb-2">
+                <div key={category} className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-700 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-2">
                       <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/50">
                         <Icon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                       </div>
                       <span className="font-semibold text-gray-900 dark:text-gray-100 capitalize">{category}</span>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      data.trend === 'increasing' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                    }`}>
-                      {data.trend === 'increasing' ? '↑ Increasing' : '↓ Decreasing'}
+                    <span className={`text-xs px-2 py-1 rounded-full ${trendColor}`}>
+                      {trendDisplay}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                  <div className="space-y-1.5 text-sm text-gray-600 dark:text-gray-400">
                     <p>Predicted: <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(data.predicted)}</span></p>
-                    <p>3-month avg: <span className="font-semibold">{formatCurrency(data.historical)}</span></p>
+                    <p>3-month avg: <span className="font-semibold">{formatCurrency(data.movingAverage)}</span></p>
+                    <div className="flex items-center justify-between pt-1 border-t border-gray-200 dark:border-gray-700">
+                      <span className="text-xs">Confidence:</span>
+                      <span className={`text-xs font-semibold ${confidenceColor}`}>
+                        {(data.confidence * 100).toFixed(0)}% ({data.dataPoints} months)
+                      </span>
+                    </div>
                   </div>
+                  {data.recommendation && (
+                    <div className="mt-2 pt-2 border-t border-purple-100 dark:border-purple-800">
+                      <p className="text-xs text-gray-700 dark:text-gray-300">{data.recommendation}</p>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -363,7 +366,6 @@ export default function Budget() {
                   className={`p-6 rounded-xl border-2 transition-all ${
                     status.status === 'over' ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-800' :
                     status.status === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-800' :
-                    status.status === 'caution' ? 'bg-orange-50 dark:bg-orange-900/30 border-orange-300 dark:border-orange-800' :
                     'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700'
                   }`}
                 >
@@ -373,13 +375,13 @@ export default function Budget() {
                       <div>
                         <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100 capitalize">{budget.category}</h4>
                         <p className={`text-sm font-medium ${
-                          status.status === 'over' ? 'text-red-600' :
-                          status.status === 'warning' ? 'text-yellow-600 dark:text-yellow-500' :
-                          status.status === 'caution' ? 'text-orange-600 dark:text-orange-500' :
-                          'text-green-600'
+                          status.status === 'over' ? 'text-red-600 dark:text-red-400' :
+                          status.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                          'text-green-600 dark:text-green-400'
                         }`}>
-                          {status.status === 'over' ? <AlertTriangle className="inline h-4 w-4 mr-1" /> : null}
-                          {status.status === 'good' ? <CheckCircle className="inline h-4 w-4 mr-1" /> : null}
+                          {status.status === 'over' && <AlertTriangle className="inline h-4 w-4 mr-1" />}
+                          {status.status === 'warning' && <Info className="inline h-4 w-4 mr-1" />}
+                          {status.status === 'good' && <CheckCircle className="inline h-4 w-4 mr-1" />}
                           {status.message}
                         </p>
                       </div>
@@ -412,7 +414,6 @@ export default function Budget() {
                         className={`h-4 rounded-full transition-all duration-500 ${
                           status.status === 'over' ? 'bg-red-500' :
                           status.status === 'warning' ? 'bg-yellow-500' :
-                          status.status === 'caution' ? 'bg-orange-500' :
                           'bg-green-500'
                         }`}
                         style={{ width: `${Math.min(percentage, 100)}%` }}
@@ -428,15 +429,34 @@ export default function Budget() {
 
                   {/* AI Recommendation */}
                   {predictions[budget.category] && (
-                    <div className="mt-4 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <p className="text-sm text-gray-700 dark:text-gray-300">
-                        <TrendingUp className="inline h-4 w-4 mr-1 text-purple-600 dark:text-purple-400" />
-                        <strong>AI Insight:</strong> Based on your trend, you're likely to spend{' '}
-                        <strong>{formatCurrency(predictions[budget.category].predicted)}</strong> this month.
-                        {predictions[budget.category].predicted > parseFloat(budget.monthly_limit) && (
-                          <span className="text-red-600"> Consider increasing your budget or reducing spending.</span>
-                        )}
-                      </p>
+                    <div className="mt-4 p-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg border border-purple-200 dark:border-purple-700">
+                      <div className="flex items-start space-x-2">
+                        <TrendingUp className="h-4 w-4 mt-0.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <p className="text-sm text-gray-700 dark:text-gray-300">
+                            <strong>AI Insight:</strong> {predictions[budget.category].recommendation}
+                          </p>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-600 dark:text-gray-400">
+                              Predicted: <strong className="text-gray-900 dark:text-gray-100">{formatCurrency(predictions[budget.category].predicted)}</strong>
+                            </span>
+                            <span className={`font-semibold ${
+                              predictions[budget.category].confidence > 0.7 ? 'text-green-600 dark:text-green-400' :
+                              predictions[budget.category].confidence > 0.5 ? 'text-yellow-600 dark:text-yellow-400' :
+                              'text-red-600 dark:text-red-400'
+                            }`}>
+                              {(predictions[budget.category].confidence * 100).toFixed(0)}% confidence
+                            </span>
+                          </div>
+                          {predictions[budget.category].predicted > parseFloat(budget.monthly_limit) && (
+                            <div className="pt-2 mt-2 border-t border-purple-200 dark:border-purple-700">
+                              <p className="text-xs text-red-600 dark:text-red-400 font-medium">
+                                ⚠️ Prediction exceeds budget by {formatCurrency(predictions[budget.category].predicted - parseFloat(budget.monthly_limit))}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -498,9 +518,26 @@ export default function Budget() {
                   required
                 />
                 {predictions[formData.category] && !editingBudget && (
-                  <p className="text-sm text-purple-600 dark:text-purple-400 mt-2">
-                    💡 Predicted spending: {formatCurrency(predictions[formData.category].predicted)}
-                  </p>
+                  <div className="mt-3 p-3 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg border border-purple-200 dark:border-purple-700">
+                    <div className="flex items-start space-x-2">
+                      <Lightbulb className="h-4 w-4 mt-0.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                      <div className="flex-1 text-sm space-y-1">
+                        <p className="text-gray-700 dark:text-gray-300">
+                          <strong>AI Suggestion:</strong> {predictions[formData.category].recommendation}
+                        </p>
+                        <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                          <span>Predicted: <strong className="text-purple-600 dark:text-purple-400">{formatCurrency(predictions[formData.category].predicted)}</strong></span>
+                          <span className={`font-semibold ${
+                            predictions[formData.category].confidence > 0.7 ? 'text-green-600 dark:text-green-400' :
+                            predictions[formData.category].confidence > 0.5 ? 'text-yellow-600 dark:text-yellow-400' :
+                            'text-red-600 dark:text-red-400'
+                          }`}>
+                            {(predictions[formData.category].confidence * 100).toFixed(0)}% confidence
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
 

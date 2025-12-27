@@ -1,22 +1,33 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency, calculateNetSalary } from '../utils/calculations'
 import { getIncomeIcon } from '../utils/iconMappings'
-import { Plus, Edit2, Trash2, DollarSign, TrendingUp, X, Calculator, FileText, Wallet, MinusCircle } from 'lucide-react'
+import { Plus, Eye, RotateCcw, DollarSign, TrendingUp, X, Calculator, FileText, Wallet, MinusCircle, Building2, AlertTriangle, CheckCircle } from 'lucide-react'
 import { IncomeService } from '../utils/incomeService'
 
 const INCOME_SOURCES = ['salary', 'side_hustle', 'investment', 'bonus', 'gift', 'other']
 
 export default function Income() {
   const { user } = useAuth()
+  const toast = useToast()
   const [incomes, setIncomes] = useState([])
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [editingIncome, setEditingIncome] = useState(null)
   const [totalIncome, setTotalIncome] = useState(0)
   const [showCalculator, setShowCalculator] = useState(false)
+
+  // View details modal state
+  const [viewingIncome, setViewingIncome] = useState(null)
+  const [showViewModal, setShowViewModal] = useState(false)
+  const [incomeDetails, setIncomeDetails] = useState(null)
+
+  // Reverse income state
+  const [showReverseModal, setShowReverseModal] = useState(false)
+  const [reversingIncome, setReversingIncome] = useState(null)
+  const [reverseReason, setReverseReason] = useState('')
 
   // Custom deductions state
   const [customDeductions, setCustomDeductions] = useState([])
@@ -25,6 +36,7 @@ export default function Income() {
   const [formData, setFormData] = useState({
     amount: '',
     source: 'salary',
+    source_name: '', // Who paid - employer name, client, etc.
     description: '',
     date: new Date().toISOString().split('T')[0],
     account_id: '',
@@ -104,12 +116,17 @@ export default function Income() {
     e.preventDefault()
 
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      alert('Please enter a valid amount')
+      toast.error('Please enter a valid amount')
       return
     }
 
     if (!formData.account_id) {
-      alert('Please select an account')
+      toast.error('Please select an account')
+      return
+    }
+
+    if (!formData.source_name?.trim()) {
+      toast.error('Please enter the source of funds (who paid you)')
       return
     }
 
@@ -121,8 +138,8 @@ export default function Income() {
       let statutoryDeductions = 0
 
       if (formData.is_gross && calculatedSalary) {
-        // Ensure tax_amount is never negative (personal relief can exceed PAYE for low earners)
-        taxAmount = Math.max(0, calculatedSalary.paye - calculatedSalary.personalRelief)
+        // calculatedSalary.paye already has personal relief applied (it's net PAYE)
+        taxAmount = Math.max(0, calculatedSalary.paye)
         statutoryDeductions = calculatedSalary.nssf + calculatedSalary.housingLevy + calculatedSalary.shif
       }
 
@@ -130,54 +147,44 @@ export default function Income() {
         account_id: formData.account_id,
         amount: parseFloat(formData.amount),
         source: formData.source,
+        source_name: formData.source_name.trim(), // Who paid - employer, client, etc.
         description: formData.description,
         date: formData.date,
         tax_amount: taxAmount,
         statutory_deductions: statutoryDeductions
       }
 
-      if (editingIncome) {
-        // Simple update for editing
-        const { error } = await supabase
-          .from('income')
-          .update(incomeData)
-          .eq('id', editingIncome.id)
-          .eq('user_id', user.id)
+      // Create new income with custom deductions
+      const result = await incomeService.createIncome(incomeData, customDeductions)
 
-        if (error) throw error
-        alert('Income updated successfully!')
-      } else {
-        // Create new income with custom deductions
-        const result = await incomeService.createIncome(incomeData, customDeductions)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
 
-        if (!result.success) {
-          throw new Error(result.error)
-        }
+      const account = accounts.find(a => a.id === formData.account_id)
+      toast.success(`Income of ${formatCurrency(result.netAmount)} added to ${account?.name || 'account'}`, { duration: 4000 })
 
-        alert(`Income added successfully!\nGross: ${formatCurrency(result.grossAmount)}\nNet (deposited): ${formatCurrency(result.netAmount)}`)
+      // If salary with statutory deductions, save to deductions table
+      if (formData.is_gross && calculatedSalary) {
+        const currentMonth = new Date(formData.date).toISOString().split('T')[0].slice(0, 7) + '-01'
 
-        // If salary with statutory deductions, save to deductions table
-        if (formData.is_gross && calculatedSalary) {
-          const currentMonth = new Date(formData.date).toISOString().split('T')[0].slice(0, 7) + '-01'
-
-          await supabase
-            .from('deductions')
-            .upsert([
-              {
-                user_id: user.id,
-                gross_salary: calculatedSalary.grossSalary,
-                nssf: calculatedSalary.nssf,
-                housing_levy: calculatedSalary.housingLevy,
-                shif: calculatedSalary.shif,
-                taxable_income: calculatedSalary.taxableIncome,
-                paye: calculatedSalary.paye,
-                personal_relief: calculatedSalary.personalRelief,
-                total_deductions: calculatedSalary.totalDeductions,
-                net_salary: calculatedSalary.netSalary,
-                month: currentMonth
-              }
-            ], { onConflict: 'user_id,month' })
-        }
+        await supabase
+          .from('deductions')
+          .upsert([
+            {
+              user_id: user.id,
+              gross_salary: calculatedSalary.grossSalary,
+              nssf: calculatedSalary.nssf,
+              housing_levy: calculatedSalary.housingLevy,
+              shif: calculatedSalary.shif,
+              taxable_income: calculatedSalary.taxableIncome,
+              paye: calculatedSalary.paye,
+              personal_relief: calculatedSalary.personalRelief,
+              total_deductions: calculatedSalary.totalDeductions,
+              net_salary: calculatedSalary.netSalary,
+              month: currentMonth
+            }
+          ], { onConflict: 'user_id,month' })
       }
 
       // Reset form
@@ -185,6 +192,7 @@ export default function Income() {
       setFormData({
         amount: '',
         source: 'salary',
+        source_name: '',
         description: '',
         date: new Date().toISOString().split('T')[0],
         account_id: primaryAccount?.id || '',
@@ -195,12 +203,11 @@ export default function Income() {
       setShowDeductionsSection(false)
       setCalculatedSalary(null)
       setShowModal(false)
-      setEditingIncome(null)
       fetchIncomes()
       fetchAccounts() // Refresh to update balances
     } catch (error) {
       console.error('Error saving income:', error)
-      alert(`Error saving income: ${error.message}`)
+      toast.error(`Error saving income: ${error.message}`)
     }
   }
 
@@ -231,37 +238,86 @@ export default function Income() {
     setCustomDeductions(updated)
   }
 
-  const handleEdit = (income) => {
-    setEditingIncome(income)
-    setFormData({
-      amount: income.amount,
-      source: income.source,
-      description: income.description || '',
-      date: income.date,
-      account_id: income.account_id || '',
-      gross_salary: '',
-      is_gross: false
-    })
-    setCustomDeductions([]) // Don't load custom deductions for edit (complex)
-    setShowDeductionsSection(false)
-    setShowModal(true)
-  }
-
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this income entry?')) return
+  // View income details with full breakdown
+  const handleViewDetails = async (income) => {
+    setViewingIncome(income)
+    setShowViewModal(true)
 
     try {
-      const { error } = await supabase
+      const incomeService = new IncomeService(supabase, user.id)
+      const result = await incomeService.getIncomeWithDeductions(income.id)
+      if (result.success) {
+        setIncomeDetails(result)
+      }
+    } catch (error) {
+      console.error('Error fetching income details:', error)
+    }
+  }
+
+  // Open reverse income modal
+  const handleOpenReverse = (income) => {
+    // Check if already reversed
+    if (income.is_reversed) {
+      toast.error('This income has already been reversed')
+      return
+    }
+    setReversingIncome(income)
+    setReverseReason('')
+    setShowReverseModal(true)
+  }
+
+  // Reverse income entry (creates a negative transaction)
+  const handleReverseIncome = async () => {
+    if (!reversingIncome) return
+
+    if (!reverseReason.trim()) {
+      toast.error('Please provide a reason for the reversal')
+      return
+    }
+
+    try {
+      // Get the account associated with this income
+      const account = accounts.find(a => a.id === reversingIncome.account_id)
+
+      // Create a reversal transaction (debit from account)
+      const { error: txError } = await supabase
+        .from('account_transactions')
+        .insert({
+          user_id: user.id,
+          from_account_id: reversingIncome.account_id, // Money flows OUT (reversal)
+          transaction_type: 'income_reversal',
+          amount: parseFloat(reversingIncome.amount),
+          date: new Date().toISOString().split('T')[0],
+          category: reversingIncome.source,
+          description: `Reversal: ${reversingIncome.source_name || reversingIncome.source} - ${reverseReason}`,
+          reference_id: reversingIncome.id,
+          reference_type: 'income_reversal'
+        })
+
+      if (txError) throw txError
+
+      // Mark original income as reversed
+      const { error: updateError } = await supabase
         .from('income')
-        .delete()
-        .eq('id', id)
+        .update({
+          is_reversed: true,
+          reversal_reason: reverseReason,
+          reversed_at: new Date().toISOString()
+        })
+        .eq('id', reversingIncome.id)
         .eq('user_id', user.id)
 
-      if (error) throw error
+      if (updateError) throw updateError
+
+      toast.success(`Income reversed successfully. ${formatCurrency(reversingIncome.amount)} debited from ${account?.name || 'account'}`)
+      setShowReverseModal(false)
+      setReversingIncome(null)
+      setReverseReason('')
       fetchIncomes()
+      fetchAccounts() // Refresh balances
     } catch (error) {
-      console.error('Error deleting income:', error)
-      alert('Error deleting income. Please try again.')
+      console.error('Error reversing income:', error)
+      toast.error(`Error reversing income: ${error.message}`)
     }
   }
 
@@ -322,12 +378,14 @@ export default function Income() {
         <div className="card bg-white dark:bg-gray-800 flex items-center justify-center">
           <button
             onClick={() => {
-              setEditingIncome(null)
+              const primaryAccount = accounts.find(a => a.is_primary)
               setFormData({
                 amount: '',
                 source: 'salary',
+                source_name: '',
                 description: '',
                 date: new Date().toISOString().split('T')[0],
+                account_id: primaryAccount?.id || '',
                 gross_salary: '',
                 is_gross: false
               })
@@ -362,26 +420,57 @@ export default function Income() {
           <div className="space-y-4">
             {incomes.map((income) => {
               const SourceIcon = getIncomeIcon(income.source)
+              const hasGrossInfo = income.source === 'salary' && (income.tax_amount > 0 || income.statutory_deductions > 0)
+              const grossAmount = hasGrossInfo
+                ? parseFloat(income.amount) + parseFloat(income.tax_amount || 0) + parseFloat(income.statutory_deductions || 0)
+                : null
+
               return (
                 <div
                   key={income.id}
-                  className="flex items-center justify-between p-5 bg-gray-50 dark:bg-gray-900 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  className={`flex items-center justify-between p-5 rounded-xl transition-colors ${
+                    income.is_reversed
+                      ? 'bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800'
+                      : 'bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
                 >
                   <div className="flex items-center space-x-4 flex-1">
-                    <div className="p-3 rounded-lg bg-white dark:bg-gray-800">
-                      <SourceIcon className="h-8 w-8 text-gray-700 dark:text-gray-300" />
+                    <div className={`p-3 rounded-lg ${income.is_reversed ? 'bg-red-100 dark:bg-red-900/40' : 'bg-white dark:bg-gray-800'}`}>
+                      <SourceIcon className={`h-8 w-8 ${income.is_reversed ? 'text-red-500' : 'text-gray-700 dark:text-gray-300'}`} />
                     </div>
                     <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <p className="font-semibold text-gray-900 dark:text-gray-100 text-lg capitalize">
+                      <div className="flex items-center space-x-3 mb-1">
+                        <p className={`font-semibold text-lg capitalize ${income.is_reversed ? 'text-red-700 dark:text-red-400 line-through' : 'text-gray-900 dark:text-gray-100'}`}>
                           {income.source.replace('_', ' ')}
                         </p>
                         <span className={`badge ${getSourceColor(income.source)}`}>
                           {income.source}
                         </span>
+                        {income.is_reversed && (
+                          <span className="badge bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                            REVERSED
+                          </span>
+                        )}
                       </div>
+                      {income.source_name && (
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-1 flex items-center">
+                          <Building2 className="h-3.5 w-3.5 mr-1.5 text-gray-500 dark:text-gray-400" />
+                          From: <span className="font-medium ml-1">{income.source_name}</span>
+                        </p>
+                      )}
+                      {/* Show Gross vs Net for salary */}
+                      {hasGrossInfo && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                          Gross: {formatCurrency(grossAmount)} → Net: {formatCurrency(income.amount)}
+                        </p>
+                      )}
                       {income.description && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{income.description}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{income.description}</p>
+                      )}
+                      {income.is_reversed && income.reversal_reason && (
+                        <p className="text-sm text-red-600 dark:text-red-400 mb-1">
+                          Reason: {income.reversal_reason}
+                        </p>
                       )}
                       <p className="text-xs text-gray-500 dark:text-gray-500">
                         {new Date(income.date).toLocaleDateString('en-KE', {
@@ -395,22 +484,33 @@ export default function Income() {
                   </div>
 
                   <div className="flex items-center space-x-4">
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      +{formatCurrency(income.amount)}
-                    </p>
+                    <div className="text-right">
+                      {hasGrossInfo && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Gross: {formatCurrency(grossAmount)}
+                        </p>
+                      )}
+                      <p className={`text-2xl font-bold ${income.is_reversed ? 'text-red-400 line-through' : 'text-green-600 dark:text-green-400'}`}>
+                        +{formatCurrency(income.amount)}
+                      </p>
+                    </div>
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => handleEdit(income)}
+                        onClick={() => handleViewDetails(income)}
                         className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                        title="View Details"
                       >
-                        <Edit2 className="h-5 w-5" />
+                        <Eye className="h-5 w-5" />
                       </button>
-                      <button
-                        onClick={() => handleDelete(income.id)}
-                        className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="h-5 w-5" />
-                      </button>
+                      {!income.is_reversed && (
+                        <button
+                          onClick={() => handleOpenReverse(income)}
+                          className="p-2 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-lg transition-colors"
+                          title="Reverse Income"
+                        >
+                          <RotateCcw className="h-5 w-5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -420,18 +520,17 @@ export default function Income() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Add Income Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full p-8 animate-slideIn max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {editingIncome ? 'Edit Income' : 'Add New Income'}
+                Add New Income
               </h3>
               <button
                 onClick={() => {
                   setShowModal(false)
-                  setEditingIncome(null)
                   setCalculatedSalary(null)
                 }}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
@@ -487,8 +586,34 @@ export default function Income() {
                 </select>
               </div>
 
+              {/* Source of Funds - Who paid */}
+              <div className="form-group">
+                <label className="label text-base font-semibold flex items-center">
+                  <Building2 className="h-4 w-4 mr-1" />
+                  {formData.source === 'salary' ? 'Employer Name' : 'Source of Funds'} *
+                </label>
+                <input
+                  type="text"
+                  className="input text-base py-3"
+                  placeholder={
+                    formData.source === 'salary' ? 'e.g., ABC Company Ltd' :
+                    formData.source === 'side_hustle' ? 'e.g., Freelance Client Name' :
+                    formData.source === 'investment' ? 'e.g., Safaricom Dividends, Treasury Bills' :
+                    formData.source === 'bonus' ? 'e.g., Year-end Bonus from ABC Ltd' :
+                    formData.source === 'gift' ? 'e.g., Birthday gift from Dad' :
+                    'e.g., M-Pesa deposit, Bank transfer'
+                  }
+                  value={formData.source_name}
+                  onChange={(e) => setFormData({ ...formData, source_name: e.target.value })}
+                  required
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  This helps track where your money comes from
+                </p>
+              </div>
+
               {/* Salary Options */}
-              {formData.source === 'salary' && !editingIncome && (
+              {formData.source === 'salary' && (
                 <div className="p-6 bg-blue-50 dark:bg-blue-900/30 rounded-xl border-2 border-blue-200 dark:border-blue-800">
                   <label className="flex items-center space-x-3 cursor-pointer">
                     <input
@@ -727,7 +852,6 @@ export default function Income() {
                   type="button"
                   onClick={() => {
                     setShowModal(false)
-                    setEditingIncome(null)
                     setCalculatedSalary(null)
                   }}
                   className="flex-1 btn btn-secondary bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 py-4 text-base"
@@ -738,10 +862,288 @@ export default function Income() {
                   type="submit"
                   className="flex-1 btn btn-primary py-4 text-base"
                 >
-                  {editingIncome ? 'Update Income' : 'Add Income'}
+                  Add Income
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Details Modal */}
+      {showViewModal && viewingIncome && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 animate-slideIn max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                <Eye className="h-5 w-5 mr-2 text-blue-500" />
+                Income Details
+              </h3>
+              <button
+                onClick={() => {
+                  setShowViewModal(false)
+                  setViewingIncome(null)
+                  setIncomeDetails(null)
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Status Badge */}
+            {viewingIncome.is_reversed && (
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                <div className="flex items-center text-red-700 dark:text-red-400">
+                  <AlertTriangle className="h-5 w-5 mr-2" />
+                  <span className="font-medium">This income has been reversed</span>
+                </div>
+                {viewingIncome.reversal_reason && (
+                  <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                    Reason: {viewingIncome.reversal_reason}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Basic Info */}
+            <div className="space-y-4">
+              <div className="p-4 bg-gradient-to-r from-green-500 to-green-600 rounded-xl text-white">
+                <p className="text-green-100 text-sm mb-1">Net Amount Received</p>
+                <p className="text-3xl font-bold">{formatCurrency(viewingIncome.amount)}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Source Type</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100 capitalize">
+                    {viewingIncome.source.replace('_', ' ')}
+                  </p>
+                </div>
+                <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Date</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">
+                    {new Date(viewingIncome.date).toLocaleDateString('en-KE', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              {viewingIncome.source_name && (
+                <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Source of Funds</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                    <Building2 className="h-4 w-4 mr-2 text-gray-500" />
+                    {viewingIncome.source_name}
+                  </p>
+                </div>
+              )}
+
+              {viewingIncome.description && (
+                <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Description</p>
+                  <p className="text-gray-900 dark:text-gray-100">{viewingIncome.description}</p>
+                </div>
+              )}
+
+              {/* Salary Breakdown */}
+              {incomeDetails && (incomeDetails.taxAmount > 0 || incomeDetails.statutoryAmount > 0) && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Salary Breakdown
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Gross Salary</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">
+                        {formatCurrency(incomeDetails.grossAmount)}
+                      </span>
+                    </div>
+                    {incomeDetails.statutoryAmount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Statutory Deductions (NSSF, SHIF, Housing)</span>
+                        <span className="text-red-600 dark:text-red-400">
+                          -{formatCurrency(incomeDetails.statutoryAmount)}
+                        </span>
+                      </div>
+                    )}
+                    {incomeDetails.taxAmount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">PAYE Tax</span>
+                        <span className="text-red-600 dark:text-red-400">
+                          -{formatCurrency(incomeDetails.taxAmount)}
+                        </span>
+                      </div>
+                    )}
+                    {incomeDetails.customDeductionsTotal > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Custom Deductions</span>
+                        <span className="text-red-600 dark:text-red-400">
+                          -{formatCurrency(incomeDetails.customDeductionsTotal)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-2 border-t border-blue-200 dark:border-blue-700">
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">Net Amount</span>
+                      <span className="font-bold text-green-600 dark:text-green-400">
+                        {formatCurrency(incomeDetails.netAmount)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Custom Deductions List */}
+              {incomeDetails?.customDeductions?.length > 0 && (
+                <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl">
+                  <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Custom Deductions</h4>
+                  <div className="space-y-2">
+                    {incomeDetails.customDeductions.map((deduction, index) => (
+                      <div key={index} className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {deduction.deduction_name || deduction.deduction_type}
+                        </span>
+                        <span className="text-red-600 dark:text-red-400">
+                          -{formatCurrency(deduction.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="mt-6 flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowViewModal(false)
+                  setViewingIncome(null)
+                  setIncomeDetails(null)
+                }}
+                className="flex-1 btn btn-secondary"
+              >
+                Close
+              </button>
+              {!viewingIncome.is_reversed && (
+                <button
+                  onClick={() => {
+                    setShowViewModal(false)
+                    handleOpenReverse(viewingIncome)
+                  }}
+                  className="flex-1 btn bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reverse
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reverse Income Modal */}
+      {showReverseModal && reversingIncome && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 animate-slideIn">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                <RotateCcw className="h-5 w-5 mr-2 text-orange-500" />
+                Reverse Income
+              </h3>
+              <button
+                onClick={() => {
+                  setShowReverseModal(false)
+                  setReversingIncome(null)
+                  setReverseReason('')
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Warning */}
+            <div className="mb-6 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-800">
+              <div className="flex items-start">
+                <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-orange-800 dark:text-orange-300">
+                    This action cannot be undone
+                  </p>
+                  <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
+                    Reversing will debit {formatCurrency(reversingIncome.amount)} from your account and mark this income as reversed.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Income Summary */}
+            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600 dark:text-gray-400">Income Type</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">
+                  {reversingIncome.source.replace('_', ' ')}
+                </span>
+              </div>
+              {reversingIncome.source_name && (
+                <div className="flex justify-between mb-2">
+                  <span className="text-gray-600 dark:text-gray-400">From</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">
+                    {reversingIncome.source_name}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600 dark:text-gray-400">Date</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">
+                  {new Date(reversingIncome.date).toLocaleDateString('en-KE')}
+                </span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
+                <span className="font-semibold text-gray-900 dark:text-gray-100">Amount</span>
+                <span className="font-bold text-green-600 dark:text-green-400">
+                  {formatCurrency(reversingIncome.amount)}
+                </span>
+              </div>
+            </div>
+
+            {/* Reason Input */}
+            <div className="mb-6">
+              <label className="label">Reason for Reversal *</label>
+              <textarea
+                className="input min-h-[80px]"
+                placeholder="e.g., Duplicate entry, Incorrect amount, Payment was refunded..."
+                value={reverseReason}
+                onChange={(e) => setReverseReason(e.target.value)}
+                required
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowReverseModal(false)
+                  setReversingIncome(null)
+                  setReverseReason('')
+                }}
+                className="flex-1 btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReverseIncome}
+                className="flex-1 btn bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Confirm Reversal
+              </button>
+            </div>
           </div>
         </div>
       )}

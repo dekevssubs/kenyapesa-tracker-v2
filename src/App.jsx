@@ -15,7 +15,7 @@ import Income from './pages/Income'
 import Expenses from './pages/Expenses'
 import Calculator from './pages/Calculator'
 import Goals from './pages/Goals'
-import Reports from './pages/Reports'
+// import Reports from './pages/Reports' // Old reports page - replaced by unified ComprehensiveReports
 import ComprehensiveReports from './pages/ComprehensiveReports'
 import Budget from './pages/Budget'
 import Settings from './pages/Settings'
@@ -26,6 +26,8 @@ import BillReminders from './pages/BillReminders'
 import Accounts from './pages/Accounts'
 import AccountHistory from './pages/AccountHistory'
 import SavingsInvestments from './pages/SavingsInvestments'
+import MpesaCalculator from './pages/MpesaCalculator'
+import Portfolio from './pages/Portfolio'
 
 function App() {
   return (
@@ -94,16 +96,6 @@ function App() {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <Reports />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/reports/comprehensive"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
                     <ComprehensiveReports />
                   </DashboardLayout>
                 </ProtectedRoute>
@@ -139,16 +131,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/networth"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <NetWorth />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
+            {/* Legacy route - redirect to Portfolio */}
+            <Route path="/networth" element={<Navigate to="/portfolio" replace />} />
             <Route
               path="/lending"
               element={
@@ -189,12 +173,24 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            {/* Legacy route - redirect to Portfolio */}
+            <Route path="/savings-investments" element={<Navigate to="/portfolio" replace />} />
             <Route
-              path="/savings-investments"
+              path="/portfolio"
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <SavingsInvestments />
+                    <Portfolio />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/mpesa-calculator"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <MpesaCalculator />
                   </DashboardLayout>
                 </ProtectedRoute>
               }

@@ -4,10 +4,11 @@ import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency } from '../utils/calculations'
 import { getCategoryIcon, getPaymentIcon, getCategoryColor } from '../utils/iconMappings'
-import { Plus, Edit2, Trash2, TrendingDown, Filter, X, AlertTriangle, Wallet, DollarSign, CheckCircle, MessageSquare } from 'lucide-react'
+import { Plus, Eye, RotateCcw, TrendingDown, Filter, X, AlertTriangle, Wallet, DollarSign, CheckCircle, MessageSquare, RefreshCw, FileText, Calendar, CreditCard, Tag, MinusCircle, Building2, Receipt } from 'lucide-react'
 import { ExpenseService } from '../utils/expenseService'
 import { calculateTransactionFee, getAvailableFeeMethods, formatFeeBreakdown, FEE_METHODS } from '../utils/kenyaTransactionFees'
 import TransactionMessageParser from '../components/TransactionMessageParser'
+import MpesaFeePreview from '../components/MpesaFeePreview'
 
 const EXPENSE_CATEGORIES = [
   'rent', 'transport', 'food', 'utilities', 'airtime',
@@ -24,8 +25,17 @@ export default function Expenses() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [showMessageParser, setShowMessageParser] = useState(false)
-  const [editingExpense, setEditingExpense] = useState(null)
   const [totalExpenses, setTotalExpenses] = useState(0)
+
+  // View details modal state
+  const [viewingExpense, setViewingExpense] = useState(null)
+  const [showViewModal, setShowViewModal] = useState(false)
+  const [expenseDetails, setExpenseDetails] = useState(null)
+
+  // Reverse expense state
+  const [showReverseModal, setShowReverseModal] = useState(false)
+  const [reversingExpense, setReversingExpense] = useState(null)
+  const [reverseReason, setReverseReason] = useState('')
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterPayment, setFilterPayment] = useState('all')
 
@@ -34,6 +44,10 @@ export default function Expenses() {
   const [feeOverride, setFeeOverride] = useState(false)
   const [balanceCheck, setBalanceCheck] = useState(null)
   const [selectedAccount, setSelectedAccount] = useState(null)
+
+  // Recurring expense state
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [recurringFrequency, setRecurringFrequency] = useState('monthly')
 
   const [formData, setFormData] = useState({
     amount: '',
@@ -45,6 +59,39 @@ export default function Expenses() {
     transaction_fee: '',
     date: new Date().toISOString().split('T')[0]
   })
+
+  // Helper function to determine payment method and fee method from account
+  const getPaymentDetailsFromAccount = (account) => {
+    let paymentMethod = 'cash' // default
+    let feeMethod = FEE_METHODS.MANUAL
+
+    if (!account) return { paymentMethod, feeMethod }
+
+    const accountType = account.account_type?.toLowerCase()
+
+    if (accountType === 'mpesa' || account.name?.toLowerCase().includes('mpesa')) {
+      paymentMethod = 'mpesa'
+      feeMethod = FEE_METHODS.MPESA_SEND
+    } else if (accountType === 'checking' || accountType === 'bank' || accountType === 'savings') {
+      paymentMethod = 'bank'
+      feeMethod = FEE_METHODS.BANK_TRANSFER
+    } else if (accountType === 'card' || accountType === 'credit') {
+      paymentMethod = 'card'
+      feeMethod = FEE_METHODS.MANUAL
+    } else if (accountType === 'cash') {
+      paymentMethod = 'cash'
+      feeMethod = FEE_METHODS.MANUAL
+    }
+
+    return { paymentMethod, feeMethod }
+  }
+
+  // Helper function to check if account is M-Pesa
+  const isMpesaAccount = (account) => {
+    if (!account) return false
+    const accountType = account.account_type?.toLowerCase()
+    return accountType === 'mpesa' || account.name?.toLowerCase().includes('mpesa')
+  }
 
   useEffect(() => {
     if (user) {
@@ -93,11 +140,12 @@ export default function Expenses() {
       const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
 
-      // Include transaction fees in monthly total
+      // Include transaction fees in monthly total, exclude reversed expenses
       const monthlyTotal = (data || [])
         .filter(expense => {
           const expenseDate = new Date(expense.date)
-          return expenseDate >= firstDay && expenseDate <= lastDay
+          const isNotReversed = !expense.is_reversed
+          return expenseDate >= firstDay && expenseDate <= lastDay && isNotReversed
         })
         .reduce((sum, expense) => {
           const amount = parseFloat(expense.amount)
@@ -122,13 +170,43 @@ export default function Expenses() {
         // Auto-select primary account if available
         const primaryAccount = result.accounts.find(a => a.is_primary)
         if (primaryAccount && !formData.account_id) {
-          setFormData(prev => ({ ...prev, account_id: primaryAccount.id }))
+          const { paymentMethod, feeMethod } = getPaymentDetailsFromAccount(primaryAccount)
+          setFormData(prev => ({
+            ...prev,
+            account_id: primaryAccount.id,
+            payment_method: paymentMethod,
+            fee_method: feeMethod
+          }))
           setSelectedAccount(primaryAccount)
         }
       }
     } catch (error) {
       console.error('Error fetching accounts:', error)
     }
+  }
+
+  // Calculate next due date for recurring expenses
+  const calculateNextDueDate = (currentDate, frequency) => {
+    const date = new Date(currentDate)
+
+    switch (frequency) {
+      case 'weekly':
+        date.setDate(date.getDate() + 7)
+        break
+      case 'monthly':
+        date.setMonth(date.getMonth() + 1)
+        break
+      case 'quarterly':
+        date.setMonth(date.getMonth() + 3)
+        break
+      case 'yearly':
+        date.setFullYear(date.getFullYear() + 1)
+        break
+      default:
+        date.setMonth(date.getMonth() + 1)
+    }
+
+    return date.toISOString().split('T')[0]
   }
 
   const handleSubmit = async (e) => {
@@ -144,49 +222,74 @@ export default function Expenses() {
       return
     }
 
+    // STRICT BALANCE VALIDATION - Prevent transaction if insufficient balance
+    const account = accounts.find(a => a.id === formData.account_id)
+    if (account) {
+      const totalRequired = parseFloat(formData.amount) + parseFloat(formData.transaction_fee || 0)
+      const availableBalance = parseFloat(account.current_balance)
+
+      if (totalRequired > availableBalance) {
+        const deficit = totalRequired - availableBalance
+        toast.error(
+          `Insufficient balance in ${account.name}. Available: ${formatCurrency(availableBalance)}, Required: ${formatCurrency(totalRequired)}, Deficit: ${formatCurrency(deficit)}`,
+          { duration: 6000 }
+        )
+        return
+      }
+    }
+
     try {
       const expenseService = new ExpenseService(supabase, user.id)
 
-      if (editingExpense) {
-        // For editing, use direct update (simpler for now)
-        const { error } = await supabase
-          .from('expenses')
-          .update({
+      // Calculate the actual fee value to use (handles empty string edge case)
+      const actualFee = feeOverride
+        ? parseFloat(formData.transaction_fee || 0)
+        : calculateTransactionFee(parseFloat(formData.amount), formData.fee_method)
+
+      // Create new expense using service
+      const result = await expenseService.createExpense({
+        account_id: formData.account_id,
+        amount: parseFloat(formData.amount),
+        date: formData.date,
+        category: formData.category,
+        description: formData.description,
+        payment_method: formData.payment_method,
+        fee_method: formData.fee_method,
+        transaction_fee: actualFee,
+        fee_override: feeOverride
+      })
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      // Use the actual calculated fee for the toast notification
+      const breakdown = formatFeeBreakdown(formData.amount, actualFee, formData.fee_method)
+      toast.success(`Expense added! Amount: ${breakdown.formattedAmount}, Fee: ${breakdown.formattedFee}, Total: ${breakdown.formattedTotal}`)
+
+      // If marked as recurring, create a bill reminder
+      if (isRecurring) {
+        const nextDueDate = calculateNextDueDate(formData.date, recurringFrequency)
+        const { error: billError } = await supabase
+          .from('bill_reminders')
+          .insert([{
+            user_id: user.id,
+            name: formData.description || `${formData.category.charAt(0).toUpperCase() + formData.category.slice(1)} expense`,
             amount: parseFloat(formData.amount),
             category: formData.category,
-            description: formData.description,
             payment_method: formData.payment_method,
-            account_id: formData.account_id,
-            transaction_fee: parseFloat(formData.transaction_fee || 0),
-            fee_method: formData.fee_method,
-            fee_override: feeOverride,
-            date: formData.date
-          })
-          .eq('id', editingExpense.id)
-          .eq('user_id', user.id)
+            due_date: nextDueDate,
+            frequency: recurringFrequency,
+            notes: `Auto-created from expense on ${formData.date}`,
+            is_active: true
+          }])
 
-        if (error) throw error
-        toast.success('Expense updated successfully!')
-      } else {
-        // Create new expense using service
-        const result = await expenseService.createExpense({
-          account_id: formData.account_id,
-          amount: parseFloat(formData.amount),
-          date: formData.date,
-          category: formData.category,
-          description: formData.description,
-          payment_method: formData.payment_method,
-          fee_method: formData.fee_method,
-          transaction_fee: parseFloat(formData.transaction_fee || 0),
-          fee_override: feeOverride
-        })
-
-        if (!result.success) {
-          throw new Error(result.error)
+        if (billError) {
+          console.error('Error creating bill reminder:', billError)
+          toast.warning('Expense saved, but failed to create recurring reminder')
+        } else {
+          toast.success(`Recurring reminder set for ${recurringFrequency} payments`, { duration: 4000 })
         }
-
-        const breakdown = formatFeeBreakdown(formData.amount, formData.transaction_fee, formData.fee_method)
-        toast.success(`Expense added! Amount: ${breakdown.formattedAmount}, Fee: ${breakdown.formattedFee}, Total: ${breakdown.formattedTotal}`)
       }
 
       // Reset form
@@ -203,8 +306,9 @@ export default function Expenses() {
       })
       setFeeOverride(false)
       setBalanceCheck(null)
+      setIsRecurring(false)
+      setRecurringFrequency('monthly')
       setShowModal(false)
-      setEditingExpense(null)
       fetchExpenses()
       fetchAccounts() // Refresh accounts to update balances
     } catch (error) {
@@ -213,26 +317,130 @@ export default function Expenses() {
     }
   }
 
-  const handleEdit = (expense) => {
-    setEditingExpense(expense)
-    setFormData({
-      amount: expense.amount,
-      category: expense.category,
-      description: expense.description || '',
-      payment_method: expense.payment_method,
-      account_id: expense.account_id || '',
-      fee_method: expense.fee_method || FEE_METHODS.MPESA_SEND,
-      transaction_fee: expense.transaction_fee?.toString() || '0',
-      date: expense.date
-    })
-    setFeeOverride(expense.fee_override || false)
-    setShowModal(true)
+  // View expense details
+  const handleViewDetails = async (expense) => {
+    setViewingExpense(expense)
+    setShowViewModal(true)
+
+    try {
+      // Fetch related account info
+      const { data: account } = await supabase
+        .from('accounts')
+        .select('name, account_type')
+        .eq('id', expense.account_id)
+        .single()
+
+      setExpenseDetails({
+        ...expense,
+        account_name: account?.name || 'Unknown Account',
+        account_type: account?.account_type || 'unknown'
+      })
+    } catch (error) {
+      console.error('Error fetching expense details:', error)
+      setExpenseDetails({
+        ...expense,
+        account_name: 'Unknown Account',
+        account_type: 'unknown'
+      })
+    }
+  }
+
+  // Open reverse modal
+  const handleOpenReverse = (expense) => {
+    setReversingExpense(expense)
+    setReverseReason('')
+    setShowReverseModal(true)
+  }
+
+  // Reverse expense
+  const handleReverseExpense = async () => {
+    if (!reversingExpense || !reverseReason.trim()) {
+      toast.error('Please provide a reason for reversing this expense')
+      return
+    }
+
+    try {
+      const expenseAmount = parseFloat(reversingExpense.amount)
+      const feeAmount = parseFloat(reversingExpense.transaction_fee || 0)
+      const totalAmount = expenseAmount + feeAmount
+      const reversalDate = new Date().toISOString().split('T')[0]
+
+      // Step 1: Mark expense as reversed in expenses table
+      const { error: updateError } = await supabase
+        .from('expenses')
+        .update({
+          is_reversed: true,
+          reversal_reason: reverseReason.trim(),
+          reversed_at: new Date().toISOString()
+        })
+        .eq('id', reversingExpense.id)
+        .eq('user_id', user.id)
+
+      if (updateError) throw updateError
+
+      // Step 2: Create REVERSAL transaction in ledger (per spec)
+      // Per reversal.md spec:
+      //   transaction_type: 'reversal'
+      //   from_account_id: null (not coming from anywhere)
+      //   to_account_id: original source account (money flows BACK IN)
+      //   reference_type: 'expense_reversal'
+      //   reference_id: original expense id
+      //   amount: total (expense + fee combined)
+      const { error: reversalError } = await supabase
+        .from('account_transactions')
+        .insert({
+          user_id: user.id,
+          from_account_id: null,
+          to_account_id: reversingExpense.account_id,
+          transaction_type: 'reversal',
+          amount: totalAmount,
+          date: reversalDate,
+          category: reversingExpense.category,
+          description: `Reversal of ${reversingExpense.category} expense${feeAmount > 0 ? ` (incl. ${formatCurrency(feeAmount)} fee)` : ''}${reversingExpense.description ? ': ' + reversingExpense.description : ''} - Reason: ${reverseReason.trim()}`,
+          reference_id: reversingExpense.id,
+          reference_type: 'expense_reversal'
+        })
+
+      if (reversalError) throw reversalError
+
+      // Note: Balance is automatically updated by database trigger
+      // No manual balance update needed - ledger is source of truth
+
+      // Success notification
+      toast.success(`Expense reversed! ${formatCurrency(totalAmount)} has been returned to your account.`)
+
+      // Reset and refresh
+      setShowReverseModal(false)
+      setReversingExpense(null)
+      setReverseReason('')
+      fetchExpenses()
+      fetchAccounts()
+    } catch (error) {
+      console.error('Error reversing expense:', error)
+      toast.error(`Failed to reverse expense: ${error.message}`)
+    }
   }
 
   const handleAccountChange = (accountId) => {
-    setFormData(prev => ({ ...prev, account_id: accountId }))
     const account = accounts.find(a => a.id === accountId)
     setSelectedAccount(account || null)
+
+    // Auto-set payment method and fee method based on account type
+    if (account) {
+      const { paymentMethod, feeMethod } = getPaymentDetailsFromAccount(account)
+
+      setFormData(prev => ({
+        ...prev,
+        account_id: accountId,
+        payment_method: paymentMethod,
+        fee_method: feeMethod
+      }))
+
+      // Reset fee override when account changes
+      setFeeOverride(false)
+    } else {
+      setFormData(prev => ({ ...prev, account_id: accountId }))
+    }
   }
 
   const handleParsedMessage = (parsedData) => {
@@ -251,23 +459,6 @@ export default function Expenses() {
     setShowModal(true)
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this expense?')) return
-
-    try {
-      const { error } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id)
-
-      if (error) throw error
-      fetchExpenses()
-    } catch (error) {
-      console.error('Error deleting expense:', error)
-      toast.error('Error deleting expense. Please try again.')
-    }
-  }
 
 
   const filteredExpenses = expenses.filter(expense => {
@@ -315,7 +506,7 @@ export default function Expenses() {
             {expenses.filter(e => {
               const d = new Date(e.date)
               const now = new Date()
-              return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+              return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && !e.is_reversed
             }).length} transactions this month
           </p>
         </div>
@@ -323,14 +514,18 @@ export default function Expenses() {
         <div className="card flex items-center justify-center">
           <button
             onClick={() => {
-              setEditingExpense(null)
               setFormData({
                 amount: '',
                 category: 'food',
                 description: '',
                 payment_method: 'mpesa',
+                account_id: accounts.find(a => a.is_primary)?.id || '',
+                fee_method: FEE_METHODS.MPESA_SEND,
+                transaction_fee: '',
                 date: new Date().toISOString().split('T')[0]
               })
+              setFeeOverride(false)
+              setBalanceCheck(null)
               setShowModal(true)
             }}
             className="btn btn-primary py-4 px-8 text-lg flex items-center"
@@ -445,20 +640,32 @@ export default function Expenses() {
             {filteredExpenses.map((expense) => {
               const CategoryIcon = getCategoryIcon(expense.category)
               const PaymentIcon = getPaymentIcon(expense.payment_method)
+              const isReversed = expense.is_reversed
+              const totalWithFee = parseFloat(expense.amount) + parseFloat(expense.transaction_fee || 0)
+
               return (
                 <div
                   key={expense.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
+                    isReversed
+                      ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                      : 'bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
                 >
                   <div className="flex items-center space-x-4 flex-1">
-                    <div className="p-2.5 rounded-lg bg-white dark:bg-gray-800">
-                      <CategoryIcon className="h-7 w-7 text-gray-700 dark:text-gray-300" />
+                    <div className={`p-2.5 rounded-lg ${isReversed ? 'bg-red-100 dark:bg-red-900/40' : 'bg-white dark:bg-gray-800'}`}>
+                      <CategoryIcon className={`h-7 w-7 ${isReversed ? 'text-red-400' : 'text-gray-700 dark:text-gray-300'}`} />
                     </div>
                     <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <p className="font-semibold text-gray-900 dark:text-gray-100 capitalize">
+                      <div className="flex items-center space-x-2 mb-1 flex-wrap">
+                        <p className={`font-semibold capitalize ${isReversed ? 'text-red-600 dark:text-red-400 line-through' : 'text-gray-900 dark:text-gray-100'}`}>
                           {expense.category}
                         </p>
+                        {isReversed && (
+                          <span className="px-2 py-0.5 text-xs font-bold bg-red-600 text-white rounded">
+                            REVERSED
+                          </span>
+                        )}
                         <span className={`badge ${getCategoryColor(expense.category)}`}>
                           {expense.category}
                         </span>
@@ -468,36 +675,61 @@ export default function Expenses() {
                         </span>
                       </div>
                       {expense.description && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{expense.description}</p>
+                        <p className={`text-sm ${isReversed ? 'text-red-500 dark:text-red-400 line-through' : 'text-gray-600 dark:text-gray-400'}`}>
+                          {expense.description}
+                        </p>
                       )}
-                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                        {new Date(expense.date).toLocaleDateString('en-KE', {
-                          weekday: 'short',
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </p>
+                      <div className="flex items-center space-x-3 mt-1">
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          {new Date(expense.date).toLocaleDateString('en-KE', {
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </p>
+                        {parseFloat(expense.transaction_fee || 0) > 0 && (
+                          <p className="text-xs text-orange-600 dark:text-orange-400">
+                            Fee: {formatCurrency(expense.transaction_fee)}
+                          </p>
+                        )}
+                      </div>
+                      {isReversed && expense.reversal_reason && (
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1 italic">
+                          Reason: {expense.reversal_reason}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-4">
-                    <p className="text-xl font-bold text-red-600 dark:text-red-400">
-                      -{formatCurrency(expense.amount)}
-                    </p>
+                    <div className="text-right">
+                      <p className={`text-xl font-bold ${isReversed ? 'text-red-400 dark:text-red-500 line-through' : 'text-red-600 dark:text-red-400'}`}>
+                        -{formatCurrency(expense.amount)}
+                      </p>
+                      {parseFloat(expense.transaction_fee || 0) > 0 && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Total: {formatCurrency(totalWithFee)}
+                        </p>
+                      )}
+                    </div>
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => handleEdit(expense)}
+                        onClick={() => handleViewDetails(expense)}
                         className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                        title="View Details"
                       >
-                        <Edit2 className="h-4 w-4" />
+                        <Eye className="h-4 w-4" />
                       </button>
-                      <button
-                        onClick={() => handleDelete(expense.id)}
-                        className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {!isReversed && (
+                        <button
+                          onClick={() => handleOpenReverse(expense)}
+                          className="p-2 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-lg transition-colors"
+                          title="Reverse Expense"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -507,33 +739,28 @@ export default function Expenses() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Add Expense Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full my-8 animate-slideIn shadow-2xl">
             <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 rounded-t-xl z-10">
               <div className="flex-1">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                  {editingExpense ? 'Edit Expense' : 'Add New Expense'}
+                  Add New Expense
                 </h3>
-                {!editingExpense && (
-                  <button
-                    onClick={() => {
-                      setShowModal(false)
-                      setShowMessageParser(true)
-                    }}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium flex items-center mt-1"
-                  >
-                    <MessageSquare className="h-4 w-4 mr-1" />
-                    Parse Transaction Message
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    setShowModal(false)
+                    setShowMessageParser(true)
+                  }}
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium flex items-center mt-1"
+                >
+                  <MessageSquare className="h-4 w-4 mr-1" />
+                  Parse Transaction Message
+                </button>
               </div>
               <button
-                onClick={() => {
-                  setShowModal(false)
-                  setEditingExpense(null)
-                }}
+                onClick={() => setShowModal(false)}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-6 w-6" />
@@ -581,71 +808,99 @@ export default function Expenses() {
                 />
               </div>
 
-              {/* Fee Method Selector */}
-              <div className="form-group">
-                <label className="label flex items-center justify-between">
-                  <span>Fee Calculation Method</span>
-                  <label className="flex items-center text-xs font-normal cursor-pointer">
+              {/* M-Pesa Fee Preview - Enhanced UI for M-Pesa accounts */}
+              {isMpesaAccount(selectedAccount) && !feeOverride ? (
+                <MpesaFeePreview
+                  amount={formData.amount}
+                  category={formData.category}
+                  selectedFeeMethod={formData.fee_method}
+                  onFeeMethodChange={(method) => setFormData({ ...formData, fee_method: method })}
+                  onFeeCalculated={(fee) => setFormData(prev => ({ ...prev, transaction_fee: fee.toString() }))}
+                />
+              ) : (
+                <>
+                  {/* Fee Method Selector - For non-M-Pesa accounts */}
+                  <div className="form-group">
+                    <label className="label flex items-center justify-between">
+                      <span>Fee Calculation Method</span>
+                      <label className="flex items-center text-xs font-normal cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={feeOverride}
+                          onChange={(e) => setFeeOverride(e.target.checked)}
+                          className="mr-1"
+                        />
+                        Manual Override
+                      </label>
+                    </label>
+                    <select
+                      className="select"
+                      value={formData.fee_method}
+                      onChange={(e) => setFormData({ ...formData, fee_method: e.target.value })}
+                      disabled={feeOverride}
+                    >
+                      {getAvailableFeeMethods().map((method) => (
+                        <option key={method.value} value={method.value}>
+                          {method.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Transaction Fee Display/Input */}
+                  <div className="form-group">
+                    <label className="label">Transaction Fee (KES)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input"
+                      placeholder="0"
+                      value={formData.transaction_fee}
+                      onChange={(e) => {
+                        setFormData({ ...formData, transaction_fee: e.target.value })
+                        setFeeOverride(true)
+                      }}
+                      readOnly={!feeOverride}
+                    />
+                    {!feeOverride && formData.amount && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Auto-calculated based on {formData.fee_method}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Total Amount Display */}
+                  {formData.amount && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600 dark:text-gray-400">Amount:</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(formData.amount)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600 dark:text-gray-400">Fee:</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(parseFloat(formData.transaction_fee) || 0)}</span>
+                      </div>
+                      <div className="flex justify-between text-base font-bold border-t border-blue-300 dark:border-blue-700 pt-1">
+                        <span className="text-gray-900 dark:text-gray-100">Total:</span>
+                        <span className="text-gray-900 dark:text-gray-100">{formatCurrency((parseFloat(formData.amount) || 0) + (parseFloat(formData.transaction_fee) || 0))}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Manual Override for M-Pesa accounts */}
+              {isMpesaAccount(selectedAccount) && (
+                <div className="flex items-center justify-end">
+                  <label className="flex items-center text-xs text-gray-500 dark:text-gray-400 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={feeOverride}
                       onChange={(e) => setFeeOverride(e.target.checked)}
-                      className="mr-1"
+                      className="mr-1.5"
                     />
-                    Manual Override
+                    Enter fee manually
                   </label>
-                </label>
-                <select
-                  className="select"
-                  value={formData.fee_method}
-                  onChange={(e) => setFormData({ ...formData, fee_method: e.target.value })}
-                  disabled={feeOverride}
-                >
-                  {getAvailableFeeMethods().map((method) => (
-                    <option key={method.value} value={method.value}>
-                      {method.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Transaction Fee Display/Input */}
-              <div className="form-group">
-                <label className="label">Transaction Fee (KES)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input"
-                  placeholder="0"
-                  value={formData.transaction_fee}
-                  onChange={(e) => {
-                    setFormData({ ...formData, transaction_fee: e.target.value })
-                    setFeeOverride(true)
-                  }}
-                  readOnly={!feeOverride}
-                />
-                {!feeOverride && formData.amount && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Auto-calculated based on {formData.fee_method}
-                  </p>
-                )}
-              </div>
-
-              {/* Total Amount Display */}
-              {formData.amount && (
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-600 dark:text-gray-400">Amount:</span>
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(formData.amount)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-600 dark:text-gray-400">Fee:</span>
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(formData.transaction_fee || 0)}</span>
-                  </div>
-                  <div className="flex justify-between text-base font-bold border-t border-blue-300 dark:border-blue-700 pt-1">
-                    <span className="text-gray-900 dark:text-gray-100">Total:</span>
-                    <span className="text-gray-900 dark:text-gray-100">{formatCurrency(parseFloat(formData.amount) + parseFloat(formData.transaction_fee || 0))}</span>
-                  </div>
                 </div>
               )}
 
@@ -657,7 +912,7 @@ export default function Expenses() {
                     <p className="font-semibold text-amber-900 dark:text-amber-400">Insufficient Balance</p>
                     <p className="text-amber-700 dark:text-amber-500">
                       {balanceCheck.accountName} has {formatCurrency(balanceCheck.balance)} available.
-                      You need {formatCurrency(parseFloat(formData.amount) + parseFloat(formData.transaction_fee || 0))}.
+                      You need {formatCurrency((parseFloat(formData.amount) || 0) + (parseFloat(formData.transaction_fee) || 0))}.
                       Deficit: {formatCurrency(balanceCheck.deficit)}
                     </p>
                     <p className="text-amber-600 dark:text-amber-400 text-xs mt-1">
@@ -676,6 +931,53 @@ export default function Expenses() {
                   </p>
                 </div>
               )}
+
+              {/* Recurring Expense Toggle */}
+              <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <RefreshCw className={`h-5 w-5 ${isRecurring ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`} />
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-gray-100">Make this recurring</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Create a bill reminder for future payments</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsRecurring(!isRecurring)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        isRecurring ? 'bg-purple-600' : 'bg-gray-300 dark:bg-gray-600'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          isRecurring ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {isRecurring && (
+                    <div className="pt-2 border-t border-purple-200 dark:border-purple-700">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Repeat every
+                      </label>
+                      <select
+                        value={recurringFrequency}
+                        onChange={(e) => setRecurringFrequency(e.target.value)}
+                        className="input w-full"
+                      >
+                        <option value="weekly">Week</option>
+                        <option value="monthly">Month</option>
+                        <option value="quarterly">Quarter (3 months)</option>
+                        <option value="yearly">Year</option>
+                      </select>
+                      <p className="text-xs text-purple-600 dark:text-purple-400 mt-2">
+                        Next reminder: {calculateNextDueDate(formData.date, recurringFrequency)}
+                      </p>
+                    </div>
+                  )}
+              </div>
 
               <div className="form-group">
                 <label className="label">Category *</label>
@@ -738,7 +1040,6 @@ export default function Expenses() {
                 type="button"
                 onClick={() => {
                   setShowModal(false)
-                  setEditingExpense(null)
                   setFeeOverride(false)
                   setBalanceCheck(null)
                 }}
@@ -751,7 +1052,7 @@ export default function Expenses() {
                 form="expense-form"
                 className="flex-1 btn btn-primary py-3"
               >
-                {editingExpense ? 'Update' : 'Add'} Expense
+                Add Expense
               </button>
             </div>
           </div>
@@ -764,6 +1065,274 @@ export default function Expenses() {
           onParsed={handleParsedMessage}
           onClose={() => setShowMessageParser(false)}
         />
+      )}
+
+      {/* View Details Modal */}
+      {showViewModal && viewingExpense && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full animate-slideIn shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 rounded-t-xl">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                <FileText className="h-5 w-5 text-blue-500 mr-2" />
+                Expense Details
+              </h3>
+              <button
+                onClick={() => {
+                  setShowViewModal(false)
+                  setViewingExpense(null)
+                  setExpenseDetails(null)
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Reversed Status Warning */}
+              {viewingExpense.is_reversed && (
+                <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                    <span className="font-bold text-red-700 dark:text-red-400">REVERSED</span>
+                  </div>
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    This expense was reversed on {viewingExpense.reversed_at ? new Date(viewingExpense.reversed_at).toLocaleDateString('en-KE') : 'N/A'}
+                  </p>
+                  {viewingExpense.reversal_reason && (
+                    <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                      <strong>Reason:</strong> {viewingExpense.reversal_reason}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Amount Summary */}
+              <div className="bg-gradient-to-r from-red-500 to-red-600 dark:from-red-600 dark:to-red-700 rounded-xl p-4 text-white">
+                <p className="text-red-100 text-sm mb-1">Total Spent</p>
+                <p className="text-3xl font-bold">
+                  -{formatCurrency(parseFloat(viewingExpense.amount) + parseFloat(viewingExpense.transaction_fee || 0))}
+                </p>
+                {parseFloat(viewingExpense.transaction_fee || 0) > 0 && (
+                  <div className="mt-2 pt-2 border-t border-red-400/30">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-red-100">Amount:</span>
+                      <span className="text-white font-medium">{formatCurrency(viewingExpense.amount)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-red-100">Transaction Fee:</span>
+                      <span className="text-white font-medium">{formatCurrency(viewingExpense.transaction_fee)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="flex items-center text-gray-500 dark:text-gray-400 mb-1">
+                    <Tag className="h-4 w-4 mr-1" />
+                    <span className="text-xs">Category</span>
+                  </div>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100 capitalize">{viewingExpense.category}</p>
+                </div>
+
+                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="flex items-center text-gray-500 dark:text-gray-400 mb-1">
+                    <CreditCard className="h-4 w-4 mr-1" />
+                    <span className="text-xs">Payment Method</span>
+                  </div>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100 capitalize">{viewingExpense.payment_method}</p>
+                </div>
+
+                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="flex items-center text-gray-500 dark:text-gray-400 mb-1">
+                    <Calendar className="h-4 w-4 mr-1" />
+                    <span className="text-xs">Date</span>
+                  </div>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">
+                    {new Date(viewingExpense.date).toLocaleDateString('en-KE', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </p>
+                </div>
+
+                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="flex items-center text-gray-500 dark:text-gray-400 mb-1">
+                    <Building2 className="h-4 w-4 mr-1" />
+                    <span className="text-xs">Account</span>
+                  </div>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">
+                    {expenseDetails?.account_name || 'Loading...'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Description */}
+              {viewingExpense.description && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center text-blue-600 dark:text-blue-400 mb-2">
+                    <FileText className="h-4 w-4 mr-1" />
+                    <span className="text-sm font-medium">Description</span>
+                  </div>
+                  <p className="text-gray-800 dark:text-gray-200">{viewingExpense.description}</p>
+                </div>
+              )}
+
+              {/* Fee Details */}
+              {parseFloat(viewingExpense.transaction_fee || 0) > 0 && (
+                <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <div className="flex items-center text-orange-600 dark:text-orange-400 mb-2">
+                    <Receipt className="h-4 w-4 mr-1" />
+                    <span className="text-sm font-medium">Transaction Fee Details</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-gray-600 dark:text-gray-400">Fee Method:</div>
+                    <div className="text-gray-900 dark:text-gray-100 font-medium">{viewingExpense.fee_method || 'N/A'}</div>
+                    <div className="text-gray-600 dark:text-gray-400">Fee Amount:</div>
+                    <div className="text-orange-600 dark:text-orange-400 font-medium">{formatCurrency(viewingExpense.transaction_fee)}</div>
+                    <div className="text-gray-600 dark:text-gray-400">Manual Override:</div>
+                    <div className="text-gray-900 dark:text-gray-100">{viewingExpense.fee_override ? 'Yes' : 'No'}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Timestamps */}
+              <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                <p>Created: {viewingExpense.created_at ? new Date(viewingExpense.created_at).toLocaleString('en-KE') : 'N/A'}</p>
+                {viewingExpense.updated_at && viewingExpense.updated_at !== viewingExpense.created_at && (
+                  <p>Last Updated: {new Date(viewingExpense.updated_at).toLocaleString('en-KE')}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex space-x-3 p-6 pt-0">
+              <button
+                onClick={() => {
+                  setShowViewModal(false)
+                  setViewingExpense(null)
+                  setExpenseDetails(null)
+                }}
+                className="flex-1 btn btn-secondary py-3"
+              >
+                Close
+              </button>
+              {!viewingExpense.is_reversed && (
+                <button
+                  onClick={() => {
+                    setShowViewModal(false)
+                    handleOpenReverse(viewingExpense)
+                  }}
+                  className="flex-1 btn bg-orange-500 hover:bg-orange-600 text-white py-3 flex items-center justify-center"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reverse Expense
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reverse Expense Modal */}
+      {showReverseModal && reversingExpense && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full animate-slideIn shadow-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                <AlertTriangle className="h-5 w-5 text-orange-500 mr-2" />
+                Reverse Expense
+              </h3>
+              <button
+                onClick={() => {
+                  setShowReverseModal(false)
+                  setReversingExpense(null)
+                  setReverseReason('')
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                <p className="text-sm text-orange-800 dark:text-orange-200 mb-3">
+                  You are about to reverse the following expense:
+                </p>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Category:</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">{reversingExpense.category}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Amount:</span>
+                    <span className="font-medium text-red-600 dark:text-red-400">{formatCurrency(reversingExpense.amount)}</span>
+                  </div>
+                  {parseFloat(reversingExpense.transaction_fee || 0) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Transaction Fee:</span>
+                      <span className="font-medium text-orange-600 dark:text-orange-400">{formatCurrency(reversingExpense.transaction_fee)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-2 border-t border-orange-300 dark:border-orange-700">
+                    <span className="text-gray-600 dark:text-gray-400 font-medium">Total to Restore:</span>
+                    <span className="font-bold text-green-600 dark:text-green-400">
+                      +{formatCurrency(parseFloat(reversingExpense.amount) + parseFloat(reversingExpense.transaction_fee || 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>What happens when you reverse:</strong>
+                </p>
+                <ul className="text-sm text-blue-700 dark:text-blue-300 mt-2 space-y-1 list-disc list-inside">
+                  <li>The full amount (including fees) will be returned to your account</li>
+                  <li>A reversal transaction will be recorded in account history</li>
+                  <li>The expense will be marked as reversed with your reason</li>
+                  <li>This action cannot be undone</li>
+                </ul>
+              </div>
+
+              <div>
+                <label className="label">Reason for Reversal *</label>
+                <textarea
+                  value={reverseReason}
+                  onChange={(e) => setReverseReason(e.target.value)}
+                  className="input min-h-[80px]"
+                  placeholder="e.g., Duplicate entry, Amount entered incorrectly, Transaction did not go through..."
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex space-x-3 p-6 pt-0">
+              <button
+                onClick={() => {
+                  setShowReverseModal(false)
+                  setReversingExpense(null)
+                  setReverseReason('')
+                }}
+                className="flex-1 btn btn-secondary py-3"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReverseExpense}
+                disabled={!reverseReason.trim()}
+                className="flex-1 btn bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 flex items-center justify-center"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Confirm Reversal
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

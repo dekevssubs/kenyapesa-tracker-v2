@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { GoalService } from '../utils/goalService'
 import { formatCurrency } from '../utils/calculations'
@@ -9,8 +10,6 @@ import {
   TrendingUp,
   Calendar,
   DollarSign,
-  Edit2,
-  Trash2,
   PauseCircle,
   PlayCircle,
   Ban,
@@ -20,11 +19,14 @@ import {
   X,
   CheckCircle,
   AlertCircle,
-  Clock
+  Clock,
+  Eye,
+  Link2
 } from 'lucide-react'
 
 export default function Goals() {
   const { user } = useAuth()
+  const toast = useToast()
   const [goals, setGoals] = useState([])
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -33,7 +35,6 @@ export default function Goals() {
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false)
   const [showContributeModal, setShowContributeModal] = useState(false)
-  const [showWithdrawModal, setShowWithdrawModal] = useState(false)
   const [showAbandonModal, setShowAbandonModal] = useState(false)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [selectedGoal, setSelectedGoal] = useState(null)
@@ -53,12 +54,6 @@ export default function Goals() {
     amount: '',
     from_account_id: '',
     notes: ''
-  })
-
-  const [withdrawData, setWithdrawData] = useState({
-    amount: '',
-    to_account_id: '',
-    reason: ''
   })
 
   const [abandonData, setAbandonData] = useState({
@@ -109,9 +104,6 @@ export default function Goals() {
         if (primaryAccount && !contributeData.from_account_id) {
           setContributeData(prev => ({ ...prev, from_account_id: primaryAccount.id }))
         }
-        if (primaryAccount && !withdrawData.to_account_id) {
-          setWithdrawData(prev => ({ ...prev, to_account_id: primaryAccount.id }))
-        }
         if (primaryAccount && !abandonData.refund_to_account_id) {
           setAbandonData(prev => ({ ...prev, refund_to_account_id: primaryAccount.id }))
         }
@@ -125,7 +117,7 @@ export default function Goals() {
     e.preventDefault()
 
     if (!formData.name || !formData.target_amount || !formData.linked_account_id) {
-      alert('Please fill in all required fields')
+      toast.warning('Please fill in all required fields')
       return
     }
 
@@ -134,7 +126,7 @@ export default function Goals() {
       const result = await goalService.createGoal(formData)
 
       if (result.success) {
-        alert('Goal created successfully!')
+        toast.success(`Goal "${formData.name}" has been created successfully!`)
         setShowAddModal(false)
         setFormData({
           name: '',
@@ -146,11 +138,11 @@ export default function Goals() {
         })
         fetchGoals()
       } else {
-        alert(`Error: ${result.error}`)
+        toast.error(result.error)
       }
     } catch (error) {
       console.error('Error creating goal:', error)
-      alert('Failed to create goal')
+      toast.error('Failed to create goal. Please try again.')
     }
   }
 
@@ -158,7 +150,7 @@ export default function Goals() {
     e.preventDefault()
 
     if (!contributeData.amount || !contributeData.from_account_id) {
-      alert('Please enter amount and select source account')
+      toast.warning('Please enter amount and select source account')
       return
     }
 
@@ -173,58 +165,32 @@ export default function Goals() {
       )
 
       if (result.success) {
-        alert(`Contribution successful! New balance: ${formatCurrency(result.newBalance)}`)
+        toast.success(`${formatCurrency(contributeData.amount)} added to "${selectedGoal.name}". New balance: ${formatCurrency(result.newBalance)}`, { duration: 6000 })
         setShowContributeModal(false)
         setContributeData({ amount: '', from_account_id: contributeData.from_account_id, notes: '' })
         fetchGoals()
         fetchAccounts()
       } else {
-        alert(`Error: ${result.error}`)
+        toast.error(result.error)
       }
     } catch (error) {
       console.error('Error making contribution:', error)
-      alert('Failed to make contribution')
-    }
-  }
-
-  const handleWithdraw = async (e) => {
-    e.preventDefault()
-
-    if (!withdrawData.amount || !withdrawData.to_account_id) {
-      alert('Please enter amount and select destination account')
-      return
-    }
-
-    if (!confirm(`Withdraw ${formatCurrency(withdrawData.amount)} from this goal?`)) return
-
-    try {
-      const goalService = new GoalService(supabase, user.id)
-      const result = await goalService.makeWithdrawal(
-        selectedGoal.id,
-        parseFloat(withdrawData.amount),
-        withdrawData.to_account_id,
-        withdrawData.reason
-      )
-
-      if (result.success) {
-        alert(`Withdrawal successful! New balance: ${formatCurrency(result.newBalance)}`)
-        setShowWithdrawModal(false)
-        setWithdrawData({ amount: '', to_account_id: withdrawData.to_account_id, reason: '' })
-        fetchGoals()
-        fetchAccounts()
-      } else {
-        alert(`Error: ${result.error}`)
-      }
-    } catch (error) {
-      console.error('Error making withdrawal:', error)
-      alert('Failed to make withdrawal')
+      toast.error('Failed to make contribution. Please try again.')
     }
   }
 
   const handleAbandon = async (e) => {
     e.preventDefault()
 
-    if (!confirm('Are you sure you want to abandon this goal? This action cannot be undone.')) return
+    if (!abandonData.reason) {
+      toast.warning('Please provide a reason for abandoning this goal')
+      return
+    }
+
+    if (parseFloat(selectedGoal.current_amount || 0) > 0 && !abandonData.refund_to_account_id) {
+      toast.warning('Please select an account for the refund')
+      return
+    }
 
     try {
       const goalService = new GoalService(supabase, user.id)
@@ -236,19 +202,19 @@ export default function Goals() {
 
       if (result.success) {
         const message = result.refundedAmount > 0
-          ? `Goal abandoned. ${formatCurrency(result.refundedAmount)} has been refunded to your account.`
-          : 'Goal abandoned successfully.'
-        alert(message)
+          ? `"${selectedGoal.name}" abandoned. ${formatCurrency(result.refundedAmount)} has been refunded to your account.`
+          : `"${selectedGoal.name}" has been abandoned.`
+        toast.info(message, { duration: 6000 })
         setShowAbandonModal(false)
         setAbandonData({ reason: '', refund_to_account_id: abandonData.refund_to_account_id })
         fetchGoals()
         fetchAccounts()
       } else {
-        alert(`Error: ${result.error}`)
+        toast.error(result.error)
       }
     } catch (error) {
       console.error('Error abandoning goal:', error)
-      alert('Failed to abandon goal')
+      toast.error('Failed to abandon goal. Please try again.')
     }
   }
 
@@ -259,29 +225,11 @@ export default function Goals() {
       : await goalService.pauseGoal(goal.id)
 
     if (result.success) {
-      alert(goal.status === 'paused' ? 'Goal resumed!' : 'Goal paused!')
+      const action = goal.status === 'paused' ? 'resumed' : 'paused'
+      toast.success(`"${goal.name}" has been ${action}.`)
       fetchGoals()
     } else {
-      alert(`Error: ${result.error}`)
-    }
-  }
-
-  const handleDelete = async (goalId) => {
-    if (!confirm('Are you sure you want to delete this goal?')) return
-
-    try {
-      const goalService = new GoalService(supabase, user.id)
-      const result = await goalService.deleteGoal(goalId)
-
-      if (result.success) {
-        alert('Goal deleted successfully!')
-        fetchGoals()
-      } else {
-        alert(`Error: ${result.error}`)
-      }
-    } catch (error) {
-      console.error('Error deleting goal:', error)
-      alert('Failed to delete goal')
+      toast.error(result.error)
     }
   }
 
@@ -491,29 +439,24 @@ export default function Goals() {
                 {/* Action Buttons */}
                 <div className="px-6 pb-6 flex flex-wrap gap-2">
                   {goal.status === 'active' && (
-                    <>
-                      <button
-                        onClick={() => {
-                          setSelectedGoal(goal)
-                          setShowContributeModal(true)
-                        }}
-                        className="flex-1 btn btn-sm bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border-0"
-                      >
-                        <ArrowUpCircle className="h-4 w-4 mr-1" />
-                        Contribute
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedGoal(goal)
-                          setShowWithdrawModal(true)
-                        }}
-                        className="flex-1 btn btn-sm bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/50 border-0"
-                      >
-                        <ArrowDownCircle className="h-4 w-4 mr-1" />
-                        Withdraw
-                      </button>
-                    </>
+                    <button
+                      onClick={() => {
+                        setSelectedGoal(goal)
+                        setShowContributeModal(true)
+                      }}
+                      className="flex-1 btn btn-sm bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border-0"
+                    >
+                      <ArrowUpCircle className="h-4 w-4 mr-1" />
+                      Contribute
+                    </button>
                   )}
+                  <button
+                    onClick={() => viewGoalDetails(goal)}
+                    className="flex-1 btn btn-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border-0"
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    Details
+                  </button>
                   {(goal.status === 'active' || goal.status === 'paused') && (
                     <button
                       onClick={() => handlePauseResume(goal)}
@@ -526,13 +469,6 @@ export default function Goals() {
                       )}
                     </button>
                   )}
-                  <button
-                    onClick={() => viewGoalDetails(goal)}
-                    className="btn btn-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border-0"
-                  >
-                    <DollarSign className="h-4 w-4 mr-1" />
-                    Details
-                  </button>
                   {goal.status === 'active' && (
                     <button
                       onClick={() => {
@@ -543,15 +479,6 @@ export default function Goals() {
                     >
                       <Ban className="h-4 w-4 mr-1" />
                       Abandon
-                    </button>
-                  )}
-                  {goal.status === 'abandoned' && (
-                    <button
-                      onClick={() => handleDelete(goal.id)}
-                      className="btn btn-sm bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 border-0"
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Delete
                     </button>
                   )}
                 </div>
@@ -611,7 +538,10 @@ export default function Goals() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Savings Account <span className="text-red-500 dark:text-red-400">*</span>
+                  <span className="flex items-center">
+                    <Link2 className="h-4 w-4 mr-1" />
+                    Linked Account <span className="text-red-500 dark:text-red-400 ml-1">*</span>
+                  </span>
                 </label>
                 <select
                   required
@@ -626,7 +556,7 @@ export default function Goals() {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Account where goal funds will be saved</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Account where funds for this goal are accumulated</p>
               </div>
 
               <div>
@@ -784,103 +714,6 @@ export default function Goals() {
                     className="flex-1 btn btn-primary bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700"
                   >
                     Contribute
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Withdraw Modal */}
-      {showWithdrawModal && selectedGoal && (
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full animate-slideIn shadow-2xl">
-            <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center">
-                <ArrowDownCircle className="h-6 w-6 text-orange-500 dark:text-orange-400 mr-2" />
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Withdraw from Goal</h3>
-              </div>
-              <button
-                onClick={() => setShowWithdrawModal(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="p-6 pt-4">
-              <div className="bg-orange-50 dark:bg-orange-900/30 rounded-lg p-4 mb-4 border border-orange-200 dark:border-orange-800">
-                <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">{selectedGoal.name}</h4>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  <p>Available to withdraw: {formatCurrency(selectedGoal.current_amount || 0)}</p>
-                </div>
-              </div>
-
-              <form onSubmit={handleWithdraw} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Amount (KES) <span className="text-red-500 dark:text-red-400">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0.01"
-                    max={selectedGoal.current_amount || 0}
-                    step="0.01"
-                    value={withdrawData.amount}
-                    onChange={(e) => setWithdrawData({ ...withdrawData, amount: e.target.value })}
-                    placeholder="500"
-                    className="input w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    To Account <span className="text-red-500 dark:text-red-400">*</span>
-                  </label>
-                  <select
-                    required
-                    value={withdrawData.to_account_id}
-                    onChange={(e) => setWithdrawData({ ...withdrawData, to_account_id: e.target.value })}
-                    className="input w-full"
-                  >
-                    <option value="">Select destination account...</option>
-                    {accounts.map(account => (
-                      <option key={account.id} value={account.id}>
-                        {account.name} - {formatCurrency(account.current_balance)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Reason <span className="text-red-500 dark:text-red-400">*</span>
-                  </label>
-                  <textarea
-                    required
-                    value={withdrawData.reason}
-                    onChange={(e) => setWithdrawData({ ...withdrawData, reason: e.target.value })}
-                    placeholder="Why are you withdrawing these funds?"
-                    rows="2"
-                    className="input w-full"
-                  ></textarea>
-                </div>
-
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowWithdrawModal(false)}
-                    className="flex-1 btn btn-secondary"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 btn btn-primary bg-orange-600 hover:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-700"
-                  >
-                    Withdraw
                   </button>
                 </div>
               </form>
@@ -1047,9 +880,9 @@ export default function Goals() {
 
                 {selectedGoal.linked_account && (
                   <div className="mt-2 flex items-center">
-                    <Wallet className="h-4 w-4 text-gray-500 dark:text-gray-400 mr-2" />
+                    <Link2 className="h-4 w-4 text-gray-500 dark:text-gray-400 mr-2" />
                     <span className="text-sm text-gray-600 dark:text-gray-400">
-                      Savings Account: {selectedGoal.linked_account.name}
+                      Linked Account: {selectedGoal.linked_account.name}
                     </span>
                   </div>
                 )}
