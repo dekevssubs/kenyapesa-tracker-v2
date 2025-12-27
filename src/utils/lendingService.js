@@ -86,9 +86,9 @@ export class LendingService {
           person_name: person_name.trim(),
           amount: parseFloat(amount),
           amount_repaid: 0,
-          date,
-          due_date: due_date || null,
-          status: LendingService.STATUS.PENDING,
+          date_lent: date,
+          expected_return_date: due_date || null,
+          repayment_status: LendingService.STATUS.PENDING,
           notes: notes || null,
           interest_rate: interest_rate ? parseFloat(interest_rate) : null
         })
@@ -177,7 +177,7 @@ export class LendingService {
       }
 
       // Check if already fully repaid
-      if (lending.status === LendingService.STATUS.COMPLETE) {
+      if (lending.repayment_status === LendingService.STATUS.COMPLETE) {
         return {
           success: false,
           error: 'This lending has already been fully repaid'
@@ -209,7 +209,7 @@ export class LendingService {
         .from('lending_tracker')
         .update({
           amount_repaid: newTotalRepaid,
-          status: newStatus,
+          repayment_status: newStatus,
           repay_to_account_id: repayToAccountId,
           notes: notes ? `${lending.notes || ''}\n[${repaymentDate}] Repayment: KES ${repaymentAmount}. ${notes}`.trim() : lending.notes
         })
@@ -395,7 +395,7 @@ export class LendingService {
         summary.totalOutstanding += outstanding
 
         // Ensure status exists in byStatus object before accessing
-        const status = lending.status || LendingService.STATUS.PENDING
+        const status = lending.repayment_status || lending.status || LendingService.STATUS.PENDING
         if (summary.byStatus[status]) {
           summary.byStatus[status].count++
           summary.byStatus[status].amount += amount
@@ -580,8 +580,10 @@ export class LendingService {
         // Calculate overdue status
         let isOverdue = false
         let daysOverdue = 0
-        if (lending.due_date && lending.status !== LendingService.STATUS.COMPLETE && lending.status !== LendingService.STATUS.FORGIVEN) {
-          const dueDate = new Date(lending.due_date)
+        const lendingDueDate = lending.expected_return_date || lending.due_date
+        const lendingStatus = lending.repayment_status || lending.status
+        if (lendingDueDate && lendingStatus !== LendingService.STATUS.COMPLETE && lendingStatus !== LendingService.STATUS.FORGIVEN) {
+          const dueDate = new Date(lendingDueDate)
           dueDate.setHours(0, 0, 0, 0)
           if (today > dueDate) {
             isOverdue = true
@@ -608,6 +610,9 @@ export class LendingService {
         const counterparty = counterpartyMap.get(personName)
         counterparty.loans.push({
           ...lending,
+          // Normalize field names for UI compatibility
+          status: lendingStatus,
+          due_date: lendingDueDate,
           outstanding,
           isOverdue,
           daysOverdue
@@ -616,7 +621,7 @@ export class LendingService {
         counterparty.totalRepaid += repaid
         counterparty.totalOutstanding += outstanding
 
-        if (lending.status !== LendingService.STATUS.COMPLETE && lending.status !== LendingService.STATUS.FORGIVEN) {
+        if (lendingStatus !== LendingService.STATUS.COMPLETE && lendingStatus !== LendingService.STATUS.FORGIVEN) {
           counterparty.activeLoans++
           if (isOverdue) {
             counterparty.overdueLoans++
@@ -632,8 +637,8 @@ export class LendingService {
         }
 
         // Track nearest due date for active loans
-        if (lending.due_date && lending.status !== LendingService.STATUS.COMPLETE && lending.status !== LendingService.STATUS.FORGIVEN) {
-          const dueDate = new Date(lending.due_date)
+        if (lendingDueDate && lendingStatus !== LendingService.STATUS.COMPLETE && lendingStatus !== LendingService.STATUS.FORGIVEN) {
+          const dueDate = new Date(lendingDueDate)
           if (!counterparty.nearestDueDate || dueDate < counterparty.nearestDueDate) {
             counterparty.nearestDueDate = dueDate
           }
@@ -794,14 +799,14 @@ export class LendingService {
       }
 
       // Check if already complete or forgiven
-      if (lending.status === LendingService.STATUS.COMPLETE) {
+      if (lending.repayment_status === LendingService.STATUS.COMPLETE) {
         return {
           success: false,
           error: 'This lending has already been fully repaid'
         }
       }
 
-      if (lending.status === LendingService.STATUS.FORGIVEN) {
+      if (lending.repayment_status === LendingService.STATUS.FORGIVEN) {
         return {
           success: false,
           error: 'This lending has already been forgiven'
@@ -843,7 +848,7 @@ export class LendingService {
       const { error: updateError } = await this.supabase
         .from('lending_tracker')
         .update({
-          status: LendingService.STATUS.FORGIVEN,
+          repayment_status: LendingService.STATUS.FORGIVEN,
           forgiven_at: new Date().toISOString(),
           forgiven_reason: reason || null,
           notes: lending.notes
@@ -913,6 +918,9 @@ export class LendingService {
 
           return {
             ...lending,
+            // Normalize field names for UI compatibility
+            status: lending.repayment_status || lending.status,
+            due_date: lending.expected_return_date || lending.due_date,
             lend_from_account: lendFromAccount,
             repay_to_account: repayToAccount,
             outstanding
@@ -926,10 +934,11 @@ export class LendingService {
         totalRepaid: lendingsWithAccounts.reduce((sum, l) => sum + parseFloat(l.amount_repaid || 0), 0),
         totalOutstanding: lendingsWithAccounts.reduce((sum, l) => sum + l.outstanding, 0),
         loanCount: lendingsWithAccounts.length,
-        activeLoans: lendingsWithAccounts.filter(l =>
-          l.status !== LendingService.STATUS.COMPLETE &&
-          l.status !== LendingService.STATUS.FORGIVEN
-        ).length
+        activeLoans: lendingsWithAccounts.filter(l => {
+          const status = l.repayment_status || l.status
+          return status !== LendingService.STATUS.COMPLETE &&
+                 status !== LendingService.STATUS.FORGIVEN
+        }).length
       }
 
       return {
@@ -959,10 +968,10 @@ export class LendingService {
         .from('lending_tracker')
         .select('*')
         .eq('user_id', this.userId)
-        .in('status', [LendingService.STATUS.PENDING, LendingService.STATUS.PARTIAL])
-        .lt('due_date', today)
-        .not('due_date', 'is', null)
-        .order('due_date', { ascending: true })
+        .in('repayment_status', [LendingService.STATUS.PENDING, LendingService.STATUS.PARTIAL])
+        .lt('expected_return_date', today)
+        .not('expected_return_date', 'is', null)
+        .order('expected_return_date', { ascending: true })
 
       if (error) throw error
 
@@ -971,7 +980,7 @@ export class LendingService {
       todayDate.setHours(0, 0, 0, 0)
 
       const overdueWithDays = (lendings || []).map(lending => {
-        const dueDate = new Date(lending.due_date)
+        const dueDate = new Date(lending.expected_return_date)
         dueDate.setHours(0, 0, 0, 0)
         const daysOverdue = Math.floor((todayDate - dueDate) / (1000 * 60 * 60 * 24))
         const outstanding = parseFloat(lending.amount) - parseFloat(lending.amount_repaid || 0)
