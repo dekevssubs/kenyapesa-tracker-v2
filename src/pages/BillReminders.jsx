@@ -4,7 +4,7 @@ import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency } from '../utils/calculations'
 import { getCategoryIcon, getPaymentIcon } from '../utils/iconMappings'
-import { Bell, Plus, Edit2, Trash2, Calendar, AlertCircle, Clock, CheckCircle, X, DollarSign, Filter, ChevronDown } from 'lucide-react'
+import { Bell, Plus, Edit2, Trash2, Calendar, AlertCircle, Clock, CheckCircle, X, DollarSign, Filter, ChevronDown, BellOff } from 'lucide-react'
 
 const BILL_FREQUENCIES = ['once', 'weekly', 'monthly', 'quarterly', 'yearly']
 
@@ -20,17 +20,32 @@ const PAYMENT_METHODS = ['mpesa', 'cash', 'bank', 'card']
 
 export default function BillReminders() {
   const { user } = useAuth()
-  const { showToast } = useToast()
+  const { showToast, toast } = useToast()
   const [bills, setBills] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingBill, setEditingBill] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
 
+  // Mark as Paid modal states
+  const [showPayModal, setShowPayModal] = useState(false)
+  const [payingBill, setPayingBill] = useState(null)
+  const [payFormData, setPayFormData] = useState({
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    notes: ''
+  })
+
   // Filter states
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterDueDays, setFilterDueDays] = useState('all') // 'all', 'overdue', 'today', 'week', 'month'
   const [sortBy, setSortBy] = useState('due_date') // 'due_date', 'amount', 'name'
+
+  // Snooze modal states
+  const [showSnoozeModal, setShowSnoozeModal] = useState(false)
+  const [snoozingBill, setSnoozingBill] = useState(null)
+  const [snoozeOption, setSnoozeOption] = useState('1day') // '1day', '3days', '1week', 'custom'
+  const [customSnoozeDate, setCustomSnoozeDate] = useState('')
 
   const [formData, setFormData] = useState({
     name: '',
@@ -138,31 +153,44 @@ export default function BillReminders() {
     return daysUntil <= PAYMENT_WINDOW_DAYS
   }
 
-  const handleMarkAsPaid = async (bill) => {
+  // Open the Mark as Paid modal with prefilled data
+  const openPayModal = (bill) => {
     // Check payment window
     const daysUntil = getDaysUntilDue(bill.due_date)
     if (daysUntil > PAYMENT_WINDOW_DAYS) {
-      showToast(
-        'Too Early',
-        `You can only mark this bill as paid ${PAYMENT_WINDOW_DAYS} days before the due date (${new Date(bill.due_date).toLocaleDateString()})`,
-        'warning'
+      toast.warning(
+        `You can only mark this bill as paid ${PAYMENT_WINDOW_DAYS} days before the due date (${new Date(bill.due_date).toLocaleDateString()})`
       )
       return
     }
 
-    if (!confirm(`Mark "${bill.name}" as paid and create expense entry?`)) return
+    // Prefill form with bill data
+    setPayingBill(bill)
+    setPayFormData({
+      amount: bill.amount.toString(),
+      date: new Date().toISOString().split('T')[0],
+      notes: `Bill payment: ${bill.name}`
+    })
+    setShowPayModal(true)
+  }
+
+  // Handle the actual payment confirmation
+  const handleConfirmPayment = async (e) => {
+    e.preventDefault()
+
+    if (!payingBill) return
 
     try {
-      // Create expense entry
+      // Create expense entry with user-adjusted values
       const { error: expenseError } = await supabase
         .from('expenses')
         .insert([{
           user_id: user.id,
-          amount: parseFloat(bill.amount),
-          category: bill.category,
-          description: `Bill payment: ${bill.name}`,
-          payment_method: bill.payment_method,
-          date: new Date().toISOString().split('T')[0]
+          amount: parseFloat(payFormData.amount),
+          category: payingBill.category,
+          description: payFormData.notes || `Bill payment: ${payingBill.name}`,
+          payment_method: payingBill.payment_method,
+          date: payFormData.date
         }])
 
       if (expenseError) throw expenseError
@@ -173,19 +201,19 @@ export default function BillReminders() {
         .update({
           last_reminded_at: new Date().toISOString()
         })
-        .eq('id', bill.id)
+        .eq('id', payingBill.id)
 
       if (updateError) throw updateError
 
       // If recurring, update due_date
-      if (bill.frequency !== 'once') {
-        const newDueDate = calculateNextDueDate(bill.due_date, bill.frequency)
+      if (payingBill.frequency !== 'once') {
+        const newDueDate = calculateNextDueDate(payingBill.due_date, payingBill.frequency)
         const { error: dueDateError } = await supabase
           .from('bill_reminders')
           .update({
             due_date: newDueDate
           })
-          .eq('id', bill.id)
+          .eq('id', payingBill.id)
 
         if (dueDateError) throw dueDateError
       } else {
@@ -195,16 +223,18 @@ export default function BillReminders() {
           .update({
             is_active: false
           })
-          .eq('id', bill.id)
+          .eq('id', payingBill.id)
 
         if (deactivateError) throw deactivateError
       }
 
-      showToast('Success', `"${bill.name}" marked as paid and expense created`, 'success')
+      toast.success(`"${payingBill.name}" marked as paid and expense of ${formatCurrency(payFormData.amount)} created`)
+      setShowPayModal(false)
+      setPayingBill(null)
       fetchBills()
     } catch (error) {
       console.error('Error marking bill as paid:', error)
-      showToast('Error', 'Failed to mark bill as paid', 'error')
+      toast.error('Failed to mark bill as paid')
     }
   }
 
@@ -229,6 +259,48 @@ export default function BillReminders() {
     }
 
     return date.toISOString().split('T')[0]
+  }
+
+  const handleSnoozeBill = async () => {
+    if (!snoozingBill) return
+    let snoozeUntil = new Date()
+
+    switch (snoozeOption) {
+      case '1day':
+        snoozeUntil.setDate(snoozeUntil.getDate() + 1)
+        break
+      case '3days':
+        snoozeUntil.setDate(snoozeUntil.getDate() + 3)
+        break
+      case '1week':
+        snoozeUntil.setDate(snoozeUntil.getDate() + 7)
+        break
+      case 'custom':
+        if (!customSnoozeDate) {
+          showToast('Error', 'Please select a date', 'error')
+          return
+        }
+        snoozeUntil = new Date(customSnoozeDate)
+        break
+    }
+
+    try {
+      const { error } = await supabase
+        .from('bill_reminders')
+        .update({ snoozed_until: snoozeUntil.toISOString() })
+        .eq('id', snoozingBill.id)
+        .eq('user_id', user.id)
+
+      if (error) throw error
+      showToast('Success', `Snoozed until ${snoozeUntil.toLocaleDateString()}`, 'success')
+      setShowSnoozeModal(false)
+      setSnoozingBill(null)
+      setSnoozeOption('1day')
+      setCustomSnoozeDate('')
+      fetchBills()
+    } catch (error) {
+      showToast('Error', error.message, 'error')
+    }
   }
 
   const handleEdit = (bill) => {
@@ -528,7 +600,7 @@ export default function BillReminders() {
                   <div className="flex items-center space-x-3">
                     <p className="font-bold text-red-600">{formatCurrency(bill.amount)}</p>
                     <button
-                      onClick={() => handleMarkAsPaid(bill)}
+                      onClick={() => openPayModal(bill)}
                       className="px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors"
                     >
                       Mark Paid
@@ -650,7 +722,7 @@ export default function BillReminders() {
                       <div className="flex space-x-2">
                         {isWithinPaymentWindow(bill) ? (
                           <button
-                            onClick={() => handleMarkAsPaid(bill)}
+                            onClick={() => openPayModal(bill)}
                             className="px-3 py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors flex items-center"
                           >
                             <CheckCircle className="h-4 w-4 mr-1" />
@@ -666,6 +738,16 @@ export default function BillReminders() {
                             Not Yet
                           </button>
                         )}
+                        <button
+                          onClick={() => {
+                            setSnoozingBill(bill)
+                            setShowSnoozeModal(true)
+                          }}
+                          className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900/30 rounded-lg transition-colors"
+                          title="Snooze reminder"
+                        >
+                          <BellOff className="h-4 w-4" />
+                        </button>
                         <button
                           onClick={() => handleEdit(bill)}
                           className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
@@ -691,7 +773,7 @@ export default function BillReminders() {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 animate-slideIn">
+          <div className="bg-white rounded-xl max-w-full sm:max-w-md w-full p-4 sm:p-6 animate-slideIn">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900">
                 {editingBill ? 'Edit Bill Reminder' : 'Add New Bill Reminder'}
@@ -803,7 +885,7 @@ export default function BillReminders() {
                 />
               </div>
 
-              <div className="flex space-x-3 pt-4">
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => {
@@ -822,6 +904,182 @@ export default function BillReminders() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Mark as Paid Modal */}
+      {showPayModal && payingBill && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-full sm:max-w-md w-full p-4 sm:p-6 animate-slideIn">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                  <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  Mark Bill as Paid
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowPayModal(false)
+                  setPayingBill(null)
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Bill Info */}
+            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+              <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {payingBill.name}
+              </p>
+              <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 space-x-4">
+                <span className="capitalize">{payingBill.category}</span>
+                <span>•</span>
+                <span className="capitalize">{payingBill.payment_method}</span>
+                <span>•</span>
+                <span className="capitalize">{payingBill.frequency}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmPayment} className="space-y-4">
+              <div className="form-group">
+                <label className="label">Amount Paid *</label>
+                <input
+                  type="number"
+                  className="input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                  placeholder="Enter amount paid"
+                  value={payFormData.amount}
+                  onChange={(e) => setPayFormData({ ...payFormData, amount: e.target.value })}
+                  required
+                  step="0.01"
+                  min="0"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Expected: {formatCurrency(payingBill.amount)}
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label className="label">Payment Date *</label>
+                <input
+                  type="date"
+                  className="input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                  value={payFormData.date}
+                  onChange={(e) => setPayFormData({ ...payFormData, date: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="label">Notes</label>
+                <input
+                  type="text"
+                  className="input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                  placeholder="Add notes (optional)"
+                  value={payFormData.notes}
+                  onChange={(e) => setPayFormData({ ...payFormData, notes: e.target.value })}
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPayModal(false)
+                    setPayingBill(null)
+                  }}
+                  className="flex-1 btn btn-secondary py-3"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 btn btn-primary py-3 bg-green-600 hover:bg-green-700"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Confirm Payment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Snooze Modal */}
+      {showSnoozeModal && snoozingBill && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-full sm:max-w-md w-full p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold flex items-center">
+                <BellOff className="h-5 w-5 mr-2" />
+                Snooze Reminder
+              </h3>
+              <button
+                onClick={() => setShowSnoozeModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="text-sm mb-4">Snooze "{snoozingBill.name}" until:</p>
+
+            <div className="space-y-3 mb-6">
+              {[
+                { value: '1day', label: 'Tomorrow' },
+                { value: '3days', label: 'In 3 days' },
+                { value: '1week', label: 'In 1 week' },
+                { value: 'custom', label: 'Custom date' }
+              ].map(opt => (
+                <label
+                  key={opt.value}
+                  className={`flex items-center p-3 rounded-lg border-2 cursor-pointer ${
+                    snoozeOption === opt.value
+                      ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                      : 'border-gray-200 dark:border-gray-600'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    value={opt.value}
+                    checked={snoozeOption === opt.value}
+                    onChange={e => setSnoozeOption(e.target.value)}
+                    className="mr-3"
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              ))}
+            </div>
+
+            {snoozeOption === 'custom' && (
+              <input
+                type="date"
+                className="input w-full mb-6"
+                value={customSnoozeDate}
+                onChange={e => setCustomSnoozeDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => setShowSnoozeModal(false)}
+                className="flex-1 btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSnoozeBill}
+                className="flex-1 btn bg-orange-500 text-white hover:bg-orange-600"
+              >
+                Snooze
+              </button>
+            </div>
           </div>
         </div>
       )}

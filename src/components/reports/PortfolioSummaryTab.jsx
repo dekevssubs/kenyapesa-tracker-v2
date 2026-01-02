@@ -184,7 +184,24 @@ export default function PortfolioSummaryTab() {
                   outerRadius={100}
                   paddingAngle={5}
                   dataKey="value"
-                  label={({ name, percentage }) => `${name} ${percentage}%`}
+                  label={({ cx, cy, midAngle, innerRadius, outerRadius, name, percentage }) => {
+                    const RADIAN = Math.PI / 180
+                    const radius = outerRadius * 1.15
+                    const x = cx + radius * Math.cos(-midAngle * RADIAN)
+                    const y = cy + radius * Math.sin(-midAngle * RADIAN)
+                    return (
+                      <text
+                        x={x}
+                        y={y}
+                        fill="var(--text-primary)"
+                        textAnchor={x > cx ? 'start' : 'end'}
+                        dominantBaseline="central"
+                        className="text-xs font-medium"
+                      >
+                        {`${name} ${percentage}%`}
+                      </text>
+                    )
+                  }}
                 >
                   {summary.assetAllocation.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
