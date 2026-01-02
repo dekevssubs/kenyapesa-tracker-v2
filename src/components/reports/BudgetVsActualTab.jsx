@@ -30,13 +30,15 @@ export default function BudgetVsActualTab({ dateRange }) {
       setLoading(true)
 
       // Fetch budgets for the period
-      const startMonth = new Date(dateRange.from)
+      // Note: budgets.month column uses 'YYYY-MM-01' format (first day of month)
+      const startMonth = dateRange.from.slice(0, 7) + '-01'
+      const endMonth = dateRange.to.slice(0, 7) + '-01'
       const { data: budgets, error: budgetError } = await supabase
         .from('budgets')
         .select('*')
         .eq('user_id', user.id)
-        .gte('month', dateRange.from.slice(0, 7))
-        .lte('month', dateRange.to.slice(0, 7))
+        .gte('month', startMonth)
+        .lte('month', endMonth)
 
       if (budgetError) throw budgetError
 

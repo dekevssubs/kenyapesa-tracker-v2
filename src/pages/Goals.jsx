@@ -165,7 +165,7 @@ export default function Goals() {
       )
 
       if (result.success) {
-        toast.success(`${formatCurrency(contributeData.amount)} added to "${selectedGoal.name}". New balance: ${formatCurrency(result.newBalance)}`, { duration: 6000 })
+        toast.success(`${formatCurrency(contributeData.amount)} added to "${selectedGoal.name}". New balance: ${formatCurrency(result.newBalance)}`, 6000)
         setShowContributeModal(false)
         setContributeData({ amount: '', from_account_id: contributeData.from_account_id, notes: '' })
         fetchGoals()
@@ -204,7 +204,7 @@ export default function Goals() {
         const message = result.refundedAmount > 0
           ? `"${selectedGoal.name}" abandoned. ${formatCurrency(result.refundedAmount)} has been refunded to your account.`
           : `"${selectedGoal.name}" has been abandoned.`
-        toast.info(message, { duration: 6000 })
+        toast.info(message, 6000)
         setShowAbandonModal(false)
         setAbandonData({ reason: '', refund_to_account_id: abandonData.refund_to_account_id })
         fetchGoals()
@@ -556,7 +556,9 @@ export default function Goals() {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Account where funds for this goal are accumulated</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Account where funds are stored. Multiple goals can share one account - each tracks its own allocation.
+                </p>
               </div>
 
               <div>
@@ -879,11 +881,30 @@ export default function Goals() {
                 )}
 
                 {selectedGoal.linked_account && (
-                  <div className="mt-2 flex items-center">
-                    <Link2 className="h-4 w-4 text-gray-500 dark:text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      Linked Account: {selectedGoal.linked_account.name}
-                    </span>
+                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center mb-2">
+                      <Link2 className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        Linked Account: {selectedGoal.linked_account.name}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">Allocated to Goal</p>
+                        <p className="font-semibold text-blue-600 dark:text-blue-400">
+                          {formatCurrency(selectedGoal.current_amount || 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">Account Total</p>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">
+                          {formatCurrency(selectedGoal.linked_account.current_balance || 0)}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
+                      Note: Goals are allocations of account funds. Multiple goals can share one account.
+                    </p>
                   </div>
                 )}
 

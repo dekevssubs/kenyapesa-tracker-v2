@@ -196,35 +196,136 @@ export function parseMpesaMessage(message) {
 
 /**
  * Parse Bank transaction SMS/message
- * Supports: Kenya banks (KCB, Equity, Co-op, etc.)
+ * Supports: Kenya banks (KCB, Equity, Co-op, NCBA, etc.)
+ *
+ * Bank to M-Pesa transactions typically come in 2 messages:
+ * 1. Bank debit notification
+ * 2. M-Pesa confirmation (Till, Paybill, or Send Money)
  */
 export function parseBankMessage(message) {
   const result = {
     success: false,
     transactionType: null,
+    bankTransferType: null, // 'bank_to_till', 'bank_to_mpesa', 'bank_to_paybill'
     amount: null,
-    transactionCost: null,
+    transactionCost: null, // Bank messages don't include fees, user must enter manually
     recipient: null,
+    recipientNumber: null, // Till number or phone number
     reference: null,
+    bankReference: null,
+    mpesaReference: null,
     balance: null,
     transactionCode: null,
     date: null,
+    time: null,
+    bankName: null,
+    accountNumber: null,
+    requiresManualFee: true, // Flag to indicate user needs to enter fee
     rawMessage: message
   }
 
   try {
     const cleanMessage = message.trim().replace(/\s+/g, ' ')
+    const lowerMessage = cleanMessage.toLowerCase()
 
-    // Extract amounts
-    const amountPattern = /(?:Ksh|KES|KSh)\s*([\d,]+(?:\.\d{2})?)/gi
+    // Extract amounts - handles both "KES 8,247.00" and "KES. 15000.00" formats
+    const amountPattern = /(?:Ksh|KES)\.?\s*([\d,]+(?:\.\d{2})?)/gi
     const amounts = []
     let match
     while ((match = amountPattern.exec(cleanMessage)) !== null) {
       amounts.push(parseFloat(match[1].replace(/,/g, '')))
     }
 
+    // Detect bank name from message
+    if (lowerMessage.includes('ncba') || lowerMessage.includes('go for it')) {
+      result.bankName = 'NCBA'
+    } else if (lowerMessage.includes('kcb')) {
+      result.bankName = 'KCB'
+    } else if (lowerMessage.includes('equity')) {
+      result.bankName = 'Equity'
+    } else if (lowerMessage.includes('co-op') || lowerMessage.includes('coop')) {
+      result.bankName = 'Co-op'
+    } else if (lowerMessage.includes('stanbic')) {
+      result.bankName = 'Stanbic'
+    } else if (lowerMessage.includes('absa')) {
+      result.bankName = 'ABSA'
+    } else if (lowerMessage.includes('dtb')) {
+      result.bankName = 'DTB'
+    } else if (lowerMessage.includes('i&m')) {
+      result.bankName = 'I&M'
+    }
+
+    // Extract masked account number (e.g., "992****013")
+    const accountMatch = cleanMessage.match(/account\s*(\d{3}\*+\d{3})/i)
+    if (accountMatch) {
+      result.accountNumber = accountMatch[1]
+    }
+
+    // ===== NCBA Bank to Till Pattern =====
+    // "Mpesa Till transfer of KES 8247 to 65575 Naivas Kitengela BANK REF. FTX25320XAREM MPESA REF. TKGSG4268Q was successful"
+    const tillMatch = cleanMessage.match(/(?:Mpesa\s+)?Till\s+transfer\s+of\s+(?:KES|Ksh)\.?\s*([\d,]+(?:\.\d{2})?)\s+to\s+(\d+)\s+([^.]+?)\s+BANK\s+REF\.?\s*(\w+)\s+MPESA\s+REF\.?\s*(\w+)/i)
+    if (tillMatch) {
+      result.transactionType = 'bank_transfer'
+      result.bankTransferType = 'bank_to_till'
+      result.amount = parseFloat(tillMatch[1].replace(/,/g, ''))
+      result.recipientNumber = tillMatch[2] // Till number
+      result.recipient = tillMatch[3].trim() // Business name
+      result.bankReference = tillMatch[4]
+      result.mpesaReference = tillMatch[5]
+      result.transactionCode = tillMatch[5] // Use M-Pesa ref as primary code
+      result.success = true
+      return result
+    }
+
+    // ===== NCBA Bank to M-Pesa User Pattern =====
+    // "Dear Kelvin Kipkoech, your MPESA transfer of KES. 15000.00 to Elizabeth Mukami Njue (254725084893) has been processed successfully. MPESA ref number TLO781XMO5"
+    const mpesaUserMatch = cleanMessage.match(/(?:Dear\s+([^,]+),\s+)?your\s+MPESA\s+transfer\s+of\s+(?:KES|Ksh)\.?\s*([\d,]+(?:\.\d{2})?)\s+to\s+([^(]+)\s*\((\d+)\)\s+has\s+been\s+processed\s+successfully\.?\s*MPESA\s+ref\s+(?:number\s+)?(\w+)/i)
+    if (mpesaUserMatch) {
+      result.transactionType = 'bank_transfer'
+      result.bankTransferType = 'bank_to_mpesa'
+      result.amount = parseFloat(mpesaUserMatch[2].replace(/,/g, ''))
+      result.recipient = mpesaUserMatch[3].trim() // Recipient name
+      result.recipientNumber = mpesaUserMatch[4] // Phone number
+      result.mpesaReference = mpesaUserMatch[5]
+      result.transactionCode = mpesaUserMatch[5]
+      result.success = true
+      return result
+    }
+
+    // ===== NCBA Bank to Paybill Pattern =====
+    // "Mpesa Paybill payment of KES 5000 to 123456 Account XYZ BANK REF. FTX123 MPESA REF. ABC123 was successful"
+    const paybillMatch = cleanMessage.match(/(?:Mpesa\s+)?Paybill\s+(?:payment|transfer)\s+of\s+(?:KES|Ksh)\.?\s*([\d,]+(?:\.\d{2})?)\s+to\s+(\d+)\s+(?:Account\s+)?([^.]+?)\s+BANK\s+REF\.?\s*(\w+)\s+MPESA\s+REF\.?\s*(\w+)/i)
+    if (paybillMatch) {
+      result.transactionType = 'bank_transfer'
+      result.bankTransferType = 'bank_to_paybill'
+      result.amount = parseFloat(paybillMatch[1].replace(/,/g, ''))
+      result.recipientNumber = paybillMatch[2] // Paybill number
+      result.recipient = paybillMatch[3].trim() // Business/Account
+      result.bankReference = paybillMatch[4]
+      result.mpesaReference = paybillMatch[5]
+      result.transactionCode = paybillMatch[5]
+      result.success = true
+      return result
+    }
+
+    // ===== Bank Debit Notification Pattern =====
+    // "Your account 992****013 has been debited with KES 8,247.00 on 16/11/2025 at 17:29. Ref: FTX25320XAREM"
+    const debitMatch = cleanMessage.match(/account\s*(\d{3}\*+\d{3})\s+has\s+been\s+debited\s+with\s+(?:KES|Ksh)\.?\s*([\d,]+(?:\.\d{2})?)\s+on\s+(\d{1,2}\/\d{1,2}\/\d{2,4})\s+at\s+(\d{1,2}:\d{2})\.?\s*Ref:\s*(\w+)/i)
+    if (debitMatch) {
+      result.transactionType = 'bank_debit'
+      result.accountNumber = debitMatch[1]
+      result.amount = parseFloat(debitMatch[2].replace(/,/g, ''))
+      result.date = debitMatch[3]
+      result.time = debitMatch[4]
+      result.bankReference = debitMatch[5]
+      result.transactionCode = debitMatch[5]
+      result.success = true
+      return result
+    }
+
+    // ===== Legacy Bank Patterns (KCB, Equity, Co-op style) =====
     // Determine transaction type
-    if (cleanMessage.toLowerCase().includes('debited') || cleanMessage.toLowerCase().includes('withdrawn')) {
+    if (lowerMessage.includes('debited') || lowerMessage.includes('withdrawn')) {
       result.transactionType = 'debit'
       result.amount = amounts[0]
 
@@ -233,7 +334,7 @@ export function parseBankMessage(message) {
         result.recipient = recipientMatch[1].trim()
       }
 
-    } else if (cleanMessage.toLowerCase().includes('credited') || cleanMessage.toLowerCase().includes('received')) {
+    } else if (lowerMessage.includes('credited') || lowerMessage.includes('received')) {
       result.transactionType = 'credit'
       result.amount = amounts[0]
 
@@ -242,12 +343,13 @@ export function parseBankMessage(message) {
         result.recipient = senderMatch[1].trim()
       }
 
-    } else if (cleanMessage.toLowerCase().includes('transfer')) {
+    } else if (lowerMessage.includes('transfer')) {
       result.transactionType = 'transfer'
       result.amount = amounts[0]
 
-      if (cleanMessage.toLowerCase().includes('charges')) {
+      if (lowerMessage.includes('charges')) {
         result.transactionCost = amounts[1]
+        result.requiresManualFee = false
       }
     }
 
@@ -255,6 +357,7 @@ export function parseBankMessage(message) {
     const refMatch = cleanMessage.match(/(?:Ref|Reference|Txn|Transaction)[\s:.]*([\w\d]+)/i)
     if (refMatch) {
       result.transactionCode = refMatch[1].trim()
+      result.bankReference = refMatch[1].trim()
     }
 
     // Extract balance
@@ -275,6 +378,78 @@ export function parseBankMessage(message) {
 
   } catch (error) {
     console.error('Error parsing bank message:', error)
+    result.error = error.message
+  }
+
+  return result
+}
+
+/**
+ * Parse combined bank messages (both debit notification and M-Pesa confirmation)
+ * Users often paste both messages together
+ */
+export function parseCombinedBankMessages(message) {
+  const result = {
+    success: false,
+    transactionType: 'bank_transfer',
+    bankTransferType: null,
+    amount: null,
+    transactionCost: null,
+    recipient: null,
+    recipientNumber: null,
+    bankReference: null,
+    mpesaReference: null,
+    transactionCode: null,
+    date: null,
+    time: null,
+    bankName: null,
+    accountNumber: null,
+    requiresManualFee: true,
+    rawMessage: message
+  }
+
+  try {
+    // Split by common separators (newlines, double spaces)
+    const messages = message.split(/\n\n|\n/).filter(m => m.trim().length > 10)
+
+    // Try to parse each part
+    let debitInfo = null
+    let transferInfo = null
+
+    for (const msg of messages) {
+      const parsed = parseBankMessage(msg.trim())
+
+      if (parsed.success) {
+        if (parsed.transactionType === 'bank_debit') {
+          debitInfo = parsed
+        } else if (parsed.bankTransferType) {
+          transferInfo = parsed
+        }
+      }
+    }
+
+    // Combine information from both messages
+    if (transferInfo) {
+      // Transfer details take priority
+      Object.assign(result, transferInfo)
+
+      // Add debit info if available
+      if (debitInfo) {
+        result.date = result.date || debitInfo.date
+        result.time = result.time || debitInfo.time
+        result.accountNumber = result.accountNumber || debitInfo.accountNumber
+        result.bankReference = result.bankReference || debitInfo.bankReference
+      }
+
+      result.success = true
+    } else if (debitInfo) {
+      // Only debit info available
+      Object.assign(result, debitInfo)
+      result.success = true
+    }
+
+  } catch (error) {
+    console.error('Error parsing combined bank messages:', error)
     result.error = error.message
   }
 
@@ -343,6 +518,33 @@ export function parseAirtelMoneyMessage(message) {
 export function parseTransactionMessage(message) {
   const cleanMessage = message.toLowerCase()
 
+  // Check for bank transfer patterns first (they contain M-Pesa keywords too)
+  // NCBA style: "Till transfer", "MPESA transfer of KES", "BANK REF", "Go for it"
+  const isBankTransfer =
+    (cleanMessage.includes('till transfer') ||
+     cleanMessage.includes('your mpesa transfer') ||
+     cleanMessage.includes('bank ref') ||
+     cleanMessage.includes('go for it') ||
+     cleanMessage.includes('has been debited with'))
+
+  if (isBankTransfer) {
+    // Try combined parser first (handles both messages pasted together)
+    const combinedResult = parseCombinedBankMessages(message)
+    if (combinedResult.success) {
+      return {
+        ...combinedResult,
+        provider: combinedResult.bankName || 'Bank'
+      }
+    }
+
+    // Fall back to single message parser
+    const bankResult = parseBankMessage(message)
+    return {
+      ...bankResult,
+      provider: bankResult.bankName || 'Bank'
+    }
+  }
+
   if (cleanMessage.includes('m-pesa') || cleanMessage.includes('mpesa') || cleanMessage.includes('safaricom')) {
     return {
       ...parseMpesaMessage(message),
@@ -382,6 +584,17 @@ export const SAMPLE_MESSAGES = {
 
   mpesa_received: "SRP5JKL345 Confirmed. You have received Ksh3,000.00 from JANE WANJIKU 254722334455 on 23/12/24 at 11:00 AM. New M-PESA balance is Ksh18,194.50.",
 
+  // Bank to Till (NCBA style)
+  bank_to_till: `Your account 992****013 has been debited with KES 8,247.00 on 16/11/2025 at 17:29. Ref: FTX25320XAREM. For queries, call 0711056444 / 0732156444 or WhatsApp: 0717804444.
+
+Mpesa Till transfer of KES 8247 to 65575 Naivas Kitengela BANK REF. FTX25320XAREM MPESA REF. TKGSG4268Q was successful. NCBA, Go for it.`,
+
+  // Bank to M-Pesa User (NCBA style)
+  bank_to_mpesa: `Your account 992****013 has been debited with KES 15,000.00 on 24/12/2025 at 19:40. Ref: FTC251224PSAI. For queries, call 0711056444 / 0732156444 or WhatsApp: 0717804444.
+
+Dear Kelvin Kipkoech, your MPESA transfer of KES. 15000.00 to Elizabeth Mukami Njue (254725084893) has been processed successfully. MPESA ref number TLO781XMO5. NCBA, Go for it.`,
+
+  // Legacy bank formats
   kcb: "KCB: Acc XXX123 debited with Ksh3,500.00 on 23/12/24. Paid to CARREFOUR SUPERMARKET. Txn Ref: FTB8765432. Avail. Bal Ksh45,678.90.",
 
   equity: "Equity Bank: Your account 0123456789 has been credited with KES 25,000.00 from EMPLOYER NAME on 23Dec24. Ref: SAL123456. Balance: KES 67,890.00",
@@ -393,6 +606,7 @@ export default {
   parseTransactionMessage,
   parseMpesaMessage,
   parseBankMessage,
+  parseCombinedBankMessages,
   parseAirtelMoneyMessage,
   SAMPLE_MESSAGES
 }

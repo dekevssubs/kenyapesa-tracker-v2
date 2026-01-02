@@ -4,10 +4,11 @@ import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency } from '../utils/calculations'
 import { getCategoryIcon } from '../utils/iconMappings'
-import { FileText, Plus, Edit2, Trash2, X, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Info } from 'lucide-react'
+import { FileText, Plus, Edit2, Trash2, X, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Info, AlertCircle } from 'lucide-react'
 import ConfirmationModal from '../components/ConfirmationModal'
 import { useConfirmation } from '../hooks/useConfirmation'
 import { fetchAndPredict } from '../utils/aiPredictions'
+import budgetService from '../utils/budgetService'
 
 const EXPENSE_CATEGORIES = [
   'rent', 'transport', 'food', 'utilities', 'airtime',
@@ -19,11 +20,13 @@ export default function Budget() {
   const toast = useToast()
   const { isOpen: confirmOpen, config: confirmConfig, confirm, close: closeConfirm } = useConfirmation()
   const [loading, setLoading] = useState(true)
-  const [budgets, setBudgets] = useState([])
-  const [expenses, setExpenses] = useState([])
+  const [budgets, setBudgets] = useState([]) // Budgets with spending data (ledger-first)
+  const [budgetSummary, setBudgetSummary] = useState(null) // Total budget summary (server-side)
+  const [overspentBudgets, setOverspentBudgets] = useState([]) // Overspent budgets (server-side)
+  const [warningBudgets, setWarningBudgets] = useState([]) // Warning budgets (server-side)
   const [showModal, setShowModal] = useState(false)
   const [editingBudget, setEditingBudget] = useState(null)
-  const [predictions, setPredictions] = useState({})
+  const [predictions, setPredictions] = useState({}) // AI forecasted spending (advisory)
 
   const [formData, setFormData] = useState({
     category: 'food',
@@ -33,90 +36,45 @@ export default function Budget() {
 
   useEffect(() => {
     if (user) {
-      fetchBudgets()
-      fetchExpenses()
+      fetchBudgetsWithSpending()
+      calculatePredictions()
     }
   }, [user])
 
-  useEffect(() => {
-    if (expenses.length > 0) {
-      calculatePredictions()
-    }
-  }, [expenses])
-
-  const fetchBudgets = async () => {
+  // Fetch budgets with spending data (ledger-first, server-side calculations)
+  const fetchBudgetsWithSpending = async () => {
     try {
-      const currentMonth = new Date().toISOString().split('T')[0].slice(0, 7) + '-01'
-      
-      const { data, error } = await supabase
-        .from('budgets')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('month', currentMonth)
+      setLoading(true)
+      const currentMonth = new Date()
 
-      if (error) throw error
-      setBudgets(data || [])
+      // Get all budget data from server-side (NO client-side calculations)
+      const [enrichedBudgets, summary, overspent, warnings] = await Promise.all([
+        budgetService.getBudgetsWithSpending(user.id, currentMonth),
+        budgetService.getTotalBudgetSummary(user.id, currentMonth),
+        budgetService.getOverspentBudgets(user.id, currentMonth),
+        budgetService.getWarningBudgets(user.id, currentMonth)
+      ])
+
+      setBudgets(enrichedBudgets)
+      setBudgetSummary(summary)
+      setOverspentBudgets(overspent)
+      setWarningBudgets(warnings)
+
       setLoading(false)
     } catch (error) {
-      console.error('Error fetching budgets:', error)
+      console.error('Error fetching budgets with spending:', error)
       setLoading(false)
-    }
-  }
-
-  const fetchExpenses = async () => {
-    try {
-      const currentDate = new Date()
-      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-      const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
-
-      // Fetch only non-reversed expenses for budget calculations
-      // Per spec: "Expense is not reversed" must be true to count toward budget
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('date', firstDay.toISOString().split('T')[0])
-        .lte('date', lastDay.toISOString().split('T')[0])
-        .or('is_reversed.is.null,is_reversed.eq.false')
-
-      if (error) throw error
-      setExpenses(data || [])
-    } catch (error) {
-      console.error('Error fetching expenses:', error)
     }
   }
 
   const calculatePredictions = async () => {
     try {
-      // Use the real AI prediction engine
+      // Use the real AI prediction engine (forecasted spending - advisory only)
       const aiPredictions = await fetchAndPredict(user.id, supabase)
       setPredictions(aiPredictions)
     } catch (error) {
       console.error('Error calculating predictions:', error)
     }
-  }
-
-  const getCategorySpent = (category) => {
-    // Per spec: Transaction fees ARE expenses
-    // Include both amount and transaction_fee in the total
-    return expenses
-      .filter(e => e.category === category)
-      .reduce((sum, e) => {
-        const amount = parseFloat(e.amount) || 0
-        const fee = parseFloat(e.transaction_fee) || 0
-        return sum + amount + fee
-      }, 0)
-  }
-
-  const getBudgetStatus = (spent, limit) => {
-    // Per spec: Status thresholds
-    // - On track: spent < 80%
-    // - Almost at limit: 80% ≤ spent < 100%
-    // - Over budget: spent ≥ 100%
-    const percentage = (spent / limit) * 100
-    if (percentage >= 100) return { status: 'over', color: 'red', message: 'Over budget!' }
-    if (percentage >= 80) return { status: 'warning', color: 'yellow', message: 'Almost at limit' }
-    return { status: 'good', color: 'green', message: 'On track' }
   }
 
   const handleSubmit = async (e) => {
@@ -162,7 +120,7 @@ export default function Budget() {
       })
       setShowModal(false)
       setEditingBudget(null)
-      fetchBudgets()
+      fetchBudgetsWithSpending()
     } catch (error) {
       console.error('Error saving budget:', error)
       toast.error('Failed to save budget. Please try again.')
@@ -195,7 +153,7 @@ export default function Budget() {
 
           if (error) throw error
           toast.info('Budget deleted successfully')
-          fetchBudgets()
+          fetchBudgetsWithSpending()
         } catch (error) {
           console.error('Error deleting budget:', error)
           toast.error('Failed to delete budget. Please try again.')
@@ -204,18 +162,9 @@ export default function Budget() {
     })
   }
 
-  const getTotalBudget = () => {
-    return budgets.reduce((sum, b) => sum + parseFloat(b.monthly_limit), 0)
-  }
-
-  const getTotalSpent = () => {
-    // Include both amount and transaction fees
-    return expenses.reduce((sum, e) => {
-      const amount = parseFloat(e.amount) || 0
-      const fee = parseFloat(e.transaction_fee) || 0
-      return sum + amount + fee
-    }, 0)
-  }
+  // ❌ REMOVED: All client-side calculations moved to budgetService
+  // Per canonical spec: "No UI-side calculations allowed"
+  // All data comes from server-side budgetService functions
 
   if (loading) {
     return (
@@ -257,21 +206,133 @@ export default function Budget() {
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Critical Alert Banner - Overspent Budgets */}
+      {overspentBudgets.length > 0 && (
+        <div className="bg-red-50 dark:bg-red-900/30 border-2 border-red-500 dark:border-red-600 rounded-xl p-6 animate-pulse">
+          <div className="flex items-start space-x-4">
+            <div className="bg-red-500 rounded-lg p-3 flex-shrink-0">
+              <AlertCircle className="h-8 w-8 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-red-900 dark:text-red-100 mb-2">
+                Budget Alert: {overspentBudgets.length} {overspentBudgets.length === 1 ? 'Category' : 'Categories'} Over Budget!
+              </h3>
+              <p className="text-red-700 dark:text-red-300 mb-4">
+                You've exceeded your budget limit in the following {overspentBudgets.length === 1 ? 'category' : 'categories'}. Consider reviewing your spending.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {overspentBudgets.map(budget => {
+                  const Icon = getCategoryIcon(budget.category)
+                  return (
+                    <div key={budget.id} className="bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 border-red-500">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <Icon className="h-5 w-5 text-red-600 dark:text-red-400" />
+                          <span className="font-semibold text-gray-900 dark:text-gray-100 capitalize">{budget.category}</span>
+                        </div>
+                        <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                          +{formatCurrency(budget.overspend)} over
+                        </span>
+                      </div>
+                      <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        Spent: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(budget.spent)}</span> of {formatCurrency(budget.monthly_limit)}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-4 pt-4 border-t border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-800 dark:text-red-200 font-medium">
+                  Total overspend: {formatCurrency(budgetSummary?.totalOverspend || 0)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Warning Summary Card - Budgets Approaching Limit */}
+      {warningBudgets.length > 0 && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/30 border-2 border-yellow-400 dark:border-yellow-600 rounded-xl p-6">
+          <div className="flex items-start space-x-4">
+            <div className="bg-yellow-400 dark:bg-yellow-500 rounded-lg p-3 flex-shrink-0">
+              <AlertTriangle className="h-6 w-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-yellow-900 dark:text-yellow-100 mb-2">
+                {warningBudgets.length} {warningBudgets.length === 1 ? 'Budget' : 'Budgets'} Approaching Limit
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {warningBudgets.map(budget => {
+                  const Icon = getCategoryIcon(budget.category)
+                  return (
+                    <div key={budget.id} className="bg-white dark:bg-gray-800 rounded-lg p-3 border-l-4 border-yellow-400">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <Icon className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                        <span className="font-semibold text-sm text-gray-900 dark:text-gray-100 capitalize">{budget.category}</span>
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        {budget.percentage.toFixed(1)}% used
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Summary - All data from server-side budgetService */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="card-stat bg-gradient-to-br from-blue-500 to-blue-600 text-white">
           <p className="text-blue-100 font-medium mb-2">Total Budget</p>
-          <p className="text-4xl font-bold">{formatCurrency(getTotalBudget())}</p>
+          <p className="text-4xl font-bold">{formatCurrency(budgetSummary?.totalBudget || 0)}</p>
         </div>
 
         <div className="card-stat bg-gradient-to-br from-red-500 to-red-600 text-white">
           <p className="text-red-100 font-medium mb-2">Total Spent</p>
-          <p className="text-4xl font-bold">{formatCurrency(getTotalSpent())}</p>
+          <p className="text-4xl font-bold">{formatCurrency(budgetSummary?.totalSpent || 0)}</p>
+          {budgetSummary && budgetSummary.totalSpent > budgetSummary.totalBudget && (
+            <p className="text-xs text-red-100 mt-2 flex items-center">
+              <AlertCircle className="h-3 w-3 mr-1" />
+              Over budget!
+            </p>
+          )}
         </div>
 
-        <div className="card-stat bg-gradient-to-br from-green-500 to-green-600 text-white">
-          <p className="text-green-100 font-medium mb-2">Remaining</p>
-          <p className="text-4xl font-bold">{formatCurrency(getTotalBudget() - getTotalSpent())}</p>
+        <div className={`card-stat ${budgetSummary && budgetSummary.totalRemaining < 0 ? 'bg-gradient-to-br from-red-500 to-red-600' : 'bg-gradient-to-br from-green-500 to-green-600'} text-white`}>
+          <p className={`${budgetSummary && budgetSummary.totalRemaining < 0 ? 'text-red-100' : 'text-green-100'} font-medium mb-2`}>Remaining</p>
+          <p className="text-4xl font-bold">{formatCurrency(Math.abs(budgetSummary?.totalRemaining || 0))}</p>
+          {budgetSummary && budgetSummary.totalRemaining < 0 && (
+            <p className="text-xs text-red-100 mt-2">Overspent</p>
+          )}
+        </div>
+
+        <div className="card-stat bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+          <p className="text-purple-100 font-medium mb-2">Budget Status</p>
+          <div className="flex flex-col space-y-2">
+            {overspentBudgets.length > 0 && (
+              <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 mr-2" />
+                <span className="text-2xl font-bold">{overspentBudgets.length}</span>
+                <span className="text-sm ml-2">over limit</span>
+              </div>
+            )}
+            {warningBudgets.length > 0 && (
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 mr-2" />
+                <span className="text-2xl font-bold">{warningBudgets.length}</span>
+                <span className="text-sm ml-2">approaching</span>
+              </div>
+            )}
+            {overspentBudgets.length === 0 && warningBudgets.length === 0 && (
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 mr-2" />
+                <span className="text-lg font-semibold">All on track</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -355,17 +416,20 @@ export default function Budget() {
         ) : (
           <div className="space-y-4">
             {budgets.map((budget) => {
-              const spent = getCategorySpent(budget.category)
-              const percentage = (spent / parseFloat(budget.monthly_limit)) * 100
-              const status = getBudgetStatus(spent, parseFloat(budget.monthly_limit))
+              // Budget data already enriched with spending info from budgetService
+              const spent = budget.spent || 0
+              const percentage = budget.percentage || 0
+              const status = budget.status || 'good'
+              const statusMessage = budget.statusMessage || 'On track'
               const Icon = getCategoryIcon(budget.category)
 
               return (
                 <div
                   key={budget.id}
                   className={`p-6 rounded-xl border-2 transition-all ${
-                    status.status === 'over' ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-800' :
-                    status.status === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-800' :
+                    status === 'over' ? 'bg-red-50 dark:bg-red-900/30 border-red-500 dark:border-red-600 shadow-lg shadow-red-200 dark:shadow-red-900/50' :
+                    status === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-400 dark:border-yellow-600 shadow-md shadow-yellow-200 dark:shadow-yellow-900/50' :
+                    status === 'at-limit' ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-800' :
                     'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700'
                   }`}
                 >
@@ -375,14 +439,16 @@ export default function Budget() {
                       <div>
                         <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100 capitalize">{budget.category}</h4>
                         <p className={`text-sm font-medium ${
-                          status.status === 'over' ? 'text-red-600 dark:text-red-400' :
-                          status.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                          status === 'over' ? 'text-red-600 dark:text-red-400' :
+                          status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                          status === 'at-limit' ? 'text-blue-600 dark:text-blue-400' :
                           'text-green-600 dark:text-green-400'
                         }`}>
-                          {status.status === 'over' && <AlertTriangle className="inline h-4 w-4 mr-1" />}
-                          {status.status === 'warning' && <Info className="inline h-4 w-4 mr-1" />}
-                          {status.status === 'good' && <CheckCircle className="inline h-4 w-4 mr-1" />}
-                          {status.message}
+                          {status === 'over' && <AlertTriangle className="inline h-4 w-4 mr-1" />}
+                          {status === 'warning' && <Info className="inline h-4 w-4 mr-1" />}
+                          {status === 'at-limit' && <CheckCircle className="inline h-4 w-4 mr-1" />}
+                          {status === 'good' && <CheckCircle className="inline h-4 w-4 mr-1" />}
+                          {statusMessage}
                         </p>
                       </div>
                     </div>
@@ -409,11 +475,12 @@ export default function Budget() {
                       <span className="font-medium text-gray-700 dark:text-gray-300">Spent: {formatCurrency(spent)}</span>
                       <span className="font-medium text-gray-700 dark:text-gray-300">Budget: {formatCurrency(budget.monthly_limit)}</span>
                     </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
                       <div
                         className={`h-4 rounded-full transition-all duration-500 ${
-                          status.status === 'over' ? 'bg-red-500' :
-                          status.status === 'warning' ? 'bg-yellow-500' :
+                          status === 'over' ? 'bg-red-500' :
+                          status === 'warning' ? 'bg-yellow-500' :
+                          status === 'at-limit' ? 'bg-blue-500' :
                           'bg-green-500'
                         }`}
                         style={{ width: `${Math.min(percentage, 100)}%` }}
@@ -421,9 +488,16 @@ export default function Budget() {
                     </div>
                     <div className="flex justify-between text-sm mt-2">
                       <span className="text-gray-600 dark:text-gray-400">{percentage.toFixed(1)}% used</span>
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">
-                        {formatCurrency(parseFloat(budget.monthly_limit) - spent)} remaining
-                      </span>
+                      {status === 'over' ? (
+                        <span className="font-bold text-red-600 dark:text-red-400 flex items-center">
+                          <AlertCircle className="h-4 w-4 mr-1" />
+                          {formatCurrency(budget.overspend || 0)} over budget
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">
+                          {formatCurrency(budget.remaining || 0)} remaining
+                        </span>
+                      )}
                     </div>
                   </div>
 

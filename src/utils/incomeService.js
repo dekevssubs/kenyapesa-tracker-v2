@@ -148,6 +148,16 @@ export class IncomeService {
       const statutoryAmount = parseFloat(statutory_deductions || 0)
       const netAmount = grossAmount - taxAmount - statutoryAmount - totalCustomDeductions
 
+      // Debug logging
+      console.log('IncomeService.createIncome - Calculation:', {
+        grossAmount,
+        taxAmount,
+        statutoryAmount,
+        totalCustomDeductions,
+        netAmount,
+        customDeductionsCount: customDeductions.length
+      })
+
       // Step 1: Create income record
       const { data: income, error: incomeError } = await this.supabase
         .from('income')
@@ -217,6 +227,14 @@ export class IncomeService {
         .single()
 
       if (txError) throw txError
+
+      // Debug: Verify the transaction was created correctly
+      console.log('IncomeService - Account Transaction Created:', {
+        transactionId: accountTransaction.id,
+        to_account_id: account_id,
+        amount: netAmount,
+        description: transactionDescription
+      })
 
       // Step 4: Balance is automatically updated by database trigger
 
@@ -599,6 +617,241 @@ export class IncomeService {
       return {
         success: false,
         accounts: [],
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * RECURRING INCOME METHODS
+   */
+
+  /**
+   * Calculate next date based on frequency
+   * @param {string} currentDate - Current date (YYYY-MM-DD)
+   * @param {string} frequency - Frequency (weekly, biweekly, monthly, quarterly, yearly)
+   * @returns {string} - Next date (YYYY-MM-DD)
+   */
+  calculateNextDate(currentDate, frequency) {
+    const date = new Date(currentDate)
+
+    switch (frequency) {
+      case 'weekly':
+        date.setDate(date.getDate() + 7)
+        break
+      case 'biweekly':
+        date.setDate(date.getDate() + 14)
+        break
+      case 'monthly':
+        date.setMonth(date.getMonth() + 1)
+        break
+      case 'quarterly':
+        date.setMonth(date.getMonth() + 3)
+        break
+      case 'yearly':
+        date.setFullYear(date.getFullYear() + 1)
+        break
+    }
+
+    return date.toISOString().split('T')[0]
+  }
+
+  /**
+   * Get all recurring income for the user
+   * @returns {Promise<object>} - {success, recurringIncomes, error}
+   */
+  async getAllRecurringIncome() {
+    try {
+      const { data, error } = await this.supabase
+        .from('recurring_income')
+        .select(`
+          *,
+          account:accounts(id, name, account_type)
+        `)
+        .eq('user_id', this.userId)
+        .order('next_date', { ascending: true })
+
+      if (error) throw error
+
+      return {
+        success: true,
+        recurringIncomes: data || []
+      }
+    } catch (error) {
+      console.error('Error fetching recurring income:', error)
+      return {
+        success: false,
+        error: error.message,
+        recurringIncomes: []
+      }
+    }
+  }
+
+  /**
+   * Create recurring income template
+   * @param {object} recurringData - Recurring income data
+   * @returns {Promise<object>} - {success, recurringIncome, error}
+   */
+  async createRecurringIncome(recurringData) {
+    try {
+      const { data, error } = await this.supabase
+        .from('recurring_income')
+        .insert({
+          user_id: this.userId,
+          ...recurringData,
+          next_date: this.calculateNextDate(recurringData.start_date, recurringData.frequency)
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      return {
+        success: true,
+        recurringIncome: data
+      }
+    } catch (error) {
+      console.error('Error creating recurring income:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Update recurring income
+   * @param {string} id - Recurring income ID
+   * @param {object} updates - Fields to update
+   * @returns {Promise<object>} - {success, recurringIncome, error}
+   */
+  async updateRecurringIncome(id, updates) {
+    try {
+      const { data, error } = await this.supabase
+        .from('recurring_income')
+        .update(updates)
+        .eq('id', id)
+        .eq('user_id', this.userId)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      return {
+        success: true,
+        recurringIncome: data
+      }
+    } catch (error) {
+      console.error('Error updating recurring income:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Delete recurring income
+   * @param {string} id - Recurring income ID
+   * @returns {Promise<object>} - {success, error}
+   */
+  async deleteRecurringIncome(id) {
+    try {
+      const { error } = await this.supabase
+        .from('recurring_income')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', this.userId)
+
+      if (error) throw error
+
+      return { success: true }
+    } catch (error) {
+      console.error('Error deleting recurring income:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Toggle recurring income active status
+   * @param {string} id - Recurring income ID
+   * @param {boolean} currentStatus - Current is_active status
+   * @returns {Promise<object>} - {success, error}
+   */
+  async toggleRecurringActive(id, currentStatus) {
+    try {
+      const { error } = await this.supabase
+        .from('recurring_income')
+        .update({ is_active: !currentStatus })
+        .eq('id', id)
+        .eq('user_id', this.userId)
+
+      if (error) throw error
+
+      return { success: true }
+    } catch (error) {
+      console.error('Error toggling recurring income:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Create income entry from recurring template
+   * @param {string} recurringId - Recurring income ID
+   * @returns {Promise<object>} - {success, incomeId, error}
+   */
+  async createIncomeFromRecurring(recurringId) {
+    try {
+      // Get recurring income template
+      const { data: recurring, error: fetchError } = await this.supabase
+        .from('recurring_income')
+        .select('*')
+        .eq('id', recurringId)
+        .eq('user_id', this.userId)
+        .single()
+
+      if (fetchError) throw fetchError
+
+      // Create income entry
+      const result = await this.recordIncome({
+        amount: recurring.amount,
+        source: recurring.source,
+        source_name: recurring.source_name,
+        description: recurring.description || `Recurring ${recurring.source}`,
+        date: new Date().toISOString().split('T')[0],
+        account_id: recurring.account_id,
+        is_gross: recurring.is_gross,
+        gross_salary: recurring.gross_salary,
+        statutory_deductions: recurring.statutory_deductions,
+        tax_amount: recurring.tax_amount
+      })
+
+      if (!result.success) throw new Error(result.error)
+
+      // Update next_date in recurring_income
+      const nextDate = this.calculateNextDate(recurring.next_date, recurring.frequency)
+      await this.supabase
+        .from('recurring_income')
+        .update({
+          next_date: nextDate,
+          last_auto_created_at: new Date().toISOString()
+        })
+        .eq('id', recurringId)
+
+      return {
+        success: true,
+        incomeId: result.incomeId
+      }
+    } catch (error) {
+      console.error('Error creating income from recurring:', error)
+      return {
+        success: false,
         error: error.message
       }
     }

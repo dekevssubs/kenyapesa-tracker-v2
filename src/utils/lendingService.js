@@ -31,7 +31,7 @@ export class LendingService {
   /**
    * Create lending record with account integration
    * @param {object} lendingData - Lending data
-   * @returns {Promise<object>} - {success, lendingId, accountTransactionId, error}
+   * @returns {Promise<object>} - {success, lendingId, accountTransactionId, feeTransactionId, error}
    */
   async createLending(lendingData) {
     try {
@@ -42,7 +42,9 @@ export class LendingService {
         date,
         due_date,
         notes,
-        interest_rate
+        interest_rate,
+        transaction_fee,
+        fee_method // 'included' or 'separate'
       } = lendingData
 
       // Validate required fields
@@ -67,17 +69,26 @@ export class LendingService {
         }
       }
 
+      // Calculate total amount needed (including fee if separate)
+      const feeAmount = (fee_method === 'separate' && transaction_fee) ? parseFloat(transaction_fee) : 0
+      const totalRequired = parseFloat(amount) + feeAmount
+
       // Check account balance
-      const balanceCheck = await this.checkAccountBalance(lend_from_account_id, amount)
+      const balanceCheck = await this.checkAccountBalance(lend_from_account_id, totalRequired)
       if (!balanceCheck.sufficient) {
         return {
           success: false,
-          error: `Insufficient balance in ${balanceCheck.accountName}. Available: KES ${balanceCheck.balance.toFixed(2)}, Required: KES ${amount}`,
+          error: `Insufficient balance in ${balanceCheck.accountName}. Available: KES ${balanceCheck.balance.toFixed(2)}, Required: KES ${totalRequired.toFixed(2)}${feeAmount > 0 ? ` (${amount} + ${feeAmount} fee)` : ''}`,
           balanceCheck
         }
       }
 
       // Step 1: Create lending_tracker record
+      // Note: interest_rate is stored in notes if provided (column doesn't exist in DB)
+      const notesWithInterest = interest_rate
+        ? `${notes || ''}${notes ? '\n' : ''}Interest Rate: ${interest_rate}%`.trim()
+        : notes || null
+
       const { data: lending, error: lendingError } = await this.supabase
         .from('lending_tracker')
         .insert({
@@ -89,8 +100,7 @@ export class LendingService {
           date_lent: date,
           expected_return_date: due_date || null,
           repayment_status: LendingService.STATUS.PENDING,
-          notes: notes || null,
-          interest_rate: interest_rate ? parseFloat(interest_rate) : null
+          notes: notesWithInterest
         })
         .select('id')
         .single()
@@ -116,12 +126,41 @@ export class LendingService {
 
       if (txError) throw txError
 
-      // Step 3: Balance is automatically updated by database trigger
+      // Step 3: Record transaction fee if provided and separate
+      let feeTransactionId = null
+      if (feeAmount > 0) {
+        const { data: feeTx, error: feeError } = await this.supabase
+          .from('account_transactions')
+          .insert({
+            user_id: this.userId,
+            from_account_id: lend_from_account_id,
+            transaction_type: 'transaction_fee',
+            amount: feeAmount,
+            date,
+            category: 'Transaction Fees',
+            description: `M-Pesa fee for lending to ${person_name}`,
+            reference_id: lending.id,
+            reference_type: 'lending'
+          })
+          .select('id')
+          .single()
+
+        if (feeError) {
+          console.warn('Failed to record transaction fee:', feeError)
+          // Don't fail the whole operation if fee recording fails
+        } else {
+          feeTransactionId = feeTx.id
+        }
+      }
+
+      // Step 4: Balance is automatically updated by database trigger
 
       return {
         success: true,
         lendingId: lending.id,
         accountTransactionId: accountTransaction.id,
+        feeTransactionId,
+        feeAmount,
         balanceCheck
       }
     } catch (error) {
@@ -825,12 +864,24 @@ export class LendingService {
         }
       }
 
-      // Step 1: Create bad_debt expense transaction in ledger
-      // This reduces assets (the receivable) and records the loss
+      // Step 1: Get or create the Bad Debt Write-Off system account
+      // This account tracks cumulative losses from forgiven debts
+      const { data: writeOffAccountId, error: accountError } = await this.supabase
+        .rpc('get_or_create_bad_debt_account', {
+          p_user_id: this.userId
+        })
+
+      if (accountError) throw accountError
+
+      // Step 2: Create bad_debt transaction in ledger (ledger-first architecture)
+      // Money flows from lender's original account to write-off account
+      // This properly records the loss while preserving ledger invariants
       const { data: badDebtTx, error: txError } = await this.supabase
         .from('account_transactions')
         .insert({
           user_id: this.userId,
+          from_account_id: lending.lend_from_account_id,  // Account that lent the money
+          to_account_id: writeOffAccountId,                // System account tracking losses
           transaction_type: 'bad_debt',
           amount: writeOffAmount,
           date: new Date().toISOString().split('T')[0],
@@ -844,7 +895,7 @@ export class LendingService {
 
       if (txError) throw txError
 
-      // Step 2: Update lending record to forgiven status
+      // Step 3: Update lending record to forgiven status
       const { error: updateError } = await this.supabase
         .from('lending_tracker')
         .update({

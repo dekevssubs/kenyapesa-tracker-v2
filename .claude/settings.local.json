@@ -10,7 +10,16 @@
       "Bash(cat:*)",
       "Bash(grep:*)",
       "Bash(dir \"C:\\\\Users\\\\kelvin.ruttoh\\\\Downloads\\\\kenyapesa-tracker2\\\\kenyapesa-tracker\\\\docs\" /B /O:N)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(npm run build:*)",
+      "Bash(findstr:*)",
+      "Bash(find:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd unified Portfolio page and implement financial immutability pattern\n\nPortfolio System:\n- Create Portfolio page as single financial backbone\n- Add portfolioService.js for data aggregation\n- Display Net Worth \\(derived: Assets - Liabilities\\)\n- Embed Goals overview \\(read-only, observe accounts\\)\n- Show asset allocation pie chart\n- Display accounts grid with filters\n- Show liabilities and lending receivables\n- Add recent activity feed from ledger\n- Add Portfolio → Reports deep link\n- Redirect /savings-investments and /networth to /portfolio\n\nExpense Reversal \\(Immutability Pattern\\):\n- Replace Edit/Delete with View/Reverse pattern\n- Create reversal transactions in account_transactions ledger\n- Use transaction_type=''reversal'', reference_type=''expense_reversal''\n- Exclude reversed expenses from totals and counts\n- Add database migration for reversal support\n\nGoals Module Fixes:\n- Remove Withdraw action \\(withdrawals are account-level\\)\n- Rename \"Savings Account\" to \"Linked Account\"\n- Goals observe accounts, don''t hold money\n\nBudget Module Fixes:\n- Filter out reversed expenses from calculations\n- Include transaction fees in spending totals\n- Align status thresholds \\(80%/100%\\)\n\nArchitecture Principles Locked:\n- Money lives in Accounts\n- Goals are intent, not storage\n- Truth lives in account_transactions ledger\n- Net Worth is calculated, never stored\n- One ledger, many views\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(supabase db reset:*)",
+      "Bash(ls:*)"
     ]
   }
 }

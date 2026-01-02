@@ -10,15 +10,13 @@ import PeriodSelector from '../components/dashboard/PeriodSelector'
 import TwelveMonthTrendWidget from '../components/dashboard/TwelveMonthTrendWidget'
 import YTDProgressWidget from '../components/dashboard/YTDProgressWidget'
 import FinancialHealthScoreWidget from '../components/dashboard/FinancialHealthScoreWidget'
+import { DashboardService } from '../utils/dashboardService'
 import {
   PERIOD_TYPES,
   getPeriodRange,
   getComparisonPeriod,
   getYoYPeriod,
-  calculatePercentageChange,
-  getYTDRange,
-  projectAnnualValue,
-  formatComparison
+  getYTDRange
 } from '../utils/periodUtils'
 import {
   DollarSign,
@@ -74,177 +72,45 @@ export default function Dashboard() {
     try {
       setLoading(true)
 
-      // Get current period range
+      // Initialize dashboard service
+      const dashboardService = new DashboardService(supabase, user.id)
+
+      // Get period ranges
       const currentPeriod = getPeriodRange(selectedPeriod, customRange)
-
-      // Get comparison period (MoM)
       const comparisonPeriod = getComparisonPeriod(selectedPeriod)
-
-      // Get year-over-year period
       const yoyPeriod = getYoYPeriod(currentPeriod.startDate, currentPeriod.endDate)
-
-      // Get year-to-date
       const ytdPeriod = getYTDRange()
 
-      // Fetch current period data
-      const [incomeData, expenseData] = await Promise.all([
-        supabase
-          .from('income')
-          .select('amount')
-          .eq('user_id', user.id)
-          .gte('date', currentPeriod.startDate)
-          .lte('date', currentPeriod.endDate),
-        supabase
-          .from('expenses')
-          .select('*')
-          .eq('user_id', user.id)
-          .gte('date', currentPeriod.startDate)
-          .lte('date', currentPeriod.endDate)
-      ])
+      // Fetch all dashboard data from service (ledger-based)
+      const dashboardData = await dashboardService.getDashboardData(
+        currentPeriod,
+        comparisonPeriod,
+        yoyPeriod,
+        ytdPeriod
+      )
 
-      // Fetch comparison period data (if available)
-      let comparisonData = { income: [], expenses: [] }
-      if (comparisonPeriod) {
-        const [compIncomeData, compExpenseData] = await Promise.all([
-          supabase
-            .from('income')
-            .select('amount')
-            .eq('user_id', user.id)
-            .gte('date', comparisonPeriod.startDate)
-            .lte('date', comparisonPeriod.endDate),
-          supabase
-            .from('expenses')
-            .select('amount')
-            .eq('user_id', user.id)
-            .gte('date', comparisonPeriod.startDate)
-            .lte('date', comparisonPeriod.endDate)
-        ])
-        comparisonData = {
-          income: compIncomeData.data || [],
-          expenses: compExpenseData.data || []
-        }
+      if (!dashboardData.success) {
+        throw new Error(dashboardData.error)
       }
 
-      // Fetch YoY data
-      const [yoyIncomeData, yoyExpenseData] = await Promise.all([
-        supabase
-          .from('income')
-          .select('amount')
-          .eq('user_id', user.id)
-          .gte('date', yoyPeriod.startDate)
-          .lte('date', yoyPeriod.endDate),
-        supabase
-          .from('expenses')
-          .select('amount')
-          .eq('user_id', user.id)
-          .gte('date', yoyPeriod.startDate)
-          .lte('date', yoyPeriod.endDate)
-      ])
-
-      // Fetch YTD data
-      const [ytdIncomeData, ytdExpenseData] = await Promise.all([
-        supabase
-          .from('income')
-          .select('amount')
-          .eq('user_id', user.id)
-          .gte('date', ytdPeriod.startDate)
-          .lte('date', ytdPeriod.endDate),
-        supabase
-          .from('expenses')
-          .select('amount')
-          .eq('user_id', user.id)
-          .gte('date', ytdPeriod.startDate)
-          .lte('date', ytdPeriod.endDate)
-      ])
-
-      // Calculate current period stats
-      const totalIncome = incomeData.data?.reduce((sum, item) => sum + parseFloat(item.amount), 0) || 0
-      const totalExpenses = expenseData.data?.reduce((sum, item) => sum + parseFloat(item.amount), 0) || 0
-      const netSavings = totalIncome - totalExpenses
-      const savingsRate = totalIncome > 0 ? (netSavings / totalIncome * 100) : 0
-
-      // Calculate comparison period stats
-      const compIncome = comparisonData.income?.reduce((sum, item) => sum + parseFloat(item.amount), 0) || 0
-      const compExpenses = comparisonData.expenses?.reduce((sum, item) => sum + parseFloat(item.amount), 0) || 0
-      const compSavings = compIncome - compExpenses
-
-      // Calculate YoY stats
-      const yoyIncome = yoyIncomeData.data?.reduce((sum, item) => sum + parseFloat(item.amount), 0) || 0
-      const yoyExpenses = yoyExpenseData.data?.reduce((sum, item) => sum + parseFloat(item.amount), 0) || 0
-      const yoySavings = yoyIncome - yoyExpenses
-
-      // Calculate YTD stats
-      const ytdIncome = ytdIncomeData.data?.reduce((sum, item) => sum + parseFloat(item.amount), 0) || 0
-      const ytdExpenses = ytdExpenseData.data?.reduce((sum, item) => sum + parseFloat(item.amount), 0) || 0
-      const ytdSavings = ytdIncome - ytdExpenses
-
+      // Set state from service response (no calculations here)
       setStats({
-        totalIncome,
-        totalExpenses,
-        netSavings,
-        savingsRate: savingsRate.toFixed(1),
-        periodLabel: currentPeriod.label
+        totalIncome: dashboardData.stats.totalIncome,
+        totalExpenses: dashboardData.stats.totalExpenses,
+        netSavings: dashboardData.stats.netSavings,
+        savingsRate: dashboardData.stats.savingsRate.toFixed(1),
+        periodLabel: dashboardData.stats.periodLabel
       })
 
       setComparisons({
-        mom: {
-          incomeChange: calculatePercentageChange(totalIncome, compIncome),
-          expenseChange: calculatePercentageChange(totalExpenses, compExpenses),
-          savingsChange: calculatePercentageChange(netSavings, compSavings),
-          label: comparisonPeriod?.label || ''
-        },
-        yoy: {
-          incomeChange: calculatePercentageChange(totalIncome, yoyIncome),
-          expenseChange: calculatePercentageChange(totalExpenses, yoyExpenses),
-          savingsChange: calculatePercentageChange(netSavings, yoySavings),
-          label: yoyPeriod.label
-        },
-        ytd: {
-          income: ytdIncome,
-          expenses: ytdExpenses,
-          savings: ytdSavings,
-          projectedAnnualIncome: projectAnnualValue(ytdIncome, ytdPeriod.daysElapsed, ytdPeriod.daysInYear),
-          projectedAnnualExpenses: projectAnnualValue(ytdExpenses, ytdPeriod.daysElapsed, ytdPeriod.daysInYear),
-          daysElapsed: ytdPeriod.daysElapsed,
-          daysInYear: ytdPeriod.daysInYear
-        }
+        mom: dashboardData.comparisons.mom || { incomeChange: 0, expenseChange: 0, savingsChange: 0, label: '' },
+        yoy: dashboardData.comparisons.yoy,
+        ytd: dashboardData.comparisons.ytd
       })
 
-      // Category breakdown
-      const categoryMap = {}
-      expenseData.data?.forEach(item => {
-        if (!categoryMap[item.category]) {
-          categoryMap[item.category] = 0
-        }
-        categoryMap[item.category] += parseFloat(item.amount)
-      })
-
-      const categoryArray = Object.entries(categoryMap)
-        .map(([name, value]) => ({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          value,
-          percentage: totalExpenses > 0 ? ((value / totalExpenses) * 100).toFixed(1) : 0
-        }))
-        .sort((a, b) => b.value - a.value)
-
-      setCategoryData(categoryArray.slice(0, 6))
-      setTopExpenses(categoryArray.slice(0, 5))
-
-      // Monthly comparison
-      if (comparisonPeriod) {
-        setMonthlyComparison([
-          {
-            month: comparisonPeriod.label,
-            income: compIncome,
-            expenses: compExpenses
-          },
-          {
-            month: currentPeriod.label,
-            income: totalIncome,
-            expenses: totalExpenses
-          }
-        ])
-      }
+      setCategoryData(dashboardData.categoryData.slice(0, 6))
+      setTopExpenses(dashboardData.topExpenses)
+      setMonthlyComparison(dashboardData.monthlyComparison)
 
       setLoading(false)
     } catch (error) {

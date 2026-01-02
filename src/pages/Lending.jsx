@@ -16,13 +16,17 @@ import {
   Users,
   Ban,
   ChevronRight,
-  Calendar
+  Calendar,
+  MessageSquare
 } from 'lucide-react'
 import { LendingService } from '../utils/lendingService'
 import ConfirmationModal from '../components/ConfirmationModal'
 import { useConfirmation } from '../hooks/useConfirmation'
 import LendingDetailDrawer from '../components/lending/LendingDetailDrawer'
 import ForgivenessModal from '../components/lending/ForgivenessModal'
+import TransactionMessageParser from '../components/TransactionMessageParser'
+import MpesaFeePreview from '../components/MpesaFeePreview'
+import { FEE_METHODS } from '../utils/kenyaTransactionFees'
 
 const STATUS_CONFIG = {
   pending: {
@@ -76,6 +80,13 @@ export default function Lending() {
 
   // Filter
   const [filterStatus, setFilterStatus] = useState('active') // active, complete, all
+
+  // Message parser and fee preview
+  const [showMessageParser, setShowMessageParser] = useState(false)
+  const [selectedFeeMethod, setSelectedFeeMethod] = useState(FEE_METHODS.MPESA_SEND) // Default to Send Money
+  const [transactionFee, setTransactionFee] = useState(0)
+  const [isBankTransfer, setIsBankTransfer] = useState(false) // Track if parsed message is bank transfer
+  const [manualFeeEntry, setManualFeeEntry] = useState('') // Manual fee entry for bank transfers
 
   // Form data
   const [formData, setFormData] = useState({
@@ -139,6 +150,122 @@ export default function Lending() {
     }
   }
 
+  // Check if selected account is M-Pesa
+  const isMpesaAccount = () => {
+    if (!formData.lend_from_account_id) return false
+    const account = accounts.find(a => a.id === formData.lend_from_account_id)
+    if (!account) return false
+    const mpesaKeywords = ['mpesa', 'm-pesa', 'safaricom', 'mobile money']
+    const accountName = (account.name || '').toLowerCase()
+    const accountType = (account.account_type || '').toLowerCase()
+    return mpesaKeywords.some(kw => accountName.includes(kw) || accountType.includes(kw)) ||
+           accountType === 'mobile_money'
+  }
+
+  // Check if selected account is a Bank account
+  const isBankAccount = () => {
+    if (!formData.lend_from_account_id) return false
+    const account = accounts.find(a => a.id === formData.lend_from_account_id)
+    if (!account) return false
+    const bankKeywords = ['bank', 'ncba', 'kcb', 'equity', 'co-op', 'coop', 'stanbic', 'absa', 'dtb', 'i&m', 'checking', 'savings']
+    const accountName = (account.name || '').toLowerCase()
+    const accountType = (account.account_type || '').toLowerCase()
+    return bankKeywords.some(kw => accountName.includes(kw) || accountType.includes(kw)) ||
+           accountType === 'bank' || accountType === 'checking' || accountType === 'savings'
+  }
+
+  // Check if message parser should be shown (M-Pesa or Bank account)
+  const shouldShowMessageParser = () => {
+    return isMpesaAccount() || isBankAccount()
+  }
+
+  // Handle parsed M-Pesa or Bank message
+  const handleMessageParsed = (parsedData) => {
+    if (parsedData) {
+      // Check if this is a bank transfer
+      const isBankTxn = parsedData.isBankTransfer || false
+      setIsBankTransfer(isBankTxn)
+
+      // TransactionMessageParser passes recipient as 'description'
+      // Clean up the recipient name (remove phone numbers, extra spaces)
+      let recipientName = parsedData.description || ''
+      // Remove phone numbers and clean up
+      recipientName = recipientName.replace(/\d{10,}/g, '').trim()
+      // Capitalize first letter of each word
+      recipientName = recipientName
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ')
+        .trim()
+
+      // Parse date from message (format: "25/12/24 10:30 AM" or similar)
+      let parsedDate = new Date().toISOString().split('T')[0] // Default to today
+      if (parsedData.transactionDate) {
+        try {
+          // Parse date like "25/12/24" or "25/12/2024"
+          const dateParts = parsedData.transactionDate.split(' ')[0].split('/')
+          if (dateParts.length === 3) {
+            const day = parseInt(dateParts[0])
+            const month = parseInt(dateParts[1]) - 1 // JS months are 0-indexed
+            let year = parseInt(dateParts[2])
+            // Handle 2-digit year
+            if (year < 100) {
+              year = year > 50 ? 1900 + year : 2000 + year
+            }
+            const dateObj = new Date(year, month, day)
+            if (!isNaN(dateObj.getTime())) {
+              parsedDate = dateObj.toISOString().split('T')[0]
+            }
+          }
+        } catch (e) {
+          console.log('Could not parse date:', parsedData.transactionDate)
+        }
+      }
+
+      // Get reference code for notes
+      const reference = parsedData.reference || parsedData.bankReference || parsedData.mpesaReference || ''
+      const existingNotes = ''
+      const notesWithRef = reference ? `Ref: ${reference}` : existingNotes
+
+      setFormData(prev => ({
+        ...prev,
+        amount: parsedData.amount?.toString() || prev.amount,
+        person_name: recipientName || prev.person_name,
+        date: parsedDate,
+        notes: notesWithRef || prev.notes
+      }))
+
+      // Store the fee from the parsed message (TransactionMessageParser passes it as 'transactionFee')
+      // For bank transfers, fee is not included in message, user needs to enter manually
+      if (isBankTxn) {
+        // Reset fee for bank transfers - user will enter manually
+        setManualFeeEntry('')
+        setTransactionFee(0)
+        showToast('Success', 'Bank transfer details extracted. Please enter the transaction fee manually.', 'success')
+      } else {
+        // M-Pesa messages include fee
+        if (parsedData.transactionFee && parsedData.transactionFee > 0) {
+          setTransactionFee(parsedData.transactionFee)
+        }
+        showToast('Success', 'Transaction details extracted from message', 'success')
+      }
+
+      setShowMessageParser(false)
+    }
+  }
+
+  // Handle fee calculation from MpesaFeePreview
+  const handleFeeCalculated = (fee) => {
+    setTransactionFee(fee)
+  }
+
+  // Handle manual fee entry for bank transfers
+  const handleManualFeeChange = (value) => {
+    setManualFeeEntry(value)
+    const fee = parseFloat(value) || 0
+    setTransactionFee(fee)
+  }
+
   const handleAddLending = async (e) => {
     e.preventDefault()
 
@@ -159,6 +286,15 @@ export default function Lending() {
 
     try {
       const lendingService = new LendingService(supabase, user.id)
+
+      // Prepare fee data for M-Pesa or Bank transactions
+      // For lending, fees are always 'separate' - we lend the amount, fee is our cost
+      const hasFee = (isMpesaAccount() || isBankAccount()) && transactionFee > 0
+      const feeData = hasFee ? {
+        transaction_fee: transactionFee,
+        fee_method: 'separate' // Always separate for lending
+      } : {}
+
       const result = await lendingService.createLending({
         lend_from_account_id: formData.lend_from_account_id,
         person_name: formData.person_name.trim(),
@@ -166,14 +302,20 @@ export default function Lending() {
         date: formData.date,
         due_date: formData.due_date || null,
         notes: formData.notes,
-        interest_rate: formData.interest_rate ? parseFloat(formData.interest_rate) : null
+        interest_rate: formData.interest_rate ? parseFloat(formData.interest_rate) : null,
+        ...feeData
       })
 
       if (!result.success) {
         throw new Error(result.error)
       }
 
-      showToast('Success', `Lent ${formatCurrency(formData.amount)} to ${formData.person_name}`, 'success')
+      // Build success message with fee info if applicable
+      let successMessage = `Lent ${formatCurrency(formData.amount)} to ${formData.person_name}`
+      if (result.feeAmount && result.feeAmount > 0) {
+        successMessage += ` (+ ${formatCurrency(result.feeAmount)} M-Pesa fee)`
+      }
+      showToast('Success', successMessage, 'success')
       resetForm()
       setShowAddModal(false)
       fetchCounterparties()
@@ -290,6 +432,11 @@ export default function Lending() {
       notes: '',
       interest_rate: ''
     })
+    setShowMessageParser(false)
+    setTransactionFee(0)
+    setSelectedFeeMethod(FEE_METHODS.MPESA_SEND)
+    setIsBankTransfer(false)
+    setManualFeeEntry('')
   }
 
   const resetRepaymentData = () => {
@@ -558,6 +705,37 @@ export default function Lending() {
                 </select>
               </div>
 
+              {/* Parse Transaction Message Button - Show for M-Pesa and Bank accounts */}
+              {shouldShowMessageParser() && (
+                <div className="form-group">
+                  <button
+                    type="button"
+                    onClick={() => setShowMessageParser(!showMessageParser)}
+                    className={`w-full py-2.5 px-4 border-2 border-dashed rounded-lg transition-colors flex items-center justify-center ${
+                      isBankAccount()
+                        ? 'border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                        : 'border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
+                    }`}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    {showMessageParser
+                      ? 'Hide Message Parser'
+                      : isBankAccount()
+                        ? 'Parse Bank Transaction SMS'
+                        : 'Parse M-Pesa Transaction SMS'
+                    }
+                  </button>
+                </div>
+              )}
+
+              {/* Transaction Message Parser */}
+              {showMessageParser && (
+                <TransactionMessageParser
+                  onParsed={handleMessageParsed}
+                  onClose={() => setShowMessageParser(false)}
+                />
+              )}
+
               <div className="form-group">
                 <label className="label">Person Name *</label>
                 <input
@@ -582,6 +760,81 @@ export default function Lending() {
                   required
                 />
               </div>
+
+              {/* M-Pesa Fee Preview - Show when M-Pesa is selected and amount is entered */}
+              {isMpesaAccount() && formData.amount && parseFloat(formData.amount) > 0 && (
+                <MpesaFeePreview
+                  amount={parseFloat(formData.amount)}
+                  selectedFeeMethod={selectedFeeMethod}
+                  onFeeMethodChange={setSelectedFeeMethod}
+                  onFeeCalculated={handleFeeCalculated}
+                />
+              )}
+
+              {/* Bank Transfer Fee - Manual Entry */}
+              {isBankAccount() && formData.amount && parseFloat(formData.amount) > 0 && (
+                <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center mb-3">
+                    <div className="p-2 bg-blue-500 rounded-lg mr-3">
+                      <Wallet className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-blue-800 dark:text-blue-300 text-sm">Bank Transfer Fee</p>
+                      <p className="text-xs text-blue-600 dark:text-blue-500">
+                        Enter the transaction fee charged by your bank
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="form-group mb-3">
+                    <label className="label text-blue-700 dark:text-blue-400">Transaction Fee (KES)</label>
+                    <input
+                      type="number"
+                      className="input bg-white dark:bg-gray-800"
+                      placeholder="e.g., 50"
+                      value={manualFeeEntry}
+                      onChange={(e) => handleManualFeeChange(e.target.value)}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+
+                  {/* Fee Summary */}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-3 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Lending Amount</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(formData.amount)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Bank Fee</span>
+                      <span className={`font-medium ${transactionFee > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                        {transactionFee > 0 ? formatCurrency(transactionFee) : 'Not entered'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-2 border-t border-gray-200 dark:border-gray-700">
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">Total Debit</span>
+                      <span className="font-bold text-blue-600 dark:text-blue-400">
+                        {formatCurrency(parseFloat(formData.amount) + transactionFee)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Show total amount - fee is always separate for lending (M-Pesa only - Bank has its own section) */}
+              {isMpesaAccount() && transactionFee > 0 && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-amber-700 dark:text-amber-400">Total Deducted from Account:</span>
+                    <span className="font-semibold text-amber-800 dark:text-amber-300">
+                      {formatCurrency(parseFloat(formData.amount) + transactionFee)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                    {formatCurrency(formData.amount)} (lending) + {formatCurrency(transactionFee)} (M-Pesa fee)
+                  </p>
+                </div>
+              )}
 
               <div className="form-group">
                 <label className="label">Date Lent *</label>
@@ -644,9 +897,9 @@ export default function Lending() {
         </div>
       )}
 
-      {/* Repayment Modal */}
+      {/* Repayment Modal - z-[60] to appear above drawer (z-50) */}
       {showRepaymentModal && selectedLending && (
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-[60] p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 animate-slideIn">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">

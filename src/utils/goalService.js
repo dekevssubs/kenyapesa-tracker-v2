@@ -193,18 +193,26 @@ export class GoalService {
         throw new Error(result.error)
       }
 
-      // Get updated goal balance
-      const { data: updatedGoal } = await this.supabase
-        .from('goals')
-        .select('current_amount')
-        .eq('id', goalId)
-        .single()
+      // CANONICAL GOAL ALLOCATION ARCHITECTURE
+      // Create allocation record linking this goal to the account transaction
+      const { error: allocationError } = await this.supabase
+        .from('goal_allocations')
+        .insert({
+          goal_id: goalId,
+          account_transaction_id: result.account_transaction_id,
+          amount: parseFloat(amount)
+        })
+
+      if (allocationError) throw allocationError
+
+      // Calculate new goal balance from allocations
+      const newBalance = await this.calculateGoalBalance(goalId)
 
       return {
         success: true,
         contributionId: result.contribution_id,
         accountTransactionId: result.account_transaction_id,
-        newBalance: updatedGoal?.current_amount || 0
+        newBalance: newBalance
       }
     } catch (error) {
       console.error('Error making contribution:', error)
@@ -241,10 +249,17 @@ export class GoalService {
         }
       }
 
-      // Get goal details
+      // Get goal details with linked account
       const { data: goal, error: goalError } = await this.supabase
         .from('goals')
-        .select('*')
+        .select(`
+          *,
+          linked_account:accounts!goals_linked_account_id_fkey (
+            id,
+            name,
+            current_balance
+          )
+        `)
         .eq('id', goalId)
         .eq('user_id', this.userId)
         .single()
@@ -258,10 +273,21 @@ export class GoalService {
         }
       }
 
-      if (parseFloat(goal.current_amount) < amount) {
+      // CANONICAL: Check goal allocation balance, not account balance
+      const goalBalance = await this.calculateGoalBalance(goalId)
+      if (goalBalance < amount) {
         return {
           success: false,
-          error: `Insufficient balance in goal. Available: KES ${parseFloat(goal.current_amount).toFixed(2)}`
+          error: `Insufficient balance allocated to this goal. Available: KES ${goalBalance.toFixed(2)}`
+        }
+      }
+
+      // Also verify linked account has sufficient funds
+      const accountBalance = parseFloat(goal.linked_account?.current_balance || 0)
+      if (accountBalance < amount) {
+        return {
+          success: false,
+          error: `Insufficient balance in linked account. Available: KES ${accountBalance.toFixed(2)}`
         }
       }
 
@@ -305,18 +331,66 @@ export class GoalService {
 
       if (withdrawalError) throw withdrawalError
 
-      // Get updated goal balance
-      const { data: updatedGoal } = await this.supabase
-        .from('goals')
-        .select('current_amount')
-        .eq('id', goalId)
-        .single()
+      // CANONICAL: Reduce goal_allocations (FIFO - oldest first)
+      const { data: allocations, error: allocError } = await this.supabase
+        .from('goal_allocations')
+        .select('id, amount')
+        .eq('goal_id', goalId)
+        .order('created_at', { ascending: true })
+
+      if (allocError) throw allocError
+
+      let remainingToReduce = parseFloat(amount)
+      const allocationsToDelete = []
+      const allocationsToUpdate = []
+
+      for (const allocation of allocations) {
+        if (remainingToReduce <= 0) break
+
+        const allocAmount = parseFloat(allocation.amount)
+
+        if (allocAmount <= remainingToReduce) {
+          // Delete this allocation entirely
+          allocationsToDelete.push(allocation.id)
+          remainingToReduce -= allocAmount
+        } else {
+          // Partially reduce this allocation
+          allocationsToUpdate.push({
+            id: allocation.id,
+            newAmount: allocAmount - remainingToReduce
+          })
+          remainingToReduce = 0
+        }
+      }
+
+      // Delete fully consumed allocations
+      if (allocationsToDelete.length > 0) {
+        const { error: deleteError } = await this.supabase
+          .from('goal_allocations')
+          .delete()
+          .in('id', allocationsToDelete)
+
+        if (deleteError) throw deleteError
+      }
+
+      // Update partially consumed allocations
+      for (const update of allocationsToUpdate) {
+        const { error: updateError } = await this.supabase
+          .from('goal_allocations')
+          .update({ amount: update.newAmount })
+          .eq('id', update.id)
+
+        if (updateError) throw updateError
+      }
+
+      // Calculate new goal balance from remaining allocations
+      const newBalance = await this.calculateGoalBalance(goalId)
 
       return {
         success: true,
         withdrawalId: withdrawal.id,
         accountTransactionId: accountTx.id,
-        newBalance: updatedGoal?.current_amount || 0
+        newBalance: newBalance
       }
     } catch (error) {
       console.error('Error making withdrawal:', error)
@@ -459,6 +533,32 @@ export class GoalService {
   }
 
   /**
+   * Calculate goal balance from goal_allocations
+   * CANONICAL: goal.current_amount = SUM(goal_allocations.amount)
+   * @param {string} goalId - Goal ID
+   * @returns {Promise<number>} - Goal balance
+   */
+  async calculateGoalBalance(goalId) {
+    try {
+      const { data: allocations, error } = await this.supabase
+        .from('goal_allocations')
+        .select('amount')
+        .eq('goal_id', goalId)
+
+      if (error) throw error
+
+      if (!allocations || allocations.length === 0) {
+        return 0
+      }
+
+      return allocations.reduce((sum, alloc) => sum + parseFloat(alloc.amount || 0), 0)
+    } catch (error) {
+      console.error('Error calculating goal balance:', error)
+      return 0
+    }
+  }
+
+  /**
    * Get all goals with contributions
    * @param {object} filters - {status, category}
    * @returns {Promise<object>} - {success, goals, summary, error}
@@ -491,24 +591,35 @@ export class GoalService {
 
       if (error) throw error
 
+      // CANONICAL GOAL ALLOCATION ARCHITECTURE
+      // Goals are virtual sub-accounts that track allocations of real account balances
+      // current_amount = SUM(goal_allocations.amount), NOT account.current_balance
+      const goalsWithRealProgress = await Promise.all(goals.map(async goal => {
+        const allocatedAmount = await this.calculateGoalBalance(goal.id)
+        return {
+          ...goal,
+          current_amount: allocatedAmount
+        }
+      }))
+
       // Calculate summary
       const summary = {
-        total: goals.length,
-        active: goals.filter(g => g.status === GoalService.STATUS.ACTIVE).length,
-        completed: goals.filter(g => g.status === GoalService.STATUS.COMPLETED).length,
-        abandoned: goals.filter(g => g.status === GoalService.STATUS.ABANDONED).length,
-        paused: goals.filter(g => g.status === GoalService.STATUS.PAUSED).length,
-        totalTargetAmount: goals
+        total: goalsWithRealProgress.length,
+        active: goalsWithRealProgress.filter(g => g.status === GoalService.STATUS.ACTIVE).length,
+        completed: goalsWithRealProgress.filter(g => g.status === GoalService.STATUS.COMPLETED).length,
+        abandoned: goalsWithRealProgress.filter(g => g.status === GoalService.STATUS.ABANDONED).length,
+        paused: goalsWithRealProgress.filter(g => g.status === GoalService.STATUS.PAUSED).length,
+        totalTargetAmount: goalsWithRealProgress
           .filter(g => g.status === GoalService.STATUS.ACTIVE)
           .reduce((sum, g) => sum + parseFloat(g.target_amount), 0),
-        totalSavedAmount: goals
+        totalSavedAmount: goalsWithRealProgress
           .filter(g => g.status === GoalService.STATUS.ACTIVE)
           .reduce((sum, g) => sum + parseFloat(g.current_amount), 0)
       }
 
       return {
         success: true,
-        goals: goals || [],
+        goals: goalsWithRealProgress || [],
         summary
       }
     } catch (error) {
@@ -562,9 +673,17 @@ export class GoalService {
 
       if (contribError) throw contribError
 
+      // CANONICAL GOAL ALLOCATION ARCHITECTURE
+      // Calculate current amount from goal_allocations, not account balance
+      const allocatedAmount = await this.calculateGoalBalance(goalId)
+      const goalWithRealProgress = {
+        ...goal,
+        current_amount: allocatedAmount
+      }
+
       return {
         success: true,
-        goal,
+        goal: goalWithRealProgress,
         contributions: contributions || []
       }
     } catch (error) {

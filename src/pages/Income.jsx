@@ -4,7 +4,7 @@ import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency, calculateNetSalary } from '../utils/calculations'
 import { getIncomeIcon } from '../utils/iconMappings'
-import { Plus, Eye, RotateCcw, DollarSign, TrendingUp, X, Calculator, FileText, Wallet, MinusCircle, Building2, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Plus, Eye, RotateCcw, DollarSign, TrendingUp, X, Calculator, FileText, Wallet, MinusCircle, Building2, AlertTriangle, CheckCircle, Calendar, RefreshCw, PauseCircle, PlayCircle, Trash2 } from 'lucide-react'
 import { IncomeService } from '../utils/incomeService'
 
 const INCOME_SOURCES = ['salary', 'side_hustle', 'investment', 'bonus', 'gift', 'other']
@@ -46,10 +46,33 @@ export default function Income() {
 
   const [calculatedSalary, setCalculatedSalary] = useState(null)
 
+  // Recurring income state
+  const [activeView, setActiveView] = useState('all') // 'all' | 'recurring'
+  const [recurringIncomes, setRecurringIncomes] = useState([])
+  const [showRecurringModal, setShowRecurringModal] = useState(false)
+  const [editingRecurring, setEditingRecurring] = useState(null)
+  const [recurringFormData, setRecurringFormData] = useState({
+    source: 'salary',
+    source_name: '',
+    amount: '',
+    description: '',
+    account_id: '',
+    frequency: 'monthly',
+    start_date: new Date().toISOString().split('T')[0],
+    end_date: '',
+    auto_create: false,
+    auto_create_days_before: 0,
+    is_gross: false,
+    gross_salary: '',
+    statutory_deductions: '',
+    tax_amount: ''
+  })
+
   useEffect(() => {
     if (user) {
       fetchIncomes()
       fetchAccounts()
+      fetchRecurringIncome()
     }
   }, [user])
 
@@ -66,21 +89,46 @@ export default function Income() {
 
   const fetchIncomes = async () => {
     try {
-      const { data, error } = await supabase
+      // Step 1: Get all incomes
+      const { data: incomesData, error: incomesError } = await supabase
         .from('income')
         .select('*')
         .eq('user_id', user.id)
         .order('date', { ascending: false })
 
-      if (error) throw error
+      if (incomesError) throw incomesError
 
-      setIncomes(data || [])
+      // Step 2: Get all account_transactions for these incomes
+      const incomeIds = (incomesData || []).map(inc => inc.id)
+
+      let depositedTransactions = []
+      if (incomeIds.length > 0) {
+        const { data: transData, error: transError } = await supabase
+          .from('account_transactions')
+          .select('reference_id, amount')
+          .eq('reference_type', 'income')
+          .in('reference_id', incomeIds)
+          .eq('user_id', user.id)
+
+        if (transError) throw transError
+        depositedTransactions = transData || []
+      }
+
+      // Step 3: Match up incomes with their deposited amounts
+      const incomesWithDeposits = (incomesData || []).map(income => ({
+        ...income,
+        deposited_transaction: depositedTransactions.filter(
+          trans => trans.reference_id === income.id
+        )
+      }))
+
+      setIncomes(incomesWithDeposits)
 
       const currentDate = new Date()
       const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
 
-      const monthlyTotal = (data || [])
+      const monthlyTotal = (incomesWithDeposits || [])
         .filter(income => {
           const incomeDate = new Date(income.date)
           return incomeDate >= firstDay && incomeDate <= lastDay
@@ -112,6 +160,18 @@ export default function Income() {
     }
   }
 
+  const fetchRecurringIncome = async () => {
+    try {
+      const incomeService = new IncomeService(supabase, user.id)
+      const result = await incomeService.getAllRecurringIncome()
+      if (result.success) {
+        setRecurringIncomes(result.recurringIncomes)
+      }
+    } catch (error) {
+      console.error('Error fetching recurring income:', error)
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -134,18 +194,32 @@ export default function Income() {
       const incomeService = new IncomeService(supabase, user.id)
 
       // Prepare statutory deductions from calculator
+      // CRITICAL: Only include deductions if using gross salary mode
       let taxAmount = 0
       let statutoryDeductions = 0
+      let incomeAmount = 0
 
-      if (formData.is_gross && calculatedSalary) {
-        // calculatedSalary.paye already has personal relief applied (it's net PAYE)
+      if (formData.is_gross && calculatedSalary && formData.gross_salary && parseFloat(formData.gross_salary) > 0) {
+        // Using gross salary mode - pass GROSS amount with deductions
+        incomeAmount = parseFloat(formData.gross_salary)
         taxAmount = Math.max(0, calculatedSalary.paye)
         statutoryDeductions = calculatedSalary.nssf + calculatedSalary.housingLevy + calculatedSalary.shif
+      } else {
+        // Using net amount mode - amount is already net, no deductions
+        incomeAmount = parseFloat(formData.amount)
+        taxAmount = 0
+        statutoryDeductions = 0
+      }
+
+      // Validation: Ensure we have valid data
+      if (formData.is_gross && (!formData.gross_salary || parseFloat(formData.gross_salary) <= 0)) {
+        toast.error('Please enter a valid gross salary amount')
+        return
       }
 
       const incomeData = {
         account_id: formData.account_id,
-        amount: parseFloat(formData.amount),
+        amount: incomeAmount,
         source: formData.source,
         source_name: formData.source_name.trim(), // Who paid - employer, client, etc.
         description: formData.description,
@@ -153,6 +227,17 @@ export default function Income() {
         tax_amount: taxAmount,
         statutory_deductions: statutoryDeductions
       }
+
+      // Debug logging (can be removed in production)
+      console.log('Income Submission:', {
+        mode: formData.is_gross ? 'Gross Salary' : 'Net Amount',
+        grossSalary: formData.gross_salary,
+        netAmount: formData.amount,
+        incomeAmount,
+        taxAmount,
+        statutoryDeductions,
+        customDeductions: customDeductions.length
+      })
 
       // Create new income with custom deductions
       const result = await incomeService.createIncome(incomeData, customDeductions)
@@ -261,7 +346,15 @@ export default function Income() {
       toast.error('This income has already been reversed')
       return
     }
-    setReversingIncome(income)
+
+    // Calculate the actual deposited NET amount from account_transactions
+    const depositedAmount = income.deposited_transaction?.[0]?.amount || income.amount
+
+    // Store income with calculated deposited amount for use in modal and reversal
+    setReversingIncome({
+      ...income,
+      depositedAmount: parseFloat(depositedAmount)
+    })
     setReverseReason('')
     setShowReverseModal(true)
   }
@@ -279,14 +372,18 @@ export default function Income() {
       // Get the account associated with this income
       const account = accounts.find(a => a.id === reversingIncome.account_id)
 
+      // Use the deposited amount already calculated in handleOpenReverse
+      const depositedAmount = reversingIncome.depositedAmount
+
       // Create a reversal transaction (debit from account)
+      // Use transaction_type: 'reversal' with reference_type: 'income_reversal' per immutability pattern
       const { error: txError } = await supabase
         .from('account_transactions')
         .insert({
           user_id: user.id,
           from_account_id: reversingIncome.account_id, // Money flows OUT (reversal)
-          transaction_type: 'income_reversal',
-          amount: parseFloat(reversingIncome.amount),
+          transaction_type: 'reversal',
+          amount: depositedAmount, // ✅ Use NET amount that was deposited, not GROSS
           date: new Date().toISOString().split('T')[0],
           category: reversingIncome.source,
           description: `Reversal: ${reversingIncome.source_name || reversingIncome.source} - ${reverseReason}`,
@@ -309,7 +406,7 @@ export default function Income() {
 
       if (updateError) throw updateError
 
-      toast.success(`Income reversed successfully. ${formatCurrency(reversingIncome.amount)} debited from ${account?.name || 'account'}`)
+      toast.success(`Income reversed successfully. ${formatCurrency(depositedAmount)} debited from ${account?.name || 'account'}`)
       setShowReverseModal(false)
       setReversingIncome(null)
       setReverseReason('')
@@ -319,6 +416,137 @@ export default function Income() {
       console.error('Error reversing income:', error)
       toast.error(`Error reversing income: ${error.message}`)
     }
+  }
+
+  // Recurring Income Handlers
+  const handleRecurringSubmit = async (e) => {
+    e.preventDefault()
+
+    if (!recurringFormData.amount || parseFloat(recurringFormData.amount) <= 0) {
+      toast.error('Please enter a valid amount')
+      return
+    }
+
+    if (!recurringFormData.account_id) {
+      toast.error('Please select an account')
+      return
+    }
+
+    try {
+      const incomeService = new IncomeService(supabase, user.id)
+
+      if (editingRecurring) {
+        // Update existing recurring income
+        const result = await incomeService.updateRecurringIncome(
+          editingRecurring.id,
+          recurringFormData
+        )
+
+        if (result.success) {
+          toast.success('Recurring income updated successfully')
+          setShowRecurringModal(false)
+          setEditingRecurring(null)
+          fetchRecurringIncome()
+        } else {
+          toast.error(result.error)
+        }
+      } else {
+        // Create new recurring income
+        const result = await incomeService.createRecurringIncome(recurringFormData)
+
+        if (result.success) {
+          toast.success('Recurring income created successfully')
+          setShowRecurringModal(false)
+          fetchRecurringIncome()
+        } else {
+          toast.error(result.error)
+        }
+      }
+    } catch (error) {
+      console.error('Error with recurring income:', error)
+      toast.error(`Error: ${error.message}`)
+    }
+  }
+
+  const handleEditRecurring = (recurring) => {
+    setEditingRecurring(recurring)
+    setRecurringFormData({
+      source: recurring.source,
+      source_name: recurring.source_name || '',
+      amount: recurring.amount.toString(),
+      description: recurring.description || '',
+      account_id: recurring.account_id,
+      frequency: recurring.frequency,
+      start_date: recurring.start_date,
+      end_date: recurring.end_date || '',
+      auto_create: recurring.auto_create,
+      auto_create_days_before: recurring.auto_create_days_before || 0,
+      is_gross: recurring.is_gross || false,
+      gross_salary: recurring.gross_salary?.toString() || '',
+      statutory_deductions: recurring.statutory_deductions?.toString() || '',
+      tax_amount: recurring.tax_amount?.toString() || ''
+    })
+    setShowRecurringModal(true)
+  }
+
+  const handleDeleteRecurring = async (recurring) => {
+    if (!confirm(`Delete recurring income "${recurring.source_name || recurring.source}"?`)) {
+      return
+    }
+
+    try {
+      const incomeService = new IncomeService(supabase, user.id)
+      const result = await incomeService.deleteRecurringIncome(recurring.id)
+
+      if (result.success) {
+        toast.success('Recurring income deleted')
+        fetchRecurringIncome()
+      } else {
+        toast.error(result.error)
+      }
+    } catch (error) {
+      console.error('Error deleting recurring income:', error)
+      toast.error(`Error: ${error.message}`)
+    }
+  }
+
+  const handleCreateFromTemplate = async (recurring) => {
+    try {
+      const incomeService = new IncomeService(supabase, user.id)
+      const result = await incomeService.createIncomeFromRecurring(recurring.id)
+
+      if (result.success) {
+        toast.success('Income created from template')
+        fetchIncomes()
+        fetchRecurringIncome()
+      } else {
+        toast.error(result.error)
+      }
+    } catch (error) {
+      console.error('Error creating from template:', error)
+      toast.error(`Error: ${error.message}`)
+    }
+  }
+
+  const handleToggleRecurringActive = async (recurring) => {
+    try {
+      const incomeService = new IncomeService(supabase, user.id)
+      const result = await incomeService.toggleRecurringActive(recurring.id, recurring.is_active)
+
+      if (result.success) {
+        toast.success(recurring.is_active ? 'Recurring income paused' : 'Recurring income resumed')
+        fetchRecurringIncome()
+      } else {
+        toast.error(result.error)
+      }
+    } catch (error) {
+      console.error('Error toggling recurring income:', error)
+      toast.error(`Error: ${error.message}`)
+    }
+  }
+
+  const formatSource = (source) => {
+    return source.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
   }
 
   const getSourceColor = (source) => {
@@ -400,9 +628,40 @@ export default function Income() {
         </div>
       </div>
 
-      {/* Income List */}
-      <div className="card bg-white dark:bg-gray-800">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">Income History</h3>
+      {/* View Toggle Tabs */}
+      <div className="flex space-x-2">
+        <button
+          onClick={() => setActiveView('all')}
+          className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+            activeView === 'all'
+              ? 'bg-green-500 text-white shadow-md'
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            <DollarSign className="h-5 w-5" />
+            <span>All Income</span>
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveView('recurring')}
+          className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+            activeView === 'recurring'
+              ? 'bg-green-500 text-white shadow-md'
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            <RefreshCw className="h-5 w-5" />
+            <span>Recurring Income</span>
+          </div>
+        </button>
+      </div>
+
+      {/* Income List - shown when activeView === 'all' */}
+      {activeView === 'all' && (
+        <div className="card bg-white dark:bg-gray-800">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">Income History</h3>
 
         {incomes.length === 0 ? (
           <div className="text-center py-16">
@@ -421,9 +680,10 @@ export default function Income() {
             {incomes.map((income) => {
               const SourceIcon = getIncomeIcon(income.source)
               const hasGrossInfo = income.source === 'salary' && (income.tax_amount > 0 || income.statutory_deductions > 0)
-              const grossAmount = hasGrossInfo
-                ? parseFloat(income.amount) + parseFloat(income.tax_amount || 0) + parseFloat(income.statutory_deductions || 0)
-                : null
+              // income.amount IS the GROSS amount already
+              const grossAmount = parseFloat(income.amount)
+              // Get the ACTUAL deposited amount from account_transactions (includes custom deductions)
+              const depositedAmount = income.deposited_transaction?.[0]?.amount || grossAmount
 
               return (
                 <div
@@ -458,10 +718,10 @@ export default function Income() {
                           From: <span className="font-medium ml-1">{income.source_name}</span>
                         </p>
                       )}
-                      {/* Show Gross vs Net for salary */}
-                      {hasGrossInfo && (
+                      {/* Show Gross vs Deposited for salary */}
+                      {hasGrossInfo && depositedAmount !== grossAmount && (
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                          Gross: {formatCurrency(grossAmount)} → Net: {formatCurrency(income.amount)}
+                          Gross: {formatCurrency(grossAmount)} → Deposited: {formatCurrency(depositedAmount)}
                         </p>
                       )}
                       {income.description && (
@@ -485,13 +745,13 @@ export default function Income() {
 
                   <div className="flex items-center space-x-4">
                     <div className="text-right">
-                      {hasGrossInfo && (
+                      {hasGrossInfo && depositedAmount !== grossAmount && (
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          Gross: {formatCurrency(grossAmount)}
+                          From Gross: {formatCurrency(grossAmount)}
                         </p>
                       )}
                       <p className={`text-2xl font-bold ${income.is_reversed ? 'text-red-400 line-through' : 'text-green-600 dark:text-green-400'}`}>
-                        +{formatCurrency(income.amount)}
+                        +{formatCurrency(depositedAmount)}
                       </p>
                     </div>
                     <div className="flex space-x-2">
@@ -518,7 +778,174 @@ export default function Income() {
             })}
           </div>
         )}
-      </div>
+        </div>
+      )}
+
+      {/* Recurring Income View - shown when activeView === 'recurring' */}
+      {activeView === 'recurring' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Recurring Income Templates</h3>
+            <button
+              onClick={() => {
+                setEditingRecurring(null)
+                const primaryAccount = accounts.find(a => a.is_primary)
+                setRecurringFormData({
+                  source: 'salary',
+                  source_name: '',
+                  amount: '',
+                  description: '',
+                  account_id: primaryAccount?.id || '',
+                  frequency: 'monthly',
+                  start_date: new Date().toISOString().split('T')[0],
+                  end_date: '',
+                  auto_create: false,
+                  auto_create_days_before: 0,
+                  is_gross: false,
+                  gross_salary: '',
+                  statutory_deductions: '',
+                  tax_amount: ''
+                })
+                setShowRecurringModal(true)
+              }}
+              className="btn btn-primary flex items-center"
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              Add Recurring Income
+            </button>
+          </div>
+
+          {/* Recurring Income Cards */}
+          {recurringIncomes.length === 0 ? (
+            <div className="card bg-white dark:bg-gray-800 text-center py-16">
+              <RefreshCw className="h-20 w-20 text-gray-300 dark:text-gray-600 mx-auto mb-6" />
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">No recurring income set up yet</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-6">
+                Add salary, freelance, or other regular income to track automatically.
+              </p>
+              <button
+                onClick={() => {
+                  setEditingRecurring(null)
+                  setShowRecurringModal(true)
+                }}
+                className="btn btn-primary px-8 py-3"
+              >
+                Create Your First Recurring Income
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {recurringIncomes.map(recurring => {
+                const isOverdue = new Date(recurring.next_date) < new Date()
+                const SourceIcon = getIncomeIcon(recurring.source)
+
+                return (
+                  <div
+                    key={recurring.id}
+                    className={`card bg-white dark:bg-gray-800 p-6 ${!recurring.is_active ? 'opacity-60' : ''}`}
+                  >
+                    {/* Header */}
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                          <SourceIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+                            {recurring.source_name || formatSource(recurring.source)}
+                          </h4>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                            {recurring.frequency}
+                          </p>
+                        </div>
+                      </div>
+                      {!recurring.is_active && (
+                        <span className="text-xs bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
+                          Paused
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Amount */}
+                    <p className="text-2xl font-bold text-green-600 dark:text-green-400 mb-4">
+                      {formatCurrency(recurring.amount)}
+                    </p>
+
+                    {/* Next Date */}
+                    <div className="flex items-center text-sm mb-3">
+                      <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                      <span className={isOverdue ? 'text-red-500' : 'text-gray-600 dark:text-gray-400'}>
+                        Next: {new Date(recurring.next_date).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    {/* Account */}
+                    <div className="flex items-center text-sm mb-4">
+                      <Wallet className="h-4 w-4 mr-2 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {recurring.account?.name}
+                      </span>
+                    </div>
+
+                    {/* Auto-create badge */}
+                    {recurring.auto_create && (
+                      <div className="flex items-center text-xs text-blue-600 dark:text-blue-400 mb-4">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Auto-create enabled
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <button
+                        onClick={() => handleCreateFromTemplate(recurring)}
+                        className="btn btn-sm btn-primary"
+                        disabled={!recurring.is_active}
+                      >
+                        Create Now
+                      </button>
+                      <button
+                        onClick={() => handleEditRecurring(recurring)}
+                        className="btn btn-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                      >
+                        Edit
+                      </button>
+                    </div>
+
+                    {/* More Actions */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleToggleRecurringActive(recurring)}
+                        className="btn btn-sm btn-ghost flex items-center justify-center"
+                      >
+                        {recurring.is_active ? (
+                          <>
+                            <PauseCircle className="h-4 w-4 mr-1" />
+                            Pause
+                          </>
+                        ) : (
+                          <>
+                            <PlayCircle className="h-4 w-4 mr-1" />
+                            Resume
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRecurring(recurring)}
+                        className="btn btn-sm btn-ghost text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Add Income Modal */}
       {showModal && (
@@ -619,7 +1046,16 @@ export default function Income() {
                     <input
                       type="checkbox"
                       checked={formData.is_gross}
-                      onChange={(e) => setFormData({ ...formData, is_gross: e.target.checked })}
+                      onChange={(e) => {
+                        const isChecked = e.target.checked
+                        setFormData({ ...formData, is_gross: isChecked })
+                        // Reset calculator state when unchecking
+                        if (!isChecked) {
+                          setCalculatedSalary(null)
+                          setCustomDeductions([])
+                          setShowDeductionsSection(false)
+                        }
+                      }}
                       className="h-5 w-5 text-kenya-green focus:ring-kenya-green border-gray-300 dark:border-gray-600 rounded"
                     />
                     <div>
@@ -910,7 +1346,7 @@ export default function Income() {
             <div className="space-y-4">
               <div className="p-4 bg-gradient-to-r from-green-500 to-green-600 rounded-xl text-white">
                 <p className="text-green-100 text-sm mb-1">Net Amount Received</p>
-                <p className="text-3xl font-bold">{formatCurrency(viewingIncome.amount)}</p>
+                <p className="text-3xl font-bold">{formatCurrency(incomeDetails?.netAmount || viewingIncome.amount)}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1076,7 +1512,7 @@ export default function Income() {
                     This action cannot be undone
                   </p>
                   <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
-                    Reversing will debit {formatCurrency(reversingIncome.amount)} from your account and mark this income as reversed.
+                    Reversing will debit {formatCurrency(reversingIncome.depositedAmount)} from your account and mark this income as reversed.
                   </p>
                 </div>
               </div>
@@ -1107,7 +1543,7 @@ export default function Income() {
               <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
                 <span className="font-semibold text-gray-900 dark:text-gray-100">Amount</span>
                 <span className="font-bold text-green-600 dark:text-green-400">
-                  {formatCurrency(reversingIncome.amount)}
+                  {formatCurrency(reversingIncome.depositedAmount)}
                 </span>
               </div>
             </div>
@@ -1144,6 +1580,200 @@ export default function Income() {
                 Confirm Reversal
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Recurring Income Modal */}
+      {showRecurringModal && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full p-8 animate-slideIn max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                {editingRecurring ? 'Edit Recurring Income' : 'Add Recurring Income'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowRecurringModal(false)
+                  setEditingRecurring(null)
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRecurringSubmit} className="space-y-6">
+              {/* Income Type */}
+              <div>
+                <label className="label">Income Type *</label>
+                <select
+                  className="input"
+                  value={recurringFormData.source}
+                  onChange={(e) => setRecurringFormData({ ...recurringFormData, source: e.target.value })}
+                  required
+                >
+                  <option value="salary">Salary</option>
+                  <option value="side_hustle">Side Hustle</option>
+                  <option value="investment">Investment Returns</option>
+                  <option value="bonus">Bonus</option>
+                  <option value="gift">Gift</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* Source Name */}
+              <div>
+                <label className="label">Source Name (Employer, Client, etc.)</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="e.g., ABC Company, Freelance Client"
+                  value={recurringFormData.source_name}
+                  onChange={(e) => setRecurringFormData({ ...recurringFormData, source_name: e.target.value })}
+                />
+              </div>
+
+              {/* Amount */}
+              <div>
+                <label className="label">Amount (KES) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="input"
+                  placeholder="0.00"
+                  value={recurringFormData.amount}
+                  onChange={(e) => setRecurringFormData({ ...recurringFormData, amount: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Frequency */}
+                <div>
+                  <label className="label">Frequency *</label>
+                  <select
+                    className="input"
+                    value={recurringFormData.frequency}
+                    onChange={(e) => setRecurringFormData({ ...recurringFormData, frequency: e.target.value })}
+                    required
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Biweekly (Every 2 weeks)</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+
+                {/* Account */}
+                <div>
+                  <label className="label">Account *</label>
+                  <select
+                    className="input"
+                    value={recurringFormData.account_id}
+                    onChange={(e) => setRecurringFormData({ ...recurringFormData, account_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Select account...</option>
+                    {accounts.map(account => (
+                      <option key={account.id} value={account.id}>
+                        {account.name} ({account.account_type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Start Date */}
+                <div>
+                  <label className="label">Start Date *</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={recurringFormData.start_date}
+                    onChange={(e) => setRecurringFormData({ ...recurringFormData, start_date: e.target.value })}
+                    required
+                  />
+                </div>
+
+                {/* End Date */}
+                <div>
+                  <label className="label">End Date (Optional)</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={recurringFormData.end_date}
+                    onChange={(e) => setRecurringFormData({ ...recurringFormData, end_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Auto-create */}
+              <div>
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={recurringFormData.auto_create}
+                    onChange={(e) => setRecurringFormData({ ...recurringFormData, auto_create: e.target.checked })}
+                    className="mr-3 h-5 w-5 rounded border-gray-300 dark:border-gray-600 text-green-600 focus:ring-green-500"
+                  />
+                  <span className="text-gray-900 dark:text-gray-100 font-medium">
+                    Automatically create income entry
+                  </span>
+                </label>
+                {recurringFormData.auto_create && (
+                  <div className="mt-3 ml-8">
+                    <label className="label text-sm">Create how many days before?</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="30"
+                      className="input w-32"
+                      value={recurringFormData.auto_create_days_before}
+                      onChange={(e) => setRecurringFormData({ ...recurringFormData, auto_create_days_before: parseInt(e.target.value) || 0 })}
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      0 = on the day, 1 = day before, etc.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="label">Description (Optional)</label>
+                <textarea
+                  className="input min-h-[80px]"
+                  placeholder="Add notes about this recurring income..."
+                  value={recurringFormData.description}
+                  onChange={(e) => setRecurringFormData({ ...recurringFormData, description: e.target.value })}
+                  rows="3"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRecurringModal(false)
+                    setEditingRecurring(null)
+                  }}
+                  className="flex-1 btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 btn btn-primary"
+                >
+                  {editingRecurring ? 'Update' : 'Create'} Recurring Income
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

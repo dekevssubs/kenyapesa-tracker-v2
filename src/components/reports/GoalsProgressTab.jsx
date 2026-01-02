@@ -30,10 +30,10 @@ export default function GoalsProgressTab() {
 
       // Fetch all goals with linked accounts
       const { data: goalsData, error } = await supabase
-        .from('savings_goals')
+        .from('goals')
         .select('*')
         .eq('user_id', user.id)
-        .order('target_date', { ascending: true })
+        .order('deadline', { ascending: true, nullsFirst: false })
 
       if (error) throw error
 
@@ -62,7 +62,7 @@ export default function GoalsProgressTab() {
 
           // Calculate days remaining
           const today = new Date()
-          const targetDate = goal.target_date ? new Date(goal.target_date) : null
+          const targetDate = goal.deadline ? new Date(goal.deadline) : null
           const daysRemaining = targetDate
             ? Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24))
             : null
@@ -313,10 +313,10 @@ export default function GoalsProgressTab() {
 
                 <div className="flex items-center justify-between mt-3 text-xs text-gray-600 dark:text-gray-400">
                   <div className="flex items-center space-x-4">
-                    {goal.target_date && (
+                    {goal.deadline && (
                       <span className="flex items-center">
                         <Calendar className="h-3 w-3 mr-1" />
-                        {new Date(goal.target_date).toLocaleDateString('en-KE', {
+                        {new Date(goal.deadline).toLocaleDateString('en-KE', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric'

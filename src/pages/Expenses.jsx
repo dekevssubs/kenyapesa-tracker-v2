@@ -22,6 +22,7 @@ export default function Expenses() {
   const toast = useToast()
   const [expenses, setExpenses] = useState([])
   const [accounts, setAccounts] = useState([])
+  const [budgets, setBudgets] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [showMessageParser, setShowMessageParser] = useState(false)
@@ -38,6 +39,11 @@ export default function Expenses() {
   const [reverseReason, setReverseReason] = useState('')
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterPayment, setFilterPayment] = useState('all')
+
+  // Budget warning state
+  const [showBudgetWarning, setShowBudgetWarning] = useState(false)
+  const [budgetWarningData, setBudgetWarningData] = useState(null)
+  const [pendingExpenseData, setPendingExpenseData] = useState(null)
 
   // Fee calculation state
   const [calculatedFee, setCalculatedFee] = useState(0)
@@ -97,6 +103,7 @@ export default function Expenses() {
     if (user) {
       fetchExpenses()
       fetchAccounts()
+      fetchBudgets()
     }
   }, [user])
 
@@ -185,6 +192,61 @@ export default function Expenses() {
     }
   }
 
+  const fetchBudgets = async () => {
+    try {
+      const currentMonth = new Date().toISOString().split('T')[0].slice(0, 7) + '-01'
+      const { data, error } = await supabase
+        .from('budgets')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('month', currentMonth)
+
+      if (error) throw error
+      setBudgets(data || [])
+    } catch (error) {
+      console.error('Error fetching budgets:', error)
+    }
+  }
+
+  // Check if expense would exceed budget
+  const checkBudgetImpact = (category, expenseAmount, expenseFee) => {
+    const budget = budgets.find(b => b.category === category)
+    if (!budget) return null // No budget set for this category
+
+    // Calculate current spending for this category this month
+    const currentDate = new Date()
+    const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+    const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+
+    const currentSpent = expenses
+      .filter(e => {
+        const expenseDate = new Date(e.date)
+        const isNotReversed = !e.is_reversed
+        return e.category === category &&
+               expenseDate >= firstDay &&
+               expenseDate <= lastDay &&
+               isNotReversed
+      })
+      .reduce((sum, e) => {
+        const amount = parseFloat(e.amount) || 0
+        const fee = parseFloat(e.transaction_fee) || 0
+        return sum + amount + fee
+      }, 0)
+
+    const totalWithNewExpense = currentSpent + parseFloat(expenseAmount) + parseFloat(expenseFee || 0)
+    const budgetLimit = parseFloat(budget.monthly_limit)
+    const wouldExceed = totalWithNewExpense > budgetLimit
+
+    return {
+      wouldExceed,
+      currentSpent,
+      budgetLimit,
+      newTotal: totalWithNewExpense,
+      overage: wouldExceed ? totalWithNewExpense - budgetLimit : 0,
+      percentage: (totalWithNewExpense / budgetLimit) * 100
+    }
+  }
+
   // Calculate next due date for recurring expenses
   const calculateNextDueDate = (currentDate, frequency) => {
     const date = new Date(currentDate)
@@ -209,7 +271,7 @@ export default function Expenses() {
     return date.toISOString().split('T')[0]
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, bypassBudgetWarning = false) => {
     e.preventDefault()
 
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
@@ -234,6 +296,18 @@ export default function Expenses() {
           `Insufficient balance in ${account.name}. Available: ${formatCurrency(availableBalance)}, Required: ${formatCurrency(totalRequired)}, Deficit: ${formatCurrency(deficit)}`,
           { duration: 6000 }
         )
+        return
+      }
+    }
+
+    // BUDGET WARNING - Check if expense would exceed budget
+    if (!bypassBudgetWarning) {
+      const budgetImpact = checkBudgetImpact(formData.category, formData.amount, formData.transaction_fee)
+      if (budgetImpact && budgetImpact.wouldExceed) {
+        // Show budget warning modal
+        setBudgetWarningData(budgetImpact)
+        setPendingExpenseData({ ...formData, isRecurring, recurringFrequency })
+        setShowBudgetWarning(true)
         return
       }
     }
@@ -288,7 +362,7 @@ export default function Expenses() {
           console.error('Error creating bill reminder:', billError)
           toast.warning('Expense saved, but failed to create recurring reminder')
         } else {
-          toast.success(`Recurring reminder set for ${recurringFrequency} payments`, { duration: 4000 })
+          toast.success(`Recurring reminder set for ${recurringFrequency} payments`, 4000)
         }
       }
 
@@ -317,24 +391,68 @@ export default function Expenses() {
     }
   }
 
+  // Proceed with expense despite budget warning
+  const handleProceedDespiteBudget = async () => {
+    setShowBudgetWarning(false)
+
+    // Restore form data from pending expense
+    if (pendingExpenseData) {
+      setFormData({
+        amount: pendingExpenseData.amount,
+        category: pendingExpenseData.category,
+        description: pendingExpenseData.description,
+        payment_method: pendingExpenseData.payment_method,
+        account_id: pendingExpenseData.account_id,
+        fee_method: pendingExpenseData.fee_method,
+        transaction_fee: pendingExpenseData.transaction_fee,
+        date: pendingExpenseData.date
+      })
+      setIsRecurring(pendingExpenseData.isRecurring)
+      setRecurringFrequency(pendingExpenseData.recurringFrequency)
+    }
+
+    // Create a synthetic event to pass to handleSubmit
+    const syntheticEvent = { preventDefault: () => {} }
+    await handleSubmit(syntheticEvent, true) // bypass budget warning
+
+    setBudgetWarningData(null)
+    setPendingExpenseData(null)
+  }
+
+  const handleCancelBudgetWarning = () => {
+    setShowBudgetWarning(false)
+    setBudgetWarningData(null)
+    setPendingExpenseData(null)
+    // Keep modal open so user can adjust the expense
+  }
+
   // View expense details
   const handleViewDetails = async (expense) => {
     setViewingExpense(expense)
     setShowViewModal(true)
 
     try {
-      // Fetch related account info
-      const { data: account } = await supabase
-        .from('accounts')
-        .select('name, account_type')
-        .eq('id', expense.account_id)
-        .single()
+      // Only fetch account info if account_id exists
+      if (expense.account_id) {
+        const { data: account } = await supabase
+          .from('accounts')
+          .select('name, account_type')
+          .eq('id', expense.account_id)
+          .single()
 
-      setExpenseDetails({
-        ...expense,
-        account_name: account?.name || 'Unknown Account',
-        account_type: account?.account_type || 'unknown'
-      })
+        setExpenseDetails({
+          ...expense,
+          account_name: account?.name || 'Unknown Account',
+          account_type: account?.account_type || 'unknown'
+        })
+      } else {
+        // No account_id - legacy expense or cash transaction
+        setExpenseDetails({
+          ...expense,
+          account_name: 'Cash/Untracked',
+          account_type: 'cash'
+        })
+      }
     } catch (error) {
       console.error('Error fetching expense details:', error)
       setExpenseDetails({
@@ -514,9 +632,12 @@ export default function Expenses() {
         <div className="card flex items-center justify-center">
           <button
             onClick={() => {
+              // Auto-select first budgeted category if available, otherwise default to 'food'
+              const firstBudgetedCategory = budgets.length > 0 ? budgets[0].category : 'food'
+
               setFormData({
                 amount: '',
-                category: 'food',
+                category: firstBudgetedCategory,
                 description: '',
                 payment_method: 'mpesa',
                 account_id: accounts.find(a => a.is_primary)?.id || '',
@@ -628,7 +749,24 @@ export default function Expenses() {
             </p>
             {expenses.length === 0 && (
               <button
-                onClick={() => setShowModal(true)}
+                onClick={() => {
+                  // Auto-select first budgeted category if available, otherwise default to 'food'
+                  const firstBudgetedCategory = budgets.length > 0 ? budgets[0].category : 'food'
+
+                  setFormData({
+                    amount: '',
+                    category: firstBudgetedCategory,
+                    description: '',
+                    payment_method: 'mpesa',
+                    account_id: accounts.find(a => a.is_primary)?.id || '',
+                    fee_method: FEE_METHODS.MPESA_SEND,
+                    transaction_fee: '',
+                    date: new Date().toISOString().split('T')[0]
+                  })
+                  setFeeOverride(false)
+                  setBalanceCheck(null)
+                  setShowModal(true)
+                }}
                 className="btn btn-primary"
               >
                 Add Your First Expense
@@ -980,19 +1118,127 @@ export default function Expenses() {
               </div>
 
               <div className="form-group">
-                <label className="label">Category *</label>
+                <label className="label">
+                  Category *
+                  {budgets.length > 0 && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                      (💰 = Has budget)
+                    </span>
+                  )}
+                </label>
                 <select
                   className="select"
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   required
                 >
-                  {EXPENSE_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                    </option>
-                  ))}
+                  {/* Prioritize categories with active budgets */}
+                  {(() => {
+                    const categoriesWithBudgets = EXPENSE_CATEGORIES.filter(cat =>
+                      budgets.some(b => b.category === cat)
+                    )
+                    const categoriesWithoutBudgets = EXPENSE_CATEGORIES.filter(cat =>
+                      !budgets.some(b => b.category === cat)
+                    )
+
+                    return (
+                      <>
+                        {categoriesWithBudgets.length > 0 && categoriesWithoutBudgets.length > 0 && (
+                          <optgroup label="📊 Budgeted Categories">
+                            {categoriesWithBudgets.map((cat) => (
+                              <option key={cat} value={cat}>
+                                💰 {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {categoriesWithBudgets.length > 0 && categoriesWithoutBudgets.length === 0 && (
+                          <>
+                            {categoriesWithBudgets.map((cat) => (
+                              <option key={cat} value={cat}>
+                                💰 {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                              </option>
+                            ))}
+                          </>
+                        )}
+                        {categoriesWithoutBudgets.length > 0 && (
+                          <>
+                            {categoriesWithBudgets.length > 0 && (
+                              <optgroup label="Other Categories">
+                                {categoriesWithoutBudgets.map((cat) => (
+                                  <option key={cat} value={cat}>
+                                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {categoriesWithBudgets.length === 0 && (
+                              <>
+                                {categoriesWithoutBudgets.map((cat) => (
+                                  <option key={cat} value={cat}>
+                                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                                  </option>
+                                ))}
+                              </>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )
+                  })()}
                 </select>
+
+                {/* Budget Impact Preview */}
+                {formData.amount && (() => {
+                  const budgetImpact = checkBudgetImpact(formData.category, formData.amount, formData.transaction_fee)
+                  if (!budgetImpact) return null
+
+                  return (
+                    <div className={`mt-2 p-3 rounded-lg border ${
+                      budgetImpact.wouldExceed
+                        ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
+                        : budgetImpact.percentage >= 80
+                        ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
+                        : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
+                    }`}>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="font-medium text-gray-700 dark:text-gray-300">Budget Impact</span>
+                        <span className={`font-bold ${
+                          budgetImpact.wouldExceed
+                            ? 'text-red-600 dark:text-red-400'
+                            : budgetImpact.percentage >= 80
+                            ? 'text-yellow-600 dark:text-yellow-400'
+                            : 'text-green-600 dark:text-green-400'
+                        }`}>
+                          {budgetImpact.percentage.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                        <div
+                          className={`h-2 rounded-full transition-all ${
+                            budgetImpact.wouldExceed
+                              ? 'bg-red-500'
+                              : budgetImpact.percentage >= 80
+                              ? 'bg-yellow-500'
+                              : 'bg-green-500'
+                          }`}
+                          style={{ width: `${Math.min(budgetImpact.percentage, 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-xs mt-1">
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {formatCurrency(budgetImpact.newTotal)} of {formatCurrency(budgetImpact.budgetLimit)}
+                        </span>
+                        {budgetImpact.wouldExceed && (
+                          <span className="text-red-600 dark:text-red-400 font-semibold flex items-center">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            Over by {formatCurrency(budgetImpact.overage)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
 
               <div className="form-group">
@@ -1329,6 +1575,103 @@ export default function Expenses() {
               >
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Confirm Reversal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Budget Warning Modal */}
+      {showBudgetWarning && budgetWarningData && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-8 animate-slideIn border-2 border-orange-500 dark:border-orange-600">
+            <div className="flex items-start space-x-4 mb-6">
+              <div className="bg-orange-100 dark:bg-orange-900/30 rounded-lg p-3 flex-shrink-0">
+                <AlertTriangle className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                  Budget Alert
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  This expense would exceed your budget for{' '}
+                  <span className="font-semibold text-gray-900 dark:text-gray-100 capitalize">
+                    {formData.category}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-600 dark:text-gray-400 mb-1">Current Spent</p>
+                    <p className="font-bold text-gray-900 dark:text-gray-100">
+                      {formatCurrency(budgetWarningData.currentSpent)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600 dark:text-gray-400 mb-1">Budget Limit</p>
+                    <p className="font-bold text-gray-900 dark:text-gray-100">
+                      {formatCurrency(budgetWarningData.budgetLimit)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600 dark:text-gray-400 mb-1">New Total</p>
+                    <p className="font-bold text-red-600 dark:text-red-400">
+                      {formatCurrency(budgetWarningData.newTotal)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600 dark:text-gray-400 mb-1">Over Budget</p>
+                    <p className="font-bold text-red-600 dark:text-red-400">
+                      +{formatCurrency(budgetWarningData.overage)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Budget Usage</span>
+                  <span className="text-sm font-bold text-orange-600 dark:text-orange-400">
+                    {budgetWarningData.percentage.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                  <div
+                    className="h-3 bg-red-500 rounded-full transition-all"
+                    style={{ width: `${Math.min(budgetWarningData.percentage, 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>What you can do:</strong>
+                </p>
+                <ul className="text-sm text-blue-700 dark:text-blue-300 mt-2 space-y-1 list-disc list-inside">
+                  <li>Cancel and reduce the expense amount</li>
+                  <li>Cancel and adjust your budget limit</li>
+                  <li>Proceed anyway (not recommended)</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={handleCancelBudgetWarning}
+                className="flex-1 btn btn-secondary py-3"
+              >
+                Go Back & Adjust
+              </button>
+              <button
+                onClick={handleProceedDespiteBudget}
+                className="flex-1 btn bg-orange-500 hover:bg-orange-600 text-white py-3 flex items-center justify-center"
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                Proceed Anyway
               </button>
             </div>
           </div>
