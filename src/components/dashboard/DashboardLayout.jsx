@@ -4,6 +4,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useNotifications } from '../../hooks/useNotifications'
 import NotificationPanel from '../NotificationPanel'
+import CommandPalette from '../ui/CommandPalette'
+import FloatingActionButton from '../ui/FloatingActionButton'
 import {
   LayoutDashboard,
   DollarSign,
@@ -15,26 +17,87 @@ import {
   Menu,
   X,
   BarChart3,
-  FileText,
   Sun,
   Moon,
   Wallet,
   CreditCard,
   RefreshCw,
   ChevronRight,
+  ChevronDown,
   Bell,
   HandCoins,
   History,
-  PiggyBank,
   Smartphone,
-  Briefcase
+  Briefcase,
+  Search,
+  Command,
+  PieChart,
+  Wrench,
+  MoreHorizontal
 } from 'lucide-react'
+
+// Navigation groups configuration
+const navigationGroups = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    icon: PieChart,
+    items: [
+      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, color: 'text-blue-500' },
+      { name: 'Portfolio', href: '/portfolio', icon: Briefcase, color: 'text-emerald-500' },
+    ]
+  },
+  {
+    id: 'money',
+    label: 'Money Flow',
+    icon: DollarSign,
+    items: [
+      { name: 'Accounts', href: '/accounts', icon: Wallet, color: 'text-teal-500' },
+      { name: 'Account History', href: '/account-history', icon: History, color: 'text-slate-500' },
+      { name: 'Income', href: '/income', icon: DollarSign, color: 'text-green-500' },
+      { name: 'Expenses', href: '/expenses', icon: TrendingDown, color: 'text-red-500' },
+    ]
+  },
+  {
+    id: 'planning',
+    label: 'Planning',
+    icon: Target,
+    items: [
+      { name: 'Budget', href: '/budget', icon: CreditCard, color: 'text-cyan-500' },
+      { name: 'Goals', href: '/goals', icon: Target, color: 'text-orange-500' },
+      { name: 'Bill Reminders', href: '/bills', icon: Bell, color: 'text-violet-500' },
+      { name: 'Subscriptions', href: '/subscriptions', icon: RefreshCw, color: 'text-pink-500' },
+    ]
+  },
+  {
+    id: 'tools',
+    label: 'Tools',
+    icon: Wrench,
+    items: [
+      { name: 'Reports', href: '/reports', icon: BarChart3, color: 'text-indigo-500' },
+      { name: 'Calculator', href: '/calculator', icon: Calculator, color: 'text-purple-500' },
+      { name: 'M-Pesa Calculator', href: '/mpesa-calculator', icon: Smartphone, color: 'text-green-600' },
+      { name: 'Lending', href: '/lending', icon: HandCoins, color: 'text-amber-500' },
+    ]
+  },
+]
+
+// Flat navigation for lookup
+const allNavItems = navigationGroups.flatMap(g => g.items)
+
+// Default expanded groups
+const defaultExpanded = ['overview', 'money', 'planning', 'tools']
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState(() => {
+    const saved = localStorage.getItem('sidebar-expanded-groups')
+    return saved ? JSON.parse(saved) : defaultExpanded
+  })
   const notificationRef = useRef(null)
   const userMenuRef = useRef(null)
   const { user, signOut } = useAuth()
@@ -63,6 +126,18 @@ export default function DashboardLayout({ children }) {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  // Global keyboard shortcut for command palette
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setCommandPaletteOpen(true)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   // Close sidebar on route change (mobile)
   useEffect(() => {
     setSidebarOpen(false)
@@ -79,6 +154,11 @@ export default function DashboardLayout({ children }) {
       document.body.style.overflow = ''
     }
   }, [sidebarOpen])
+
+  // Save expanded groups to localStorage
+  useEffect(() => {
+    localStorage.setItem('sidebar-expanded-groups', JSON.stringify(expandedGroups))
+  }, [expandedGroups])
 
   // Handle click outside notification panel
   useEffect(() => {
@@ -119,33 +199,45 @@ export default function DashboardLayout({ children }) {
     navigate('/login')
   }
 
-  const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, color: 'text-blue-500' },
-    { name: 'Portfolio', href: '/portfolio', icon: Briefcase, color: 'text-emerald-500' },
-    { name: 'Accounts', href: '/accounts', icon: Wallet, color: 'text-teal-500' },
-    { name: 'Account History', href: '/account-history', icon: History, color: 'text-slate-500' },
-    { name: 'Goals', href: '/goals', icon: Target, color: 'text-orange-500' },
-    { name: 'Income', href: '/income', icon: DollarSign, color: 'text-green-500' },
-    { name: 'Expenses', href: '/expenses', icon: TrendingDown, color: 'text-red-500' },
-    { name: 'Budget', href: '/budget', icon: CreditCard, color: 'text-cyan-500' },
-    { name: 'Reports', href: '/reports', icon: BarChart3, color: 'text-indigo-500' },
-    { name: 'Calculator', href: '/calculator', icon: Calculator, color: 'text-purple-500' },
-    { name: 'M-Pesa Calculator', href: '/mpesa-calculator', icon: Smartphone, color: 'text-green-600' },
-    { name: 'Subscriptions', href: '/subscriptions', icon: RefreshCw, color: 'text-pink-500' },
-    { name: 'Lending', href: '/lending', icon: HandCoins, color: 'text-amber-500' },
-    { name: 'Bill Reminders', href: '/bills', icon: Bell, color: 'text-violet-500' },
-    { name: 'Settings', href: '/settings', icon: Settings, color: 'text-gray-500' },
-    // Legacy routes - redirect to Portfolio
-    // { name: 'Savings & Investments', href: '/savings-investments', icon: PiggyBank, color: 'text-emerald-600' },
-    // { name: 'Net Worth', href: '/networth', icon: FileText, color: 'text-emerald-500' },
-  ]
+  const toggleGroup = (groupId) => {
+    setExpandedGroups(prev =>
+      prev.includes(groupId)
+        ? prev.filter(id => id !== groupId)
+        : [...prev, groupId]
+    )
+  }
 
   const isActive = (path) => location.pathname === path
 
-  const currentPage = navigation.find(item => isActive(item.href)) || { name: 'Dashboard' }
+  const currentPage = allNavItems.find(item => isActive(item.href)) ||
+    (location.pathname === '/settings' ? { name: 'Settings' } : { name: 'Dashboard' })
+
+  // Handle quick actions from FAB or command palette
+  const handleQuickAction = (action) => {
+    switch (action) {
+      case 'expense':
+      case 'add-expense':
+        navigate('/expenses', { state: { openAddModal: true } })
+        break
+      case 'income':
+      case 'add-income':
+        navigate('/income', { state: { openAddModal: true } })
+        break
+      case 'transfer':
+        navigate('/accounts', { state: { openTransferModal: true } })
+        break
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] transition-colors duration-300">
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onQuickAction={handleQuickAction}
+      />
+
       {/* Mobile sidebar backdrop */}
       <div
         className={`
@@ -191,44 +283,123 @@ export default function DashboardLayout({ children }) {
             </button>
           </div>
 
+          {/* Search trigger - Desktop sidebar */}
+          <div className="px-3 pt-4 pb-2">
+            <button
+              onClick={() => setCommandPaletteOpen(true)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors text-sm"
+            >
+              <Search className="h-4 w-4" />
+              <span className="flex-1 text-left">Search...</span>
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[var(--bg-secondary)] rounded text-[10px] font-mono">
+                <Command className="h-3 w-3" />K
+              </kbd>
+            </button>
+          </div>
+
           {/* Navigation - Scrollable */}
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-hide">
-            {navigation.map((item, index) => {
-              const Icon = item.icon
-              const active = isActive(item.href)
+          <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto scrollbar-hide">
+            {navigationGroups.map((group) => {
+              const GroupIcon = group.icon
+              const isExpanded = expandedGroups.includes(group.id)
+              const hasActiveItem = group.items.some(item => isActive(item.href))
+
               return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={`
-                    group flex items-center justify-between px-3 py-2.5 rounded-xl
-                    text-sm font-medium transition-all duration-200
-                    animate-fade-in-up
-                    ${active
-                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-item-hover)] hover:text-[var(--text-primary)]'
-                    }
-                  `}
-                  style={{ animationDelay: `${index * 30}ms` }}
-                >
-                  <div className="flex items-center">
-                    <div className={`
-                      p-1.5 rounded-lg mr-3 transition-colors duration-200
-                      ${active
-                        ? 'bg-white/20'
-                        : `bg-[var(--bg-tertiary)] ${item.color}`
+                <div key={group.id} className="mb-2">
+                  {/* Group Header */}
+                  <button
+                    onClick={() => toggleGroup(group.id)}
+                    className={`
+                      w-full flex items-center justify-between px-3 py-2 rounded-lg
+                      text-xs font-semibold uppercase tracking-wider
+                      transition-colors duration-200
+                      ${hasActiveItem
+                        ? 'text-primary-500'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                       }
-                    `}>
-                      <Icon className={`h-4 w-4 ${active ? 'text-white' : ''}`} />
+                    `}
+                  >
+                    <div className="flex items-center gap-2">
+                      <GroupIcon className="h-3.5 w-3.5" />
+                      <span>{group.label}</span>
                     </div>
-                    <span>{item.name}</span>
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? '' : '-rotate-90'}`} />
+                  </button>
+
+                  {/* Group Items */}
+                  <div className={`
+                    overflow-hidden transition-all duration-200
+                    ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}
+                  `}>
+                    {group.items.map((item) => {
+                      const Icon = item.icon
+                      const active = isActive(item.href)
+                      return (
+                        <Link
+                          key={item.name}
+                          to={item.href}
+                          className={`
+                            group flex items-center justify-between px-3 py-2.5 rounded-xl ml-2
+                            text-sm font-medium transition-all duration-200
+                            ${active
+                              ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
+                              : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-item-hover)] hover:text-[var(--text-primary)]'
+                            }
+                          `}
+                        >
+                          <div className="flex items-center">
+                            <div className={`
+                              p-1.5 rounded-lg mr-3 transition-colors duration-200
+                              ${active
+                                ? 'bg-white/20'
+                                : `bg-[var(--bg-tertiary)] ${item.color}`
+                              }
+                            `}>
+                              <Icon className={`h-4 w-4 ${active ? 'text-white' : ''}`} />
+                            </div>
+                            <span>{item.name}</span>
+                          </div>
+                          {active && (
+                            <ChevronRight className="h-4 w-4 opacity-70" />
+                          )}
+                        </Link>
+                      )
+                    })}
                   </div>
-                  {active && (
-                    <ChevronRight className="h-4 w-4 opacity-70" />
-                  )}
-                </Link>
+                </div>
               )
             })}
+
+            {/* Settings - Always visible */}
+            <div className="pt-2 border-t border-[var(--border-primary)]">
+              <Link
+                to="/settings"
+                className={`
+                  group flex items-center justify-between px-3 py-2.5 rounded-xl
+                  text-sm font-medium transition-all duration-200
+                  ${isActive('/settings')
+                    ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-item-hover)] hover:text-[var(--text-primary)]'
+                  }
+                `}
+              >
+                <div className="flex items-center">
+                  <div className={`
+                    p-1.5 rounded-lg mr-3 transition-colors duration-200
+                    ${isActive('/settings')
+                      ? 'bg-white/20'
+                      : 'bg-[var(--bg-tertiary)] text-gray-500'
+                    }
+                  `}>
+                    <Settings className={`h-4 w-4 ${isActive('/settings') ? 'text-white' : ''}`} />
+                  </div>
+                  <span>Settings</span>
+                </div>
+                {isActive('/settings') && (
+                  <ChevronRight className="h-4 w-4 opacity-70" />
+                )}
+              </Link>
+            </div>
           </nav>
         </div>
       </aside>
@@ -264,6 +435,15 @@ export default function DashboardLayout({ children }) {
             </div>
 
             <div className="flex items-center space-x-2 sm:space-x-3">
+              {/* Search button - Mobile */}
+              <button
+                onClick={() => setCommandPaletteOpen(true)}
+                className="p-2.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all duration-200 lg:hidden"
+                title="Search (Ctrl+K)"
+              >
+                <Search className="h-5 w-5" />
+              </button>
+
               {/* Date display - hidden on mobile */}
               <div className="hidden md:flex items-center px-4 py-2 rounded-xl bg-[var(--bg-tertiary)] text-sm text-[var(--text-secondary)]">
                 <span className="font-medium">
@@ -422,10 +602,19 @@ export default function DashboardLayout({ children }) {
         </footer>
       </div>
 
-      {/* Mobile Bottom Navigation - Optional enhancement */}
+      {/* Floating Action Button - Mobile */}
+      <FloatingActionButton onAction={handleQuickAction} />
+
+      {/* Mobile Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-[var(--bg-secondary)] border-t border-[var(--border-primary)] safe-area-inset-bottom">
         <div className="flex items-center justify-around h-16 px-2">
-          {navigation.slice(0, 5).map((item) => {
+          {/* Show first 4 items + More */}
+          {[
+            { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+            { name: 'Accounts', href: '/accounts', icon: Wallet },
+            { name: 'Expenses', href: '/expenses', icon: TrendingDown },
+            { name: 'Budget', href: '/budget', icon: CreditCard },
+          ].map((item) => {
             const Icon = item.icon
             const active = isActive(item.href)
             return (
@@ -446,6 +635,14 @@ export default function DashboardLayout({ children }) {
               </Link>
             )
           })}
+          {/* More button - opens sidebar */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="flex flex-col items-center justify-center flex-1 h-full text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors duration-200"
+          >
+            <MoreHorizontal className="h-5 w-5" />
+            <span className="text-[10px] mt-1 font-medium">More</span>
+          </button>
         </div>
       </nav>
 
