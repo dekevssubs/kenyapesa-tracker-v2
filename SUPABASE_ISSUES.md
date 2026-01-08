@@ -77,5 +77,29 @@ module "recharts/es6/index.js" while both modules are dependencies of each other
 
 ---
 
+## Technical Debt: Large Components
+
+### Components to Split (Future Phase)
+
+| File | Lines | Priority | Suggested Split |
+|------|-------|----------|-----------------|
+| `Income.jsx` | 1781 | High | IncomeList, IncomeForm, IncomeFilters, IncomeModals |
+| `Expenses.jsx` | 1706 | High | ExpensesList, ExpenseForm, ExpenseFilters, ExpenseModals |
+| `BillReminders.jsx` | 1088 | Medium | BillList, BillForm, SnoozeModal, BillFilters |
+| `Lending.jsx` | 1040 | Medium | LendingList, LendingForm, RepaymentModal |
+| `Goals.jsx` | 988 | Medium | GoalsList, GoalForm, GoalProgress |
+
+### Recommended Pattern
+```
+src/pages/Expenses.jsx (orchestrator ~200 lines)
+src/components/expenses/
+  ├── ExpensesList.jsx
+  ├── ExpenseForm.jsx
+  ├── ExpenseFilters.jsx
+  └── ExpenseModals.jsx
+```
+
+---
+
 *Created: January 2026*
 *Last Updated: January 2026*
