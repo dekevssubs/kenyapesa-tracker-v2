@@ -4,7 +4,9 @@ import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency } from '../utils/calculations'
 import { getCategoryIcon, getPaymentIcon, getCategoryColor } from '../utils/iconMappings'
-import { Plus, Eye, RotateCcw, TrendingDown, Filter, X, AlertTriangle, Wallet, DollarSign, CheckCircle, MessageSquare, RefreshCw, FileText, Calendar, CreditCard, Tag, MinusCircle, Building2, Receipt } from 'lucide-react'
+import { Plus, Eye, RotateCcw, TrendingDown, Filter, X, AlertTriangle, Wallet, DollarSign, CheckCircle, MessageSquare, RefreshCw, FileText, Calendar, CreditCard, Tag, MinusCircle, Building2, Receipt, Search, Upload } from 'lucide-react'
+import SearchBar, { searchItems } from '../components/ui/SearchBar'
+import ImportWizard from '../components/import/ImportWizard'
 import { ExpenseService } from '../utils/expenseService'
 import { calculateTransactionFee, getAvailableFeeMethods, formatFeeBreakdown, FEE_METHODS } from '../utils/kenyaTransactionFees'
 import TransactionMessageParser from '../components/TransactionMessageParser'
@@ -39,6 +41,8 @@ export default function Expenses() {
   const [reverseReason, setReverseReason] = useState('')
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterPayment, setFilterPayment] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showImportWizard, setShowImportWizard] = useState(false)
 
   // Budget warning state
   const [showBudgetWarning, setShowBudgetWarning] = useState(false)
@@ -606,13 +610,72 @@ export default function Expenses() {
     setShowModal(true)
   }
 
+  // Handle CSV import
+  const handleCSVImport = async (data) => {
+    try {
+      const expenseService = new ExpenseService(supabase, user.id)
+      let successCount = 0
+      let errorCount = 0
 
+      // Get primary account for imported expenses
+      const primaryAccount = accounts.find(a => a.is_primary) || accounts[0]
+      if (!primaryAccount) {
+        throw new Error('No account available. Please create an account first.')
+      }
 
-  const filteredExpenses = expenses.filter(expense => {
-    const categoryMatch = filterCategory === 'all' || expense.category === filterCategory
-    const paymentMatch = filterPayment === 'all' || expense.payment_method === filterPayment
-    return categoryMatch && paymentMatch
-  })
+      for (const item of data) {
+        try {
+          const result = await expenseService.createExpense({
+            account_id: primaryAccount.id,
+            amount: parseFloat(item.amount) || 0,
+            date: item.date || new Date().toISOString().split('T')[0],
+            category_slug: item.category || 'other',
+            description: item.description || 'Imported expense',
+            payment_method: item.payment_method || 'cash',
+            fee_method: 'none',
+            transaction_fee: 0,
+            fee_override: true
+          })
+
+          if (result.success) {
+            successCount++
+          } else {
+            errorCount++
+          }
+        } catch (e) {
+          errorCount++
+        }
+      }
+
+      await fetchExpenses()
+      await fetchAccounts()
+
+      if (errorCount > 0) {
+        toast.warning(`Imported ${successCount} expenses. ${errorCount} failed.`)
+      } else {
+        toast.success(`Successfully imported ${successCount} expenses!`)
+      }
+
+      return { success: true, count: successCount }
+    } catch (error) {
+      console.error('Import error:', error)
+      throw error
+    }
+  }
+
+  const filteredExpenses = (() => {
+    // First apply category and payment filters
+    let result = expenses.filter(expense => {
+      const categoryMatch = filterCategory === 'all' || expense.category === filterCategory
+      const paymentMatch = filterPayment === 'all' || expense.payment_method === filterPayment
+      return categoryMatch && paymentMatch
+    })
+    // Then apply search
+    if (searchQuery.trim()) {
+      result = searchItems(result, searchQuery, ['description', 'category', 'payment_method', 'amount'])
+    }
+    return result
+  })()
 
   const getCategoryTotal = (category) => {
     const currentMonth = expenses.filter(e => {
@@ -676,7 +739,7 @@ export default function Expenses() {
           </p>
         </div>
 
-        <div className="card flex items-center justify-center">
+        <div className="card flex flex-col sm:flex-row items-center justify-center gap-4">
           <button
             onClick={() => {
               // Auto-select first budgeted category if available, otherwise default to first database category
@@ -701,6 +764,13 @@ export default function Expenses() {
           >
             <Plus className="h-6 w-6 mr-2" />
             Add New Expense
+          </button>
+          <button
+            onClick={() => setShowImportWizard(true)}
+            className="btn btn-secondary py-4 px-6 flex items-center"
+          >
+            <Upload className="h-5 w-5 mr-2" />
+            Import CSV
           </button>
         </div>
       </div>
@@ -743,11 +813,20 @@ export default function Expenses() {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Search & Filters */}
       <div className="card">
-        <div className="flex items-center space-x-2 mb-4">
-          <Filter className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Filters</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+          <div className="flex items-center space-x-2">
+            <Filter className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Search & Filters</h3>
+          </div>
+          <div className="flex-1">
+            <SearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search expenses by description, category, amount..."
+            />
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -791,14 +870,18 @@ export default function Expenses() {
       {/* Expense List */}
       <div className="card">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          Expense History {filterCategory !== 'all' || filterPayment !== 'all' ? `(${filteredExpenses.length} filtered)` : ''}
+          Expense History {(filterCategory !== 'all' || filterPayment !== 'all' || searchQuery.trim()) ? `(${filteredExpenses.length} result${filteredExpenses.length !== 1 ? 's' : ''})` : ''}
         </h3>
 
         {filteredExpenses.length === 0 ? (
           <div className="text-center py-12">
             <TrendingDown className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400 mb-4">
-              {expenses.length === 0 ? 'No expenses recorded yet' : 'No expenses match your filters'}
+              {expenses.length === 0
+                ? 'No expenses recorded yet'
+                : searchQuery.trim()
+                  ? `No expenses match "${searchQuery}"`
+                  : 'No expenses match your filters'}
             </p>
             {expenses.length === 0 && (
               <button
@@ -1701,6 +1784,14 @@ export default function Expenses() {
           </div>
         </div>
       )}
+
+      {/* CSV Import Wizard */}
+      <ImportWizard
+        isOpen={showImportWizard}
+        onClose={() => setShowImportWizard(false)}
+        type="expense"
+        onImport={handleCSVImport}
+      />
     </div>
   )
 }

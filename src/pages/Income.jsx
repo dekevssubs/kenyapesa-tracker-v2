@@ -4,7 +4,8 @@ import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency, calculateNetSalary } from '../utils/calculations'
 import { getIncomeIcon } from '../utils/iconMappings'
-import { Plus, Eye, RotateCcw, DollarSign, TrendingUp, X, Calculator, FileText, Wallet, MinusCircle, Building2, AlertTriangle, CheckCircle, Calendar, RefreshCw, PauseCircle, PlayCircle, Trash2 } from 'lucide-react'
+import { Plus, Eye, RotateCcw, DollarSign, TrendingUp, X, Calculator, FileText, Wallet, MinusCircle, Building2, AlertTriangle, CheckCircle, Calendar, RefreshCw, PauseCircle, PlayCircle, Trash2, Search } from 'lucide-react'
+import SearchBar, { searchItems } from '../components/ui/SearchBar'
 import { IncomeService } from '../utils/incomeService'
 
 const INCOME_SOURCES = ['salary', 'side_hustle', 'investment', 'bonus', 'gift', 'other']
@@ -45,6 +46,9 @@ export default function Income() {
   })
 
   const [calculatedSalary, setCalculatedSalary] = useState(null)
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Recurring income state
   const [activeView, setActiveView] = useState('all') // 'all' | 'recurring'
@@ -661,23 +665,44 @@ export default function Income() {
       {/* Income List - shown when activeView === 'all' */}
       {activeView === 'all' && (
         <div className="card bg-white dark:bg-gray-800">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">Income History</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              Income History {searchQuery.trim() && `(${searchItems(incomes, searchQuery, ['source', 'source_name', 'description', 'amount']).length} result${searchItems(incomes, searchQuery, ['source', 'source_name', 'description', 'amount']).length !== 1 ? 's' : ''})`}
+            </h3>
+            <div className="flex-1">
+              <SearchBar
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search by source, description, amount..."
+              />
+            </div>
+          </div>
 
-        {incomes.length === 0 ? (
+        {(() => {
+          const filteredIncomes = searchQuery.trim()
+            ? searchItems(incomes, searchQuery, ['source', 'source_name', 'description', 'amount'])
+            : incomes
+          return filteredIncomes.length === 0 ? (
           <div className="text-center py-16">
             <DollarSign className="h-20 w-20 text-gray-300 dark:text-gray-600 mx-auto mb-6" />
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">No income recorded yet</h3>
-            <p className="text-gray-500 dark:text-gray-500 mb-6">Start tracking your earnings</p>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              {incomes.length === 0 ? 'No income recorded yet' : `No income matches "${searchQuery}"`}
+            </h3>
+            <p className="text-gray-500 dark:text-gray-500 mb-6">
+              {incomes.length === 0 ? 'Start tracking your earnings' : 'Try a different search term'}
+            </p>
+            {incomes.length === 0 && (
             <button
               onClick={() => setShowModal(true)}
               className="btn btn-primary px-8 py-3"
             >
               Add Your First Income
             </button>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
-            {incomes.map((income) => {
+            {filteredIncomes.map((income) => {
               const SourceIcon = getIncomeIcon(income.source)
               const hasGrossInfo = income.source === 'salary' && (income.tax_amount > 0 || income.statutory_deductions > 0)
               // income.amount IS the GROSS amount already
@@ -777,7 +802,8 @@ export default function Income() {
               )
             })}
           </div>
-        )}
+        )
+        })()}
         </div>
       )}
 

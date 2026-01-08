@@ -31,6 +31,8 @@ import BudgetVsActualTab from '../components/reports/BudgetVsActualTab'
 import PortfolioSummaryTab from '../components/reports/PortfolioSummaryTab'
 import GoalsProgressTab from '../components/reports/GoalsProgressTab'
 import MpesaFeeAnalytics from '../components/MpesaFeeAnalytics'
+import { openPrintableReport } from '../components/reports/PrintableReport'
+import { ReportsService } from '../utils/reportsService'
 
 // Two-tier tab structure for reduced cognitive load
 const PRIMARY_TABS = [
@@ -94,8 +96,68 @@ export default function ComprehensiveReports() {
     setSecondaryTab(DEFAULT_SECONDARY[tabId])
   }
 
-  const handleExportPDF = () => {
-    showToast('Coming Soon', 'PDF export feature is under development', 'info')
+  const handleExportPDF = async () => {
+    try {
+      setLoading(true)
+
+      // Fetch summary data for the current date range
+      const service = new ReportsService(supabase, user.id)
+
+      // Get income and expense data
+      const incomeResult = await service.getTransactions({
+        startDate: dateRange.from,
+        endDate: dateRange.to,
+        types: ['income']
+      })
+      const expenseResult = await service.getTransactions({
+        startDate: dateRange.from,
+        endDate: dateRange.to,
+        types: ['expense', 'payment']
+      })
+      const categoryResult = await service.getCategoryBreakdown({
+        startDate: dateRange.from,
+        endDate: dateRange.to
+      })
+
+      const incomeData = incomeResult || []
+      const expenseData = expenseResult || []
+      const categoryData = categoryResult?.expenses || []
+
+      const totalIncome = incomeData.reduce((sum, i) => sum + parseFloat(i.amount), 0)
+      const totalExpenses = expenseData.reduce((sum, e) => sum + parseFloat(e.amount) + parseFloat(e.transaction_fee || 0), 0)
+
+      // Calculate category percentages
+      const categories = categoryData
+        .filter(c => c.total > 0)
+        .map(c => ({
+          name: c.category?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Other',
+          amount: c.total,
+          percentage: totalExpenses > 0 ? ((c.total / totalExpenses) * 100).toFixed(1) : 0
+        }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 10)
+
+      const reportData = {
+        title: 'Financial Report',
+        period: `${new Date(dateRange.from).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })} - ${new Date(dateRange.to).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })}`,
+        summary: {
+          totalIncome,
+          totalExpenses,
+          netSavings: totalIncome - totalExpenses
+        },
+        categories,
+        transactions: expenseData.slice(0, 20),
+        generatedAt: new Date().toLocaleString('en-KE')
+      }
+
+      openPrintableReport(reportData, 'monthly')
+      showToast('Report Generated', 'Use Print (Ctrl+P) to save as PDF', 'success')
+    } catch (error) {
+      console.error('Error generating PDF:', error)
+      showToast('Error', 'Failed to generate report', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleExportCSV = () => {
