@@ -298,23 +298,26 @@ export default function DashboardLayout({ children }) {
           </div>
 
           {/* Navigation - Scrollable */}
-          <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto scrollbar-hide">
+          <nav className="flex-1 px-3 py-2 space-y-2 overflow-y-auto scrollbar-hide">
             {navigationGroups.map((group) => {
               const GroupIcon = group.icon
               const isExpanded = expandedGroups.includes(group.id)
               const hasActiveItem = group.items.some(item => isActive(item.href))
 
               return (
-                <div key={group.id} className="mb-2">
+                <div
+                  key={group.id}
+                  className="rounded-xl bg-[var(--bg-tertiary)]/50 dark:bg-white/[0.02] p-1.5"
+                >
                   {/* Group Header */}
                   <button
                     onClick={() => toggleGroup(group.id)}
                     className={`
-                      w-full flex items-center justify-between px-3 py-2 rounded-lg
-                      text-xs font-semibold uppercase tracking-wider
+                      w-full flex items-center justify-between px-2.5 py-2
+                      text-[11px] font-semibold uppercase tracking-[0.1em]
                       transition-colors duration-200
                       ${hasActiveItem
-                        ? 'text-primary-500'
+                        ? 'text-primary-600 dark:text-primary-400'
                         : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                       }
                     `}
@@ -325,6 +328,11 @@ export default function DashboardLayout({ children }) {
                     </div>
                     <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? '' : '-rotate-90'}`} />
                   </button>
+
+                  {/* Divider */}
+                  {isExpanded && (
+                    <div className="h-px bg-[var(--border-primary)]/50 mx-2 mb-1" />
+                  )}
 
                   {/* Group Items */}
                   <div className={`
@@ -339,10 +347,10 @@ export default function DashboardLayout({ children }) {
                           key={item.name}
                           to={item.href}
                           className={`
-                            group flex items-center justify-between px-3 py-2.5 rounded-xl ml-2
+                            group flex items-center justify-between px-3 py-2.5 rounded-lg
                             text-sm font-medium transition-all duration-200
                             ${active
-                              ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
+                              ? 'bg-gradient-to-r from-primary-500/90 to-primary-600 text-white shadow-md shadow-primary-500/20'
                               : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-item-hover)] hover:text-[var(--text-primary)]'
                             }
                           `}
@@ -352,10 +360,10 @@ export default function DashboardLayout({ children }) {
                               p-1.5 rounded-lg mr-3 transition-colors duration-200
                               ${active
                                 ? 'bg-white/20'
-                                : `bg-[var(--bg-tertiary)] ${item.color}`
+                                : 'bg-[var(--bg-secondary)]'
                               }
                             `}>
-                              <Icon className={`h-4 w-4 ${active ? 'text-white' : ''}`} />
+                              <Icon className={`h-4 w-4 ${active ? 'text-white' : 'text-[var(--text-muted)]'}`} />
                             </div>
                             <span>{item.name}</span>
                           </div>
@@ -371,14 +379,14 @@ export default function DashboardLayout({ children }) {
             })}
 
             {/* Settings - Always visible */}
-            <div className="pt-2 border-t border-[var(--border-primary)]">
+            <div className="pt-2 mt-2 border-t border-[var(--border-primary)]">
               <Link
                 to="/settings"
                 className={`
-                  group flex items-center justify-between px-3 py-2.5 rounded-xl
+                  group flex items-center justify-between px-3 py-2.5 rounded-lg
                   text-sm font-medium transition-all duration-200
                   ${isActive('/settings')
-                    ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
+                    ? 'bg-gradient-to-r from-primary-500/90 to-primary-600 text-white shadow-md shadow-primary-500/20'
                     : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-item-hover)] hover:text-[var(--text-primary)]'
                   }
                 `}
@@ -388,10 +396,10 @@ export default function DashboardLayout({ children }) {
                     p-1.5 rounded-lg mr-3 transition-colors duration-200
                     ${isActive('/settings')
                       ? 'bg-white/20'
-                      : 'bg-[var(--bg-tertiary)] text-gray-500'
+                      : 'bg-[var(--bg-secondary)]'
                     }
                   `}>
-                    <Settings className={`h-4 w-4 ${isActive('/settings') ? 'text-white' : ''}`} />
+                    <Settings className={`h-4 w-4 ${isActive('/settings') ? 'text-white' : 'text-[var(--text-muted)]'}`} />
                   </div>
                   <span>Settings</span>
                 </div>
