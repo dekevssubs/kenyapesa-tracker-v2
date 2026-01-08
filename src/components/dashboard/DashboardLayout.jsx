@@ -413,7 +413,7 @@ export default function DashboardLayout({ children }) {
         {/* Footer */}
         <footer className="mt-auto py-4 px-4 sm:px-6 lg:px-8 border-t border-[var(--border-primary)]">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between text-xs text-[var(--text-muted)] gap-2">
-            <p>2024 KenyaPesa Tracker. Built for Kenyan employees.</p>
+            <p>{new Date().getFullYear()} KenyaPesa Tracker. Built for Kenyan employees.</p>
             <p className="flex items-center gap-2">
               <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               All systems operational

@@ -2,8 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ToastProvider } from './contexts/ToastContext'
-import ProtectedRoute from './components/ProtectedRoute'
-import DashboardLayout from './components/dashboard/DashboardLayout'
+import PrivateRoute from './components/PrivateRoute'
 
 // Auth pages
 import Login from './components/auth/Login'
@@ -15,17 +14,14 @@ import Income from './pages/Income'
 import Expenses from './pages/Expenses'
 import Calculator from './pages/Calculator'
 import Goals from './pages/Goals'
-// import Reports from './pages/Reports' // Old reports page - replaced by unified ComprehensiveReports
 import ComprehensiveReports from './pages/ComprehensiveReports'
 import Budget from './pages/Budget'
 import Settings from './pages/Settings'
 import Subscriptions from './pages/Subscriptions'
-import NetWorth from './pages/NetWorth'
 import Lending from './pages/Lending'
 import BillReminders from './pages/BillReminders'
 import Accounts from './pages/Accounts'
 import AccountHistory from './pages/AccountHistory'
-import SavingsInvestments from './pages/SavingsInvestments'
 import MpesaCalculator from './pages/MpesaCalculator'
 import Portfolio from './pages/Portfolio'
 
@@ -36,171 +32,34 @@ function App() {
         <ToastProvider>
           <AuthProvider>
             <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
+              {/* Public routes */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
 
-            {/* Protected routes */}
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Dashboard />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/income"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Income />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/expenses"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Expenses />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/calculator"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Calculator />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/goals"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Goals />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/reports"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <ComprehensiveReports />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/budget"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Budget />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Settings />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/subscriptions"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Subscriptions />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            {/* Legacy route - redirect to Portfolio */}
-            <Route path="/networth" element={<Navigate to="/portfolio" replace />} />
-            <Route
-              path="/lending"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Lending />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/bills"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <BillReminders />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/accounts"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Accounts />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/account-history"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <AccountHistory />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            {/* Legacy route - redirect to Portfolio */}
-            <Route path="/savings-investments" element={<Navigate to="/portfolio" replace />} />
-            <Route
-              path="/portfolio"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <Portfolio />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/mpesa-calculator"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <MpesaCalculator />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
+              {/* Protected routes - using PrivateRoute wrapper */}
+              <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+              <Route path="/income" element={<PrivateRoute><Income /></PrivateRoute>} />
+              <Route path="/expenses" element={<PrivateRoute><Expenses /></PrivateRoute>} />
+              <Route path="/calculator" element={<PrivateRoute><Calculator /></PrivateRoute>} />
+              <Route path="/goals" element={<PrivateRoute><Goals /></PrivateRoute>} />
+              <Route path="/reports" element={<PrivateRoute><ComprehensiveReports /></PrivateRoute>} />
+              <Route path="/budget" element={<PrivateRoute><Budget /></PrivateRoute>} />
+              <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+              <Route path="/subscriptions" element={<PrivateRoute><Subscriptions /></PrivateRoute>} />
+              <Route path="/lending" element={<PrivateRoute><Lending /></PrivateRoute>} />
+              <Route path="/bills" element={<PrivateRoute><BillReminders /></PrivateRoute>} />
+              <Route path="/accounts" element={<PrivateRoute><Accounts /></PrivateRoute>} />
+              <Route path="/account-history" element={<PrivateRoute><AccountHistory /></PrivateRoute>} />
+              <Route path="/mpesa-calculator" element={<PrivateRoute><MpesaCalculator /></PrivateRoute>} />
+              <Route path="/portfolio" element={<PrivateRoute><Portfolio /></PrivateRoute>} />
 
-            {/* Redirect root to dashboard */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              {/* Legacy redirects */}
+              <Route path="/networth" element={<Navigate to="/portfolio" replace />} />
+              <Route path="/savings-investments" element={<Navigate to="/portfolio" replace />} />
 
-            {/* 404 redirect */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              {/* Default routes */}
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </AuthProvider>
         </ToastProvider>

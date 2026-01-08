@@ -8,12 +8,42 @@
  * - Automatic fund transfers via account_transactions
  * - Goal completion, abandonment, and pause functionality
  * - Withdrawal support
+ *
+ * Category Note (per canonical spec):
+ * - Goals do NOT use expense categories for transaction classification
+ * - Goal's 'category' field is for goal TYPE (vacation, emergency-fund) - not expense type
+ * - Transfers/withdrawals may use system category or NULL
  */
 
 export class GoalService {
   constructor(supabase, userId) {
     this.supabase = supabase
     this.userId = userId
+    this._categoryCache = {}
+  }
+
+  /**
+   * Get category_id from slug (for system transactions only)
+   */
+  async getCategoryId(slug) {
+    if (!slug) return null
+    if (this._categoryCache[slug]) return this._categoryCache[slug]
+    try {
+      const { data } = await this.supabase
+        .from('expense_categories')
+        .select('id')
+        .eq('user_id', this.userId)
+        .eq('slug', slug)
+        .eq('is_active', true)
+        .single()
+      if (data) {
+        this._categoryCache[slug] = data.id
+        return data.id
+      }
+      return null
+    } catch (err) {
+      return null
+    }
   }
 
   /**

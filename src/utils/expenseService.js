@@ -76,7 +76,8 @@ export class ExpenseService {
         account_id,
         amount,
         date,
-        category,
+        category_id, // UUID foreign key to expense_categories
+        category_slug, // Category slug for description/display
         description,
         payment_method,
         fee_method, // Method used to calculate fee (mpesa_send, bank_transfer, etc.)
@@ -99,6 +100,13 @@ export class ExpenseService {
         }
       }
 
+      if (!category_id) {
+        return {
+          success: false,
+          error: 'Category selection is required'
+        }
+      }
+
       // Calculate or use provided transaction fee
       let finalFee = 0
       let finalFeeMethod = fee_method
@@ -117,7 +125,7 @@ export class ExpenseService {
       // Check account balance (warn but allow)
       const balanceCheck = await this.checkAccountBalance(account_id, totalAmount)
 
-      // Step 1: Create expense record
+      // Step 1: Create expense record with category_id
       const { data: expense, error: expenseError } = await this.supabase
         .from('expenses')
         .insert({
@@ -125,7 +133,8 @@ export class ExpenseService {
           account_id,
           amount: parseFloat(amount),
           date,
-          category,
+          category_id, // UUID foreign key
+          category: category_slug, // Keep for backwards compatibility during transition
           description,
           payment_method,
           transaction_fee: finalFee,
@@ -139,7 +148,7 @@ export class ExpenseService {
 
       const accountTransactionIds = []
 
-      // Step 2: Create account_transaction for expense amount
+      // Step 2: Create account_transaction for expense amount with category_id
       const { data: expenseTransaction, error: expenseTxError } = await this.supabase
         .from('account_transactions')
         .insert({
@@ -148,8 +157,9 @@ export class ExpenseService {
           transaction_type: 'expense',
           amount: parseFloat(amount),
           date,
-          category,
-          description: description || `Expense: ${category}`,
+          category_id, // UUID foreign key
+          category: category_slug, // Keep for backwards compatibility
+          description: description || `Expense: ${category_slug}`,
           reference_id: expense.id,
           reference_type: 'expense'
         })
@@ -161,6 +171,14 @@ export class ExpenseService {
 
       // Step 3: Create separate account_transaction for fee (if > 0)
       if (finalFee > 0) {
+        // Get transaction-charges category for fees
+        const { data: feeCategory } = await this.supabase
+          .from('expense_categories')
+          .select('id')
+          .eq('user_id', this.userId)
+          .eq('slug', 'transaction-charges')
+          .single()
+
         const { data: feeTransaction, error: feeTxError } = await this.supabase
           .from('account_transactions')
           .insert({
@@ -169,8 +187,9 @@ export class ExpenseService {
             transaction_type: 'transaction_fee',
             amount: finalFee,
             date,
-            category: `${finalFeeMethod}_fee`,
-            description: `Transaction fee for ${category} (${finalFeeMethod})`,
+            category_id: feeCategory?.id || null, // Link to transaction-charges category
+            category: 'transaction-charges', // Standardized fee category
+            description: `Transaction fee for ${category_slug} (${finalFeeMethod})`,
             reference_id: expense.id,
             reference_type: 'expense'
           })

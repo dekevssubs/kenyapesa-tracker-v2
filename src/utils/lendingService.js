@@ -10,12 +10,51 @@
  * - Status tracking (pending, partial, complete, forgiven)
  * - Counterparty-centric views
  * - Forgiveness with bad debt tracking
+ *
+ * Category Integration (per canonical spec):
+ * - Uses category_id (UUID foreign key) for all transactions
+ * - Categories: 'lending', 'repayment', 'transaction-charges', 'bad-debt'
  */
 
 export class LendingService {
   constructor(supabase, userId) {
     this.supabase = supabase
     this.userId = userId
+    this._categoryCache = {} // Cache category IDs to avoid repeated lookups
+  }
+
+  /**
+   * Get category_id from slug (with caching)
+   * @param {string} slug - Category slug
+   * @returns {Promise<string|null>} - Category UUID or null
+   */
+  async getCategoryId(slug) {
+    // Check cache first
+    if (this._categoryCache[slug]) {
+      return this._categoryCache[slug]
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('expense_categories')
+        .select('id')
+        .eq('user_id', this.userId)
+        .eq('slug', slug)
+        .eq('is_active', true)
+        .single()
+
+      if (error || !data) {
+        console.warn(`Category '${slug}' not found for user`)
+        return null
+      }
+
+      // Cache the result
+      this._categoryCache[slug] = data.id
+      return data.id
+    } catch (err) {
+      console.error('Error getting category ID:', err)
+      return null
+    }
   }
 
   /**
@@ -107,7 +146,13 @@ export class LendingService {
 
       if (lendingError) throw lendingError
 
-      // Step 2: Create account_transaction (money flows OUT of account)
+      // Step 2: Get category IDs for lending and fees
+      const lendingCategoryId = await this.getCategoryId('lending') ||
+                                await this.getCategoryId('uncategorized')
+      const feeCategoryId = await this.getCategoryId('transaction-charges') ||
+                            await this.getCategoryId('bank-fees')
+
+      // Step 3: Create account_transaction (money flows OUT of account)
       const { data: accountTransaction, error: txError } = await this.supabase
         .from('account_transactions')
         .insert({
@@ -116,7 +161,8 @@ export class LendingService {
           transaction_type: 'lending',
           amount: parseFloat(amount),
           date,
-          category: 'lending',
+          category_id: lendingCategoryId,
+          category: 'lending', // Keep for backwards compatibility
           description: `Lent to ${person_name}`,
           reference_id: lending.id,
           reference_type: 'lending'
@@ -126,7 +172,7 @@ export class LendingService {
 
       if (txError) throw txError
 
-      // Step 3: Record transaction fee if provided and separate
+      // Step 4: Record transaction fee if provided and separate
       let feeTransactionId = null
       if (feeAmount > 0) {
         const { data: feeTx, error: feeError } = await this.supabase
@@ -137,7 +183,8 @@ export class LendingService {
             transaction_type: 'transaction_fee',
             amount: feeAmount,
             date,
-            category: 'Transaction Fees',
+            category_id: feeCategoryId,
+            category: 'transaction-charges', // Standardized slug
             description: `M-Pesa fee for lending to ${person_name}`,
             reference_id: lending.id,
             reference_type: 'lending'
@@ -257,7 +304,11 @@ export class LendingService {
 
       if (updateError) throw updateError
 
-      // Step 2: Create account_transaction (money flows INTO account)
+      // Step 2: Get category ID for repayment
+      const repaymentCategoryId = await this.getCategoryId('repayment') ||
+                                   await this.getCategoryId('uncategorized')
+
+      // Step 3: Create account_transaction (money flows INTO account)
       const { data: accountTransaction, error: txError } = await this.supabase
         .from('account_transactions')
         .insert({
@@ -266,7 +317,8 @@ export class LendingService {
           transaction_type: 'repayment',
           amount: parseFloat(repaymentAmount),
           date: repaymentDate,
-          category: 'repayment',
+          category_id: repaymentCategoryId,
+          category: 'repayment', // Keep for backwards compatibility
           description: `Repayment from ${lending.person_name}${notes ? ` - ${notes}` : ''}`,
           reference_id: lendingId,
           reference_type: 'lending'
@@ -873,7 +925,11 @@ export class LendingService {
 
       if (accountError) throw accountError
 
-      // Step 2: Create bad_debt transaction in ledger (ledger-first architecture)
+      // Step 2: Get category ID for bad debt
+      const badDebtCategoryId = await this.getCategoryId('bad-debt') ||
+                                await this.getCategoryId('uncategorized')
+
+      // Step 3: Create bad_debt transaction in ledger (ledger-first architecture)
       // Money flows from lender's original account to write-off account
       // This properly records the loss while preserving ledger invariants
       const { data: badDebtTx, error: txError } = await this.supabase
@@ -885,7 +941,8 @@ export class LendingService {
           transaction_type: 'bad_debt',
           amount: writeOffAmount,
           date: new Date().toISOString().split('T')[0],
-          category: 'Bad Debt',
+          category_id: badDebtCategoryId,
+          category: 'bad-debt', // Standardized slug
           description: `Debt forgiven: ${lending.person_name}${reason ? ` - ${reason}` : ''}`,
           reference_id: lendingId,
           reference_type: 'lending'

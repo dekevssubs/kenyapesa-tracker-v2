@@ -1,12 +1,46 @@
 /**
  * Recurring Expense Automation Service
  * Handles automatic creation of pending expenses from recurring transactions
+ *
+ * Category Integration (per canonical spec):
+ * - Uses category_id (UUID foreign key) for all transactions
+ * - Maintains category slug for backwards compatibility
  */
 
 export class RecurringExpenseService {
   constructor(supabase, userId) {
     this.supabase = supabase
     this.userId = userId
+    this._categoryCache = {}
+  }
+
+  /**
+   * Get category_id from slug (with caching)
+   * @param {string} slug - Category slug
+   * @returns {Promise<string|null>} - Category UUID or null
+   */
+  async getCategoryId(slug) {
+    if (!slug) return null
+    if (this._categoryCache[slug]) return this._categoryCache[slug]
+
+    try {
+      const { data } = await this.supabase
+        .from('expense_categories')
+        .select('id')
+        .eq('user_id', this.userId)
+        .eq('slug', slug)
+        .eq('is_active', true)
+        .single()
+
+      if (data) {
+        this._categoryCache[slug] = data.id
+        return data.id
+      }
+      return null
+    } catch (err) {
+      console.warn(`Category '${slug}' not found`)
+      return null
+    }
   }
 
   /**
@@ -95,13 +129,17 @@ export class RecurringExpenseService {
    */
   async createPendingExpense(recurring) {
     try {
+      // Get category_id from slug (or use recurring's category_id if available)
+      const categoryId = recurring.category_id || await this.getCategoryId(recurring.category)
+
       const { data, error } = await this.supabase
         .from('pending_expenses')
         .insert([{
           user_id: this.userId,
           recurring_transaction_id: recurring.id,
           amount: recurring.amount,
-          category: recurring.category,
+          category_id: categoryId,
+          category: recurring.category, // Keep for backwards compatibility
           description: `Auto-created: ${recurring.name}`,
           payment_method: recurring.payment_method || 'mpesa',
           date: recurring.next_date,
@@ -139,13 +177,17 @@ export class RecurringExpenseService {
         return { success: false, error: 'Pending expense not found' }
       }
 
-      // Create actual expense
+      // Get category_id from pending (or lookup from slug)
+      const categoryId = pending.category_id || await this.getCategoryId(pending.category)
+
+      // Create actual expense with category_id
       const { data: expense, error: expenseError } = await this.supabase
         .from('expenses')
         .insert([{
           user_id: this.userId,
           amount: pending.amount,
-          category: pending.category,
+          category_id: categoryId,
+          category: pending.category, // Keep for backwards compatibility
           description: pending.description,
           payment_method: pending.payment_method,
           date: pending.date

@@ -10,11 +10,6 @@ import { useConfirmation } from '../hooks/useConfirmation'
 import { fetchAndPredict } from '../utils/aiPredictions'
 import budgetService from '../utils/budgetService'
 
-const EXPENSE_CATEGORIES = [
-  'rent', 'transport', 'food', 'utilities', 'airtime',
-  'entertainment', 'health', 'education', 'clothing', 'savings', 'debt', 'fees', 'other'
-]
-
 export default function Budget() {
   const { user } = useAuth()
   const toast = useToast()
@@ -27,19 +22,42 @@ export default function Budget() {
   const [showModal, setShowModal] = useState(false)
   const [editingBudget, setEditingBudget] = useState(null)
   const [predictions, setPredictions] = useState({}) // AI forecasted spending (advisory)
+  const [budgetableCategories, setBudgetableCategories] = useState([]) // Categories from database
 
   const [formData, setFormData] = useState({
-    category: 'food',
+    category_id: '',
     monthly_limit: '',
     month: new Date().toISOString().split('T')[0].slice(0, 7) + '-01'
   })
 
   useEffect(() => {
     if (user) {
+      fetchBudgetableCategories()
       fetchBudgetsWithSpending()
       calculatePredictions()
     }
   }, [user])
+
+  // Fetch budgetable categories from database (per canonical spec)
+  const fetchBudgetableCategories = async () => {
+    try {
+      const categories = await budgetService.getBudgetableCategories(user.id)
+      console.log('✅ Fetched budgetable categories:', categories)
+      console.log('✅ Total categories:', categories.length)
+      setBudgetableCategories(categories)
+
+      // Set default category if available
+      if (categories.length > 0 && !formData.category_id) {
+        setFormData(prev => ({
+          ...prev,
+          category_id: categories[0].category_id
+        }))
+      }
+    } catch (error) {
+      console.error('❌ Error fetching budgetable categories:', error)
+      toast.error('Failed to load categories')
+    }
+  }
 
   // Fetch budgets with spending data (ledger-first, server-side calculations)
   const fetchBudgetsWithSpending = async () => {
@@ -85,6 +103,11 @@ export default function Budget() {
       return
     }
 
+    if (!formData.category_id && !editingBudget) {
+      toast.warning('Please select a category')
+      return
+    }
+
     try {
       if (editingBudget) {
         const { error } = await supabase
@@ -103,7 +126,7 @@ export default function Budget() {
           .insert([
             {
               user_id: user.id,
-              category: formData.category,
+              category_id: formData.category_id,
               monthly_limit: parseFloat(formData.monthly_limit),
               month: formData.month
             }
@@ -114,7 +137,7 @@ export default function Budget() {
       }
 
       setFormData({
-        category: 'food',
+        category_id: budgetableCategories.length > 0 ? budgetableCategories[0].category_id : '',
         monthly_limit: '',
         month: new Date().toISOString().split('T')[0].slice(0, 7) + '-01'
       })
@@ -130,7 +153,7 @@ export default function Budget() {
   const handleEdit = (budget) => {
     setEditingBudget(budget)
     setFormData({
-      category: budget.category,
+      category_id: budget.category_id,
       monthly_limit: budget.monthly_limit,
       month: budget.month
     })
@@ -192,7 +215,7 @@ export default function Budget() {
             onClick={() => {
               setEditingBudget(null)
               setFormData({
-                category: 'food',
+                category_id: budgetableCategories.length > 0 ? budgetableCategories[0].category_id : '',
                 monthly_limit: '',
                 month: new Date().toISOString().split('T')[0].slice(0, 7) + '-01'
               })
@@ -564,16 +587,47 @@ export default function Budget() {
                 <label className="label text-base font-semibold">Category *</label>
                 <select
                   className="select text-base py-3"
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  value={formData.category_id}
+                  onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
                   required
                   disabled={!!editingBudget}
                 >
-                  {EXPENSE_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat.charAt(0).toUpperCase() + cat.slice(1).replace(/_/g, ' ')}
-                    </option>
-                  ))}
+                  {budgetableCategories.length === 0 ? (
+                    <option value="">Loading categories...</option>
+                  ) : (
+                    <>
+                      {/* Build unique list of parent categories */}
+                      {Array.from(new Set(budgetableCategories.map(cat => cat.parent_name).filter(Boolean)))
+                        .sort()
+                        .map(parentName => {
+                          // Get all subcategories under this parent
+                          const subcategories = budgetableCategories.filter(
+                            cat => cat.parent_name === parentName
+                          )
+
+                          return (
+                            <optgroup key={parentName} label={parentName}>
+                              {subcategories.map((sub) => (
+                                <option key={sub.category_id} value={sub.category_id}>
+                                  {sub.category_name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )
+                        })
+                      }
+
+                      {/* Standalone categories (no parent) */}
+                      {budgetableCategories
+                        .filter(cat => !cat.parent_name)
+                        .map(cat => (
+                          <option key={cat.category_id} value={cat.category_id}>
+                            {cat.category_name}
+                          </option>
+                        ))
+                      }
+                    </>
+                  )}
                 </select>
                 {editingBudget && (
                   <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Category cannot be changed</p>
@@ -591,28 +645,37 @@ export default function Budget() {
                   onChange={(e) => setFormData({ ...formData, monthly_limit: e.target.value })}
                   required
                 />
-                {predictions[formData.category] && !editingBudget && (
-                  <div className="mt-3 p-3 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg border border-purple-200 dark:border-purple-700">
-                    <div className="flex items-start space-x-2">
-                      <Lightbulb className="h-4 w-4 mt-0.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                      <div className="flex-1 text-sm space-y-1">
-                        <p className="text-gray-700 dark:text-gray-300">
-                          <strong>AI Suggestion:</strong> {predictions[formData.category].recommendation}
-                        </p>
-                        <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                          <span>Predicted: <strong className="text-purple-600 dark:text-purple-400">{formatCurrency(predictions[formData.category].predicted)}</strong></span>
-                          <span className={`font-semibold ${
-                            predictions[formData.category].confidence > 0.7 ? 'text-green-600 dark:text-green-400' :
-                            predictions[formData.category].confidence > 0.5 ? 'text-yellow-600 dark:text-yellow-400' :
-                            'text-red-600 dark:text-red-400'
-                          }`}>
-                            {(predictions[formData.category].confidence * 100).toFixed(0)}% confidence
-                          </span>
+                {(() => {
+                  // Get category slug for predictions lookup
+                  const selectedCategory = budgetableCategories.find(
+                    cat => cat.category_id === formData.category_id
+                  )
+                  const categorySlug = selectedCategory?.category_slug
+                  const prediction = categorySlug ? predictions[categorySlug] : null
+
+                  return prediction && !editingBudget && (
+                    <div className="mt-3 p-3 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg border border-purple-200 dark:border-purple-700">
+                      <div className="flex items-start space-x-2">
+                        <Lightbulb className="h-4 w-4 mt-0.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                        <div className="flex-1 text-sm space-y-1">
+                          <p className="text-gray-700 dark:text-gray-300">
+                            <strong>AI Suggestion:</strong> {prediction.recommendation}
+                          </p>
+                          <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                            <span>Predicted: <strong className="text-purple-600 dark:text-purple-400">{formatCurrency(prediction.predicted)}</strong></span>
+                            <span className={`font-semibold ${
+                              prediction.confidence > 0.7 ? 'text-green-600 dark:text-green-400' :
+                              prediction.confidence > 0.5 ? 'text-yellow-600 dark:text-yellow-400' :
+                              'text-red-600 dark:text-red-400'
+                            }`}>
+                              {(prediction.confidence * 100).toFixed(0)}% confidence
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
               </div>
 
               <div className="flex space-x-4 pt-4">

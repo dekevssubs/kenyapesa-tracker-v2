@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../utils/supabase'
-import { DataMigrationService } from '../utils/dataMigrationService'
-import { Settings as SettingsIcon, User, DollarSign, AlertCircle, Trash2, Download, CheckCircle, Mail, Phone, Calendar, Database, RefreshCw } from 'lucide-react'
+import { Settings as SettingsIcon, User, DollarSign, AlertCircle, Trash2, Download, Mail, Phone, Calendar, CheckCircle } from 'lucide-react'
 
 export default function Settings() {
   const { user, signOut } = useAuth()
@@ -17,16 +16,9 @@ export default function Settings() {
     currency: 'KES'
   })
 
-  // Migration state
-  const [migrationNeeded, setMigrationNeeded] = useState(false)
-  const [migrationComplete, setMigrationComplete] = useState(false)
-  const [migrating, setMigrating] = useState(false)
-  const [migrationResults, setMigrationResults] = useState(null)
-
   useEffect(() => {
     if (user) {
       fetchProfile()
-      checkMigrationStatus()
     }
   }, [user])
 
@@ -141,67 +133,6 @@ export default function Settings() {
     } catch (error) {
       console.error('Error deleting account:', error)
       setMessage({ type: 'error', text: '✗ Error deleting account. Please try again.' })
-    }
-  }
-
-  const checkMigrationStatus = async () => {
-    try {
-      const service = new DataMigrationService(supabase, user.id)
-      const [needed, complete] = await Promise.all([
-        service.needsMigration(),
-        service.isMigrationComplete()
-      ])
-
-      setMigrationNeeded(needed)
-      setMigrationComplete(complete)
-    } catch (error) {
-      console.error('Error checking migration status:', error)
-    }
-  }
-
-  const handleRunMigration = async () => {
-    const confirmation = confirm(
-      'This will create a default account and backfill all your historical income and expense data. Continue?'
-    )
-
-    if (!confirmation) {
-      return
-    }
-
-    setMigrating(true)
-    setMessage({ type: '', text: '' })
-
-    try {
-      const service = new DataMigrationService(supabase, user.id)
-      const results = await service.runMigration()
-
-      if (results.alreadyComplete) {
-        setMessage({ type: 'error', text: 'Migration has already been completed' })
-        setMigrationComplete(true)
-        return
-      }
-
-      if (results.success) {
-        setMigrationResults(results)
-        setMigrationComplete(true)
-        setMessage({
-          type: 'success',
-          text: `Migration completed! ${results.totalRecords} records migrated successfully.`
-        })
-      } else {
-        setMessage({
-          type: 'error',
-          text: `Migration failed: ${results.error}`
-        })
-      }
-    } catch (error) {
-      console.error('Error running migration:', error)
-      setMessage({
-        type: 'error',
-        text: 'Migration failed. Please try again or contact support.'
-      })
-    } finally {
-      setMigrating(false)
     }
   }
 
@@ -430,132 +361,6 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Data Migration Section */}
-      <div className="card">
-        <div className="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-200">
-          <div className="bg-purple-500 bg-opacity-10 rounded-xl p-3">
-            <Database className="h-6 w-6 text-purple-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900">Data Migration</h3>
-        </div>
-
-        {migrationComplete ? (
-          /* Migration Complete State */
-          <div className="p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-2xl border-2 border-green-200">
-            <div className="flex items-center space-x-3 mb-4">
-              <CheckCircle className="h-8 w-8 text-green-600" />
-              <div>
-                <h4 className="text-lg font-bold text-green-900">Migration Complete</h4>
-                <p className="text-sm text-green-700">
-                  Your historical data has been successfully migrated to the new accounts system.
-                </p>
-              </div>
-            </div>
-
-            {migrationResults && migrationResults.summary && (
-              <div className="mt-4 p-4 bg-white rounded-xl border border-green-200">
-                <h5 className="text-sm font-bold text-gray-900 mb-3">Migration Summary</h5>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-600">Account Created</p>
-                    <p className="font-bold text-gray-900">{migrationResults.summary.accountName}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Current Balance</p>
-                    <p className="font-bold text-gray-900">
-                      KES {migrationResults.summary.currentBalance.toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Total Transactions</p>
-                    <p className="font-bold text-gray-900">{migrationResults.summary.totalTransactions}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Income Records</p>
-                    <p className="font-bold text-green-600">{migrationResults.summary.incomeCount}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Expense Records</p>
-                    <p className="font-bold text-red-600">{migrationResults.summary.expenseCount}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Date Range</p>
-                    <p className="font-bold text-gray-900 text-xs">
-                      {migrationResults.summary.earliestTransaction &&
-                        new Date(migrationResults.summary.earliestTransaction).toLocaleDateString()}
-                      {' - '}
-                      {migrationResults.summary.latestTransaction &&
-                        new Date(migrationResults.summary.latestTransaction).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          /* Migration Not Started State */
-          <div className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl border-2 border-purple-200">
-            <div className="flex items-start justify-between gap-6">
-              <div className="flex-1">
-                <h4 className="text-lg font-bold text-gray-900 mb-3">Migrate to Accounts System</h4>
-                <p className="text-sm text-gray-700 leading-relaxed mb-4">
-                  {migrationNeeded
-                    ? 'You have existing income and expense data that needs to be migrated to the new accounts system. This will create a default "Main Account" and import all your historical transactions.'
-                    : 'Backfill your historical income and expense data into the new accounts system. This creates a default account and links all past transactions for complete financial tracking.'}
-                </p>
-                <ul className="text-sm text-gray-700 space-y-2">
-                  <li className="flex items-start">
-                    <CheckCircle className="h-4 w-4 text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Creates a default "Main Account" for cash transactions</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle className="h-4 w-4 text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Imports all historical income and expense records</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle className="h-4 w-4 text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Calculates accurate account balances from transaction history</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle className="h-4 w-4 text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>One-time operation - safe to run once</span>
-                  </li>
-                </ul>
-              </div>
-              <button
-                onClick={handleRunMigration}
-                disabled={migrating}
-                className="btn btn-primary flex items-center flex-shrink-0 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {migrating ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Migrating...
-                  </>
-                ) : (
-                  <>
-                    <Database className="h-4 w-4 mr-2" />
-                    Run Migration
-                  </>
-                )}
-              </button>
-            </div>
-
-            {migrating && (
-              <div className="mt-6 p-4 bg-white rounded-xl border border-purple-200">
-                <h5 className="text-sm font-bold text-gray-900 mb-3 flex items-center">
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin text-purple-600" />
-                  Migration in Progress...
-                </h5>
-                <p className="text-xs text-gray-600">
-                  Please wait while we migrate your data. This may take a few moments.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* App Information - BETTER LAYOUT */}
       <div className="card bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200">
         <h3 className="text-xl font-bold text-gray-900 mb-6">About KenyaPesa Tracker</h3>
@@ -567,7 +372,7 @@ export default function Settings() {
             </div>
             <div className="flex justify-between items-center py-3 border-b border-gray-300">
               <span className="text-sm font-medium text-gray-600">Last Updated</span>
-              <span className="text-sm font-bold text-gray-900">December 2024</span>
+              <span className="text-sm font-bold text-gray-900">January 2026</span>
             </div>
           </div>
           <div className="space-y-4">

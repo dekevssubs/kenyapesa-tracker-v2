@@ -9,11 +9,7 @@ import { ExpenseService } from '../utils/expenseService'
 import { calculateTransactionFee, getAvailableFeeMethods, formatFeeBreakdown, FEE_METHODS } from '../utils/kenyaTransactionFees'
 import TransactionMessageParser from '../components/TransactionMessageParser'
 import MpesaFeePreview from '../components/MpesaFeePreview'
-
-const EXPENSE_CATEGORIES = [
-  'rent', 'transport', 'food', 'utilities', 'airtime',
-  'entertainment', 'health', 'education', 'clothing', 'savings', 'debt', 'loan', 'other'
-]
+import { getCategoriesGroupedByParent, getExpenseCategoriesForSelection } from '../utils/categoryService'
 
 const PAYMENT_METHODS = ['mpesa', 'cash', 'bank', 'card']
 
@@ -27,6 +23,10 @@ export default function Expenses() {
   const [showModal, setShowModal] = useState(false)
   const [showMessageParser, setShowMessageParser] = useState(false)
   const [totalExpenses, setTotalExpenses] = useState(0)
+
+  // Database categories state (per canonical spec - categories from database, not hardcoded)
+  const [categoriesGrouped, setCategoriesGrouped] = useState([])
+  const [categoriesFlat, setCategoriesFlat] = useState([])
 
   // View details modal state
   const [viewingExpense, setViewingExpense] = useState(null)
@@ -57,7 +57,8 @@ export default function Expenses() {
 
   const [formData, setFormData] = useState({
     amount: '',
-    category: 'food',
+    category_id: '', // UUID foreign key to expense_categories
+    category_slug: '', // Category slug for display/compatibility
     description: '',
     payment_method: 'mpesa',
     account_id: '',
@@ -104,8 +105,32 @@ export default function Expenses() {
       fetchExpenses()
       fetchAccounts()
       fetchBudgets()
+      fetchCategories()
     }
   }, [user])
+
+  // Fetch categories from database (per canonical spec)
+  const fetchCategories = async () => {
+    try {
+      const [grouped, flat] = await Promise.all([
+        getCategoriesGroupedByParent(user.id),
+        getExpenseCategoriesForSelection(user.id)
+      ])
+      setCategoriesGrouped(grouped)
+      setCategoriesFlat(flat)
+
+      // Set default category if available and form is empty
+      if (flat.length > 0 && !formData.category_id) {
+        setFormData(prev => ({
+          ...prev,
+          category_id: flat[0].id,
+          category_slug: flat[0].slug
+        }))
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    }
+  }
 
   // Auto-calculate fee when amount or fee_method changes
   useEffect(() => {
@@ -302,7 +327,7 @@ export default function Expenses() {
 
     // BUDGET WARNING - Check if expense would exceed budget
     if (!bypassBudgetWarning) {
-      const budgetImpact = checkBudgetImpact(formData.category, formData.amount, formData.transaction_fee)
+      const budgetImpact = checkBudgetImpact(formData.category_slug, formData.amount, formData.transaction_fee)
       if (budgetImpact && budgetImpact.wouldExceed) {
         // Show budget warning modal
         setBudgetWarningData(budgetImpact)
@@ -320,12 +345,13 @@ export default function Expenses() {
         ? parseFloat(formData.transaction_fee || 0)
         : calculateTransactionFee(parseFloat(formData.amount), formData.fee_method)
 
-      // Create new expense using service
+      // Create new expense using service with category_id (proper foreign key)
       const result = await expenseService.createExpense({
         account_id: formData.account_id,
         amount: parseFloat(formData.amount),
         date: formData.date,
-        category: formData.category,
+        category_id: formData.category_id,
+        category_slug: formData.category_slug,
         description: formData.description,
         payment_method: formData.payment_method,
         fee_method: formData.fee_method,
@@ -348,9 +374,9 @@ export default function Expenses() {
           .from('bill_reminders')
           .insert([{
             user_id: user.id,
-            name: formData.description || `${formData.category.charAt(0).toUpperCase() + formData.category.slice(1)} expense`,
+            name: formData.description || `${formData.category_slug.charAt(0).toUpperCase() + formData.category_slug.slice(1)} expense`,
             amount: parseFloat(formData.amount),
-            category: formData.category,
+            category: formData.category_slug, // Bill reminders still use slug for now
             payment_method: formData.payment_method,
             due_date: nextDueDate,
             frequency: recurringFrequency,
@@ -368,9 +394,11 @@ export default function Expenses() {
 
       // Reset form
       const primaryAccount = accounts.find(a => a.is_primary)
+      const defaultCategory = categoriesFlat.length > 0 ? categoriesFlat[0] : null
       setFormData({
         amount: '',
-        category: 'food',
+        category_id: defaultCategory?.id || '',
+        category_slug: defaultCategory?.slug || 'groceries',
         description: '',
         payment_method: 'mpesa',
         account_id: primaryAccount?.id || '',
@@ -399,7 +427,8 @@ export default function Expenses() {
     if (pendingExpenseData) {
       setFormData({
         amount: pendingExpenseData.amount,
-        category: pendingExpenseData.category,
+        category_id: pendingExpenseData.category_id,
+        category_slug: pendingExpenseData.category_slug,
         description: pendingExpenseData.description,
         payment_method: pendingExpenseData.payment_method,
         account_id: pendingExpenseData.account_id,
@@ -589,18 +618,36 @@ export default function Expenses() {
     const currentMonth = expenses.filter(e => {
       const d = new Date(e.date)
       const now = new Date()
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && !e.is_reversed
     })
     return currentMonth
       .filter(e => e.category === category)
       .reduce((sum, e) => sum + parseFloat(e.amount), 0)
   }
 
-  const topCategories = EXPENSE_CATEGORIES
-    .map(cat => ({ category: cat, total: getCategoryTotal(cat) }))
-    .filter(c => c.total > 0)
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5)
+  // Calculate top categories from actual expense data (not hardcoded list)
+  const topCategories = (() => {
+    const currentMonth = expenses.filter(e => {
+      const d = new Date(e.date)
+      const now = new Date()
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && !e.is_reversed
+    })
+
+    // Group expenses by category
+    const categoryTotals = {}
+    currentMonth.forEach(e => {
+      const cat = e.category || 'uncategorized'
+      if (!categoryTotals[cat]) categoryTotals[cat] = 0
+      categoryTotals[cat] += parseFloat(e.amount) + parseFloat(e.transaction_fee || 0)
+    })
+
+    // Convert to array and sort
+    return Object.entries(categoryTotals)
+      .map(([category, total]) => ({ category, total }))
+      .filter(c => c.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5)
+  })()
 
   if (loading) {
     return (
@@ -632,12 +679,13 @@ export default function Expenses() {
         <div className="card flex items-center justify-center">
           <button
             onClick={() => {
-              // Auto-select first budgeted category if available, otherwise default to 'food'
-              const firstBudgetedCategory = budgets.length > 0 ? budgets[0].category : 'food'
+              // Auto-select first budgeted category if available, otherwise default to first database category
+              const firstBudgetedCategory = budgets.length > 0 ? budgets[0].category : null
+              const defaultCategory = firstBudgetedCategory || (categoriesFlat.length > 0 ? categoriesFlat[0].slug : 'groceries')
 
               setFormData({
                 amount: '',
-                category: firstBudgetedCategory,
+                category: defaultCategory,
                 description: '',
                 payment_method: 'mpesa',
                 account_id: accounts.find(a => a.is_primary)?.id || '',
@@ -710,10 +758,15 @@ export default function Expenses() {
               onChange={(e) => setFilterCategory(e.target.value)}
             >
               <option value="all">All Categories</option>
-              {EXPENSE_CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                </option>
+              {/* Use hierarchical categories from database */}
+              {categoriesGrouped.map((group) => (
+                <optgroup key={group.parentSlug} label={group.parentName}>
+                  {group.categories.map((cat) => (
+                    <option key={cat.id} value={cat.slug}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>
@@ -750,12 +803,13 @@ export default function Expenses() {
             {expenses.length === 0 && (
               <button
                 onClick={() => {
-                  // Auto-select first budgeted category if available, otherwise default to 'food'
-                  const firstBudgetedCategory = budgets.length > 0 ? budgets[0].category : 'food'
+                  // Auto-select first budgeted category if available, otherwise default to first database category
+                  const firstBudgetedCategory = budgets.length > 0 ? budgets[0].category : null
+                  const defaultCategory = firstBudgetedCategory || (categoriesFlat.length > 0 ? categoriesFlat[0].slug : 'groceries')
 
                   setFormData({
                     amount: '',
-                    category: firstBudgetedCategory,
+                    category: defaultCategory,
                     description: '',
                     payment_method: 'mpesa',
                     account_id: accounts.find(a => a.is_primary)?.id || '',
@@ -950,7 +1004,7 @@ export default function Expenses() {
               {isMpesaAccount(selectedAccount) && !feeOverride ? (
                 <MpesaFeePreview
                   amount={formData.amount}
-                  category={formData.category}
+                  category={formData.category_slug}
                   selectedFeeMethod={formData.fee_method}
                   onFeeMethodChange={(method) => setFormData({ ...formData, fee_method: method })}
                   onFeeCalculated={(fee) => setFormData(prev => ({ ...prev, transaction_fee: fee.toString() }))}
@@ -1128,69 +1182,39 @@ export default function Expenses() {
                 </label>
                 <select
                   className="select"
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  value={formData.category_id}
+                  onChange={(e) => {
+                    const selectedCat = categoriesFlat.find(c => c.id === e.target.value)
+                    setFormData({
+                      ...formData,
+                      category_id: e.target.value,
+                      category_slug: selectedCat?.slug || ''
+                    })
+                  }}
                   required
                 >
-                  {/* Prioritize categories with active budgets */}
-                  {(() => {
-                    const categoriesWithBudgets = EXPENSE_CATEGORIES.filter(cat =>
-                      budgets.some(b => b.category === cat)
-                    )
-                    const categoriesWithoutBudgets = EXPENSE_CATEGORIES.filter(cat =>
-                      !budgets.some(b => b.category === cat)
-                    )
-
-                    return (
-                      <>
-                        {categoriesWithBudgets.length > 0 && categoriesWithoutBudgets.length > 0 && (
-                          <optgroup label="📊 Budgeted Categories">
-                            {categoriesWithBudgets.map((cat) => (
-                              <option key={cat} value={cat}>
-                                💰 {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {categoriesWithBudgets.length > 0 && categoriesWithoutBudgets.length === 0 && (
-                          <>
-                            {categoriesWithBudgets.map((cat) => (
-                              <option key={cat} value={cat}>
-                                💰 {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                              </option>
-                            ))}
-                          </>
-                        )}
-                        {categoriesWithoutBudgets.length > 0 && (
-                          <>
-                            {categoriesWithBudgets.length > 0 && (
-                              <optgroup label="Other Categories">
-                                {categoriesWithoutBudgets.map((cat) => (
-                                  <option key={cat} value={cat}>
-                                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )}
-                            {categoriesWithBudgets.length === 0 && (
-                              <>
-                                {categoriesWithoutBudgets.map((cat) => (
-                                  <option key={cat} value={cat}>
-                                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                                  </option>
-                                ))}
-                              </>
-                            )}
-                          </>
-                        )}
-                      </>
-                    )
-                  })()}
+                  {/* Hierarchical categories from database (per canonical spec) */}
+                  {categoriesGrouped.length > 0 ? (
+                    categoriesGrouped.map((group) => (
+                      <optgroup key={group.parentSlug} label={group.parentName}>
+                        {group.categories.map((cat) => {
+                          const hasBudget = budgets.some(b => b.category === cat.slug || b.category_id === cat.id)
+                          return (
+                            <option key={cat.id} value={cat.id}>
+                              {hasBudget ? '💰 ' : ''}{cat.name}
+                            </option>
+                          )
+                        })}
+                      </optgroup>
+                    ))
+                  ) : (
+                    <option value="">Loading categories...</option>
+                  )}
                 </select>
 
                 {/* Budget Impact Preview */}
                 {formData.amount && (() => {
-                  const budgetImpact = checkBudgetImpact(formData.category, formData.amount, formData.transaction_fee)
+                  const budgetImpact = checkBudgetImpact(formData.category_slug, formData.amount, formData.transaction_fee)
                   if (!budgetImpact) return null
 
                   return (
@@ -1596,7 +1620,7 @@ export default function Expenses() {
                 <p className="text-gray-600 dark:text-gray-400">
                   This expense would exceed your budget for{' '}
                   <span className="font-semibold text-gray-900 dark:text-gray-100 capitalize">
-                    {formData.category}
+                    {formData.category_slug}
                   </span>
                 </p>
               </div>

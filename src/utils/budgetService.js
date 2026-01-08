@@ -303,34 +303,79 @@ export async function getBudgetsWithSpending(userId, month) {
     const monthStart = new Date(month.getFullYear(), month.getMonth(), 1)
     const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0)
 
-    // Get budgets for the month
+    // Format month as YYYY-MM-01 without timezone conversion issues
+    const year = month.getFullYear()
+    const monthNum = String(month.getMonth() + 1).padStart(2, '0')
+    const monthString = `${year}-${monthNum}-01`
+
+    console.log('📅 Fetching budgets for month:', monthString)
+
+    // Get budgets for the month with category data
     const { data: budgets, error: budgetsError } = await supabase
       .from('budgets')
       .select(`
         id,
-        category,
+        category_id,
         monthly_limit,
         month,
         created_at,
-        updated_at
+        updated_at,
+        expense_categories!category_id (
+          id,
+          slug,
+          name,
+          parent_category_id
+        )
       `)
       .eq('user_id', userId)
-      .eq('month', monthStart.toISOString().split('T')[0])
+      .eq('month', monthString)
 
-    if (budgetsError || !budgets) {
-      console.error('Error fetching budgets:', budgetsError)
+    if (budgetsError) {
+      console.error('❌ Error fetching budgets:', budgetsError)
+      return []
+    }
+
+    console.log('📊 Raw budgets from DB:', budgets?.length || 0, budgets)
+
+    if (!budgets || budgets.length === 0) {
+      console.log('ℹ️ No budgets found for month:', monthString)
       return []
     }
 
     // Enrich each budget with spending data
     const enrichedBudgets = await Promise.all(
       budgets.map(async (budget) => {
-        const spent = await getCategoryActualSpending(userId, budget.category, monthStart, monthEnd)
+        // Extract category data from join
+        const categorySlug = budget.expense_categories?.slug
+        const categoryName = budget.expense_categories?.name
+
+        console.log('🔍 Processing budget:', {
+          id: budget.id,
+          category_id: budget.category_id,
+          expense_categories: budget.expense_categories,
+          categorySlug,
+          categoryName
+        })
+
+        if (!categorySlug) {
+          console.warn('⚠️ Budget missing category data:', budget.id, 'category_id:', budget.category_id)
+          return null
+        }
+
+        const spent = await getCategoryActualSpending(userId, categorySlug, monthStart, monthEnd)
         const status = getBudgetStatus(spent, parseFloat(budget.monthly_limit))
-        const forecast = await getCategoryForecastedSpending(userId, budget.category, month)
+        const forecast = await getCategoryForecastedSpending(userId, categorySlug, month)
 
         return {
-          ...budget,
+          id: budget.id,
+          category_id: budget.category_id,
+          category: categorySlug, // For backward compatibility
+          categorySlug,
+          categoryName,
+          monthly_limit: budget.monthly_limit,
+          month: budget.month,
+          created_at: budget.created_at,
+          updated_at: budget.updated_at,
           spent,
           remaining: Math.max(0, parseFloat(budget.monthly_limit) - spent),
           overspend: Math.max(0, spent - parseFloat(budget.monthly_limit)),
@@ -344,7 +389,8 @@ export async function getBudgetsWithSpending(userId, month) {
       })
     )
 
-    return enrichedBudgets
+    // Filter out any null entries (budgets with missing category data)
+    return enrichedBudgets.filter(b => b !== null)
   } catch (err) {
     console.error('Error getting budgets with spending:', err)
     return []
@@ -540,6 +586,106 @@ export async function getAllCategories(userId) {
   }
 }
 
+/**
+ * Get budgetable categories (excludes transfers, savings, investments per canonical spec)
+ * Returns only SUBCATEGORIES (budgets link to leaf nodes, not parents)
+ * @param {UUID} userId - User ID
+ * @returns {Array} Array of categories that can be budgeted
+ */
+export async function getBudgetableCategories(userId) {
+  try {
+    // Get all categories
+    const { data: allCategories, error } = await supabase
+      .from('expense_categories')
+      .select(`
+        id,
+        slug,
+        name,
+        parent_category_id,
+        is_system,
+        is_active,
+        display_order
+      `)
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .order('display_order', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching categories:', error)
+      return []
+    }
+
+    if (!allCategories || allCategories.length === 0) {
+      console.warn('No categories found for user:', userId)
+      return []
+    }
+
+    // Separate parents and subcategories
+    const parents = allCategories.filter(c => !c.parent_category_id)
+    const subcategories = allCategories.filter(c => c.parent_category_id)
+
+    console.log('📊 Categories breakdown:', {
+      total: allCategories.length,
+      parents: parents.length,
+      subcategories: subcategories.length
+    })
+
+    // Excluded slugs per canonical spec (non-budgetable categories)
+    const excludedSlugs = [
+      'transfers',
+      'savings-transfer',
+      'investment',
+      'lending',
+      'repayment',
+      'bad-debt',
+      'account-transfer'
+    ]
+
+    // Filter out excluded subcategories
+    const budgetableSubcategories = subcategories
+      .filter(c => !excludedSlugs.includes(c.slug))
+      .map(sub => {
+        const parent = parents.find(p => p.id === sub.parent_category_id)
+        return {
+          category_id: sub.id,
+          category_slug: sub.slug,
+          category_name: sub.name,
+          parent_id: sub.parent_category_id,
+          parent_name: parent?.name || null,
+          is_subcategory: true
+        }
+      })
+
+    console.log('📊 Budgetable subcategories:', budgetableSubcategories.length)
+
+    // Also include parent categories that have NO subcategories (standalone categories)
+    const standaloneParents = parents
+      .filter(parent => {
+        const hasChildren = subcategories.some(sub => sub.parent_category_id === parent.id)
+        return !hasChildren && !excludedSlugs.includes(parent.slug)
+      })
+      .map(parent => ({
+        category_id: parent.id,
+        category_slug: parent.slug,
+        category_name: parent.name,
+        parent_id: null,
+        parent_name: null,
+        is_subcategory: false
+      }))
+
+    console.log('📊 Standalone parents:', standaloneParents.length)
+
+    const result = [...budgetableSubcategories, ...standaloneParents]
+    console.log('📊 Total budgetable categories:', result.length)
+    console.log('📊 Sample categories:', result.slice(0, 5))
+
+    return result
+  } catch (err) {
+    console.error('Error getting budgetable categories:', err)
+    return []
+  }
+}
+
 export default {
   getCategoryActualSpending,
   getTotalActualSpending,
@@ -552,5 +698,6 @@ export default {
   getOverspentBudgets,
   getWarningBudgets,
   getCategoryBySlug,
-  getAllCategories
+  getAllCategories,
+  getBudgetableCategories
 }
