@@ -103,28 +103,20 @@ export default function ComprehensiveReports() {
       // Fetch summary data for the current date range
       const service = new ReportsService(supabase, user.id)
 
-      // Get income and expense data
-      const incomeResult = await service.getTransactions({
-        startDate: dateRange.from,
-        endDate: dateRange.to,
-        types: ['income']
-      })
-      const expenseResult = await service.getTransactions({
-        startDate: dateRange.from,
-        endDate: dateRange.to,
-        types: ['expense', 'payment']
-      })
-      const categoryResult = await service.getCategoryBreakdown({
-        startDate: dateRange.from,
-        endDate: dateRange.to
-      })
+      // Get income, expense, and category data using proper method signatures
+      const [incomeResult, expenseResult, categoryResult] = await Promise.all([
+        service.getIncomeTransactions(dateRange.from, dateRange.to),
+        service.getExpenseTransactions(dateRange.from, dateRange.to),
+        service.getCategoryBreakdown(dateRange.from, dateRange.to)
+      ])
 
-      const incomeData = incomeResult || []
-      const expenseData = expenseResult || []
-      const categoryData = categoryResult?.expenses || []
+      // Extract data from results (methods return objects with .transactions array)
+      const incomeTransactions = incomeResult?.transactions || []
+      const expenseTransactions = expenseResult?.transactions || []
+      const categoryData = categoryResult?.categories || []
 
-      const totalIncome = incomeData.reduce((sum, i) => sum + parseFloat(i.amount), 0)
-      const totalExpenses = expenseData.reduce((sum, e) => sum + parseFloat(e.amount) + parseFloat(e.transaction_fee || 0), 0)
+      const totalIncome = incomeResult?.total || 0
+      const totalExpenses = expenseResult?.total || 0
 
       // Calculate category percentages
       const categories = categoryData
@@ -146,7 +138,7 @@ export default function ComprehensiveReports() {
           netSavings: totalIncome - totalExpenses
         },
         categories,
-        transactions: expenseData.slice(0, 20),
+        transactions: expenseTransactions.slice(0, 20),
         generatedAt: new Date().toLocaleString('en-KE')
       }
 

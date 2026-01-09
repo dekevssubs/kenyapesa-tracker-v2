@@ -29,13 +29,20 @@ export default function BudgetVsActualTab({ dateRange }) {
     try {
       setLoading(true)
 
-      // Fetch budgets for the period
+      // Fetch budgets for the period with category data via join
       // Note: budgets.month column uses 'YYYY-MM-01' format (first day of month)
       const startMonth = dateRange.from.slice(0, 7) + '-01'
       const endMonth = dateRange.to.slice(0, 7) + '-01'
       const { data: budgets, error: budgetError } = await supabase
         .from('budgets')
-        .select('*')
+        .select(`
+          *,
+          expense_categories!category_id (
+            id,
+            slug,
+            name
+          )
+        `)
         .eq('user_id', user.id)
         .gte('month', startMonth)
         .lte('month', endMonth)
@@ -60,13 +67,15 @@ export default function BudgetVsActualTab({ dateRange }) {
       })
 
       // Group budgets by category and aggregate
+      // Use expense_categories.slug from the join, or fallback to category_id
       const budgetByCategory = {}
       budgets?.forEach(budget => {
-        const category = (budget.category || 'uncategorized').toLowerCase()
+        const category = (budget.expense_categories?.slug || budget.category || 'uncategorized').toLowerCase()
         if (!budgetByCategory[category]) {
           budgetByCategory[category] = { amount: 0, months: 0 }
         }
-        budgetByCategory[category].amount += parseFloat(budget.amount)
+        // Use monthly_limit (not amount) per budgets table schema
+        budgetByCategory[category].amount += parseFloat(budget.monthly_limit || budget.amount || 0)
         budgetByCategory[category].months++
       })
 

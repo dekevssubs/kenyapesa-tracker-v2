@@ -313,11 +313,12 @@ function LendingReceivables({ userId }) {
 
   const fetchLendings = async () => {
     try {
+      // Use overall_status column (not status) per lending_tracker schema
       const { data, error } = await supabase
         .from('lending_tracker')
         .select('*')
         .eq('user_id', userId)
-        .in('status', ['pending', 'partial'])
+        .in('overall_status', ['pending', 'partial'])
         .order('date_lent', { ascending: false })
 
       if (error) throw error
