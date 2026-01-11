@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { supabase } from '../../utils/supabase'
 import { formatCurrency } from '../../utils/calculations'
 import { ReportsService } from '../../utils/reportsService'
@@ -8,8 +9,29 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Ba
 
 const COLORS = ['#006B3F', '#BB0000', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F97316', '#06B6D4', '#84CC16']
 
+// Custom Tooltip component for dark mode support
+const CustomTooltip = ({ active, payload, label, isDark }) => {
+  if (!active || !payload || !payload.length) return null
+
+  return (
+    <div className={`px-3 py-2 rounded-lg shadow-lg border ${
+      isDark
+        ? 'bg-gray-800 border-gray-700 text-gray-100'
+        : 'bg-white border-gray-200 text-gray-900'
+    }`}>
+      {label && <p className="font-medium mb-1">{label}</p>}
+      {payload.map((entry, index) => (
+        <p key={index} style={{ color: entry.color || entry.payload?.fill }} className="text-sm">
+          {entry.name || entry.payload?.name}: {formatCurrency(entry.value)}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 export default function CategoryAnalysisTab({ dateRange }) {
   const { user } = useAuth()
+  const { isDark } = useTheme()
   const [loading, setLoading] = useState(true)
   const [categoryData, setCategoryData] = useState([])
   const [selectedCategory, setSelectedCategory] = useState(null)
@@ -360,15 +382,7 @@ export default function CategoryAnalysisTab({ dateRange }) {
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip
-                formatter={(value) => formatCurrency(value)}
-                contentStyle={{
-                  backgroundColor: 'var(--card-bg)',
-                  borderColor: 'var(--border-primary)',
-                  color: 'var(--text-primary)',
-                  borderRadius: '8px'
-                }}
-              />
+              <Tooltip content={<CustomTooltip isDark={isDark} />} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -424,23 +438,11 @@ export default function CategoryAnalysisTab({ dateRange }) {
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={categoryTrends}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-              <XAxis dataKey="month" stroke="var(--text-secondary)" />
-              <YAxis stroke="var(--text-secondary)" />
-              <Tooltip
-                formatter={(value, name) => {
-                  if (name === 'amount') return formatCurrency(value)
-                  if (name === 'avgTransaction') return formatCurrency(value)
-                  return value
-                }}
-                contentStyle={{
-                  backgroundColor: 'var(--card-bg)',
-                  borderColor: 'var(--border-primary)',
-                  color: 'var(--text-primary)',
-                  borderRadius: '8px'
-                }}
-              />
-              <Legend />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+              <XAxis dataKey="month" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Tooltip content={<CustomTooltip isDark={isDark} />} cursor={false} />
+              <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
               <Bar dataKey="amount" fill="#3B82F6" name="Total Spent" />
             </BarChart>
           </ResponsiveContainer>

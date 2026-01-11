@@ -1,13 +1,35 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { supabase } from '../../utils/supabase'
 import { formatCurrency } from '../../utils/calculations'
 import { ReportsService } from '../../utils/reportsService'
 import { Target, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 
+// Custom Tooltip component for dark mode support
+const CustomTooltip = ({ active, payload, label, isDark }) => {
+  if (!active || !payload || !payload.length) return null
+
+  return (
+    <div className={`px-3 py-2 rounded-lg shadow-lg border ${
+      isDark
+        ? 'bg-gray-800 border-gray-700 text-gray-100'
+        : 'bg-white border-gray-200 text-gray-900'
+    }`}>
+      {label && <p className="font-medium mb-1">{label}</p>}
+      {payload.map((entry, index) => (
+        <p key={index} style={{ color: entry.color }} className="text-sm">
+          {entry.name}: {formatCurrency(entry.value)}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 export default function BudgetVsActualTab({ dateRange }) {
   const { user } = useAuth()
+  const { isDark } = useTheme()
   const [loading, setLoading] = useState(true)
   const [budgetData, setBudgetData] = useState([])
   const [summary, setSummary] = useState({
@@ -245,19 +267,11 @@ export default function BudgetVsActualTab({ dateRange }) {
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Budget vs Actual by Category</h3>
         <ResponsiveContainer width="100%" height={400}>
           <BarChart data={budgetData.slice(0, 10)} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-            <XAxis type="number" stroke="var(--text-secondary)" />
-            <YAxis type="category" dataKey="category" width={120} stroke="var(--text-secondary)" />
-            <Tooltip
-              formatter={(value) => formatCurrency(value)}
-              contentStyle={{
-                backgroundColor: 'var(--card-bg)',
-                borderColor: 'var(--border-primary)',
-                color: 'var(--text-primary)',
-                borderRadius: '8px'
-              }}
-            />
-            <Legend />
+            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+            <XAxis type="number" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+            <YAxis type="category" dataKey="category" width={120} stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+            <Tooltip content={<CustomTooltip isDark={isDark} />} cursor={false} />
+            <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
             <Bar dataKey="budgeted" fill="#94A3B8" name="Budget" />
             <Bar dataKey="actual" name="Actual">
               {budgetData.slice(0, 10).map((entry, index) => (

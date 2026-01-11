@@ -1,12 +1,34 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { supabase } from '../../utils/supabase'
 import { formatCurrency } from '../../utils/calculations'
 import { Target, Calendar, CheckCircle, Clock, AlertTriangle, TrendingUp } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
+// Custom Tooltip component for dark mode support
+const CustomTooltip = ({ active, payload, label, isDark }) => {
+  if (!active || !payload || !payload.length) return null
+
+  return (
+    <div className={`px-3 py-2 rounded-lg shadow-lg border ${
+      isDark
+        ? 'bg-gray-800 border-gray-700 text-gray-100'
+        : 'bg-white border-gray-200 text-gray-900'
+    }`}>
+      {label && <p className="font-medium mb-1">{label}</p>}
+      {payload.map((entry, index) => (
+        <p key={index} style={{ color: entry.color }} className="text-sm">
+          {entry.name}: {entry.dataKey === 'progress' ? `${entry.value}%` : formatCurrency(entry.value)}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 export default function GoalsProgressTab() {
   const { user } = useAuth()
+  const { isDark } = useTheme()
   const [loading, setLoading] = useState(true)
   const [goals, setGoals] = useState([])
   const [summary, setSummary] = useState({
@@ -24,6 +46,30 @@ export default function GoalsProgressTab() {
     }
   }, [user])
 
+  /**
+   * Calculate goal balance from goal_allocations table
+   * This is the canonical way to get a goal's current amount
+   */
+  const calculateGoalBalance = async (goalId) => {
+    try {
+      const { data: allocations, error } = await supabase
+        .from('goal_allocations')
+        .select('amount')
+        .eq('goal_id', goalId)
+
+      if (error) throw error
+
+      if (!allocations || allocations.length === 0) {
+        return 0
+      }
+
+      return allocations.reduce((sum, alloc) => sum + parseFloat(alloc.amount || 0), 0)
+    } catch (error) {
+      console.error('Error calculating goal balance:', error)
+      return 0
+    }
+  }
+
   const fetchGoalsData = async () => {
     try {
       setLoading(true)
@@ -31,34 +77,32 @@ export default function GoalsProgressTab() {
       // Fetch all goals with linked accounts
       const { data: goalsData, error } = await supabase
         .from('goals')
-        .select('*')
+        .select(`
+          *,
+          linked_account:accounts!goals_linked_account_id_fkey (
+            id,
+            name,
+            current_balance
+          )
+        `)
         .eq('user_id', user.id)
         .order('deadline', { ascending: true, nullsFirst: false })
 
       if (error) throw error
 
-      // Fetch linked account balances
+      // Calculate actual goal progress from goal_allocations
+      // CANONICAL GOAL ALLOCATION ARCHITECTURE:
+      // - Goals are virtual accounts tracking allocations within real accounts
+      // - current_amount = SUM(goal_allocations.amount), NOT account.current_balance
+      // - One account can have multiple goals, each with its own allocation
       const goalsWithProgress = await Promise.all(
         (goalsData || []).map(async (goal) => {
-          let currentAmount = parseFloat(goal.current_amount) || 0
-
-          // If goal has a linked account, use account balance
-          if (goal.linked_account_id) {
-            const { data: account } = await supabase
-              .from('accounts')
-              .select('current_balance, name')
-              .eq('id', goal.linked_account_id)
-              .single()
-
-            if (account) {
-              currentAmount = parseFloat(account.current_balance) || 0
-              goal.linkedAccountName = account.name
-            }
-          }
+          // Get the actual allocated amount for this specific goal
+          const allocatedAmount = await calculateGoalBalance(goal.id)
 
           const targetAmount = parseFloat(goal.target_amount) || 0
-          const progress = targetAmount > 0 ? (currentAmount / targetAmount) * 100 : 0
-          const remaining = Math.max(0, targetAmount - currentAmount)
+          const progress = targetAmount > 0 ? (allocatedAmount / targetAmount) * 100 : 0
+          const remaining = Math.max(0, targetAmount - allocatedAmount)
 
           // Calculate days remaining
           const today = new Date()
@@ -67,23 +111,29 @@ export default function GoalsProgressTab() {
             ? Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24))
             : null
 
-          // Determine status
-          let status = 'in-progress'
-          if (progress >= 100) {
-            status = 'completed'
+          // Determine status based on goal.status field first, then calculate display status
+          let displayStatus = 'in-progress'
+          if (goal.status === 'completed' || progress >= 100) {
+            displayStatus = 'completed'
+          } else if (goal.status === 'abandoned') {
+            displayStatus = 'abandoned'
+          } else if (goal.status === 'paused') {
+            displayStatus = 'paused'
           } else if (daysRemaining !== null && daysRemaining < 0) {
-            status = 'overdue'
+            displayStatus = 'overdue'
           } else if (daysRemaining !== null && daysRemaining <= 30 && progress < 80) {
-            status = 'at-risk'
+            displayStatus = 'at-risk'
           }
 
           return {
             ...goal,
-            currentAmount,
+            currentAmount: allocatedAmount,
+            linkedAccountName: goal.linked_account?.name,
+            linkedAccountBalance: goal.linked_account?.current_balance,
             progress: Math.min(100, progress),
             remaining,
             daysRemaining,
-            status
+            status: displayStatus
           }
         })
       )
@@ -138,6 +188,20 @@ export default function GoalsProgressTab() {
           color: 'text-amber-500 dark:text-amber-400',
           bgColor: 'bg-amber-100 dark:bg-amber-900/30',
           label: 'At Risk'
+        }
+      case 'paused':
+        return {
+          icon: Clock,
+          color: 'text-yellow-500 dark:text-yellow-400',
+          bgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
+          label: 'Paused'
+        }
+      case 'abandoned':
+        return {
+          icon: AlertTriangle,
+          color: 'text-gray-500 dark:text-gray-400',
+          bgColor: 'bg-gray-100 dark:bg-gray-900/30',
+          label: 'Abandoned'
         }
       default:
         return {
@@ -234,18 +298,10 @@ export default function GoalsProgressTab() {
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Goals Overview</h3>
         <ResponsiveContainer width="100%" height={400}>
           <BarChart data={chartData} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-            <XAxis type="number" stroke="var(--text-secondary)" />
-            <YAxis type="category" dataKey="name" width={120} stroke="var(--text-secondary)" />
-            <Tooltip
-              formatter={(value) => formatCurrency(value)}
-              contentStyle={{
-                backgroundColor: 'var(--card-bg)',
-                borderColor: 'var(--border-primary)',
-                color: 'var(--text-primary)',
-                borderRadius: '8px'
-              }}
-            />
+            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+            <XAxis type="number" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+            <YAxis type="category" dataKey="name" width={120} stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+            <Tooltip content={<CustomTooltip isDark={isDark} />} cursor={false} />
             <Bar dataKey="target" fill="#94A3B8" name="Target" />
             <Bar dataKey="current" name="Current">
               {chartData.map((entry, index) => (

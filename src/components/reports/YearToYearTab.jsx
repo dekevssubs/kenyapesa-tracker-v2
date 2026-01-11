@@ -1,13 +1,35 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { supabase } from '../../utils/supabase'
 import { formatCurrency } from '../../utils/calculations'
 import { ReportsService } from '../../utils/reportsService'
 import { Calendar, TrendingUp, TrendingDown, BarChart3, PieChart } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
 
+// Custom Tooltip component for dark mode support
+const CustomTooltip = ({ active, payload, label, isDark }) => {
+  if (!active || !payload || !payload.length) return null
+
+  return (
+    <div className={`px-3 py-2 rounded-lg shadow-lg border ${
+      isDark
+        ? 'bg-gray-800 border-gray-700 text-gray-100'
+        : 'bg-white border-gray-200 text-gray-900'
+    }`}>
+      {label && <p className="font-medium mb-1">{label}</p>}
+      {payload.map((entry, index) => (
+        <p key={index} style={{ color: entry.color }} className="text-sm">
+          {entry.name}: {formatCurrency(entry.value)}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 export default function YearToYearTab() {
   const { user } = useAuth()
+  const { isDark } = useTheme()
   const [loading, setLoading] = useState(true)
   const [yearlyData, setYearlyData] = useState([])
   const [selectedYears, setSelectedYears] = useState([])
@@ -251,19 +273,11 @@ export default function YearToYearTab() {
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Annual Financial Comparison</h3>
         <ResponsiveContainer width="100%" height={400}>
           <BarChart data={[...yearlyData].reverse()}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-            <XAxis dataKey="year" stroke="var(--text-secondary)" />
-            <YAxis stroke="var(--text-secondary)" />
-            <Tooltip
-              formatter={(value) => formatCurrency(value)}
-              contentStyle={{
-                backgroundColor: 'var(--card-bg)',
-                borderColor: 'var(--border-primary)',
-                color: 'var(--text-primary)',
-                borderRadius: '8px'
-              }}
-            />
-            <Legend />
+            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+            <XAxis dataKey="year" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+            <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+            <Tooltip content={<CustomTooltip isDark={isDark} />} cursor={false} />
+            <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
             <Bar dataKey="income" fill="#10B981" name="Income" />
             <Bar dataKey="expenses" fill="#EF4444" name="Expenses" />
             <Bar dataKey="savings" fill="#3B82F6" name="Savings" />
@@ -277,19 +291,19 @@ export default function YearToYearTab() {
           <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Year-over-Year Growth Rates</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={[...yearlyData].reverse().filter((_, idx) => idx > 0)}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-              <XAxis dataKey="year" stroke="var(--text-secondary)" />
-              <YAxis stroke="var(--text-secondary)" />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+              <XAxis dataKey="year" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
               <Tooltip
                 formatter={(value) => `${value.toFixed(1)}%`}
                 contentStyle={{
-                  backgroundColor: 'var(--card-bg)',
-                  borderColor: 'var(--border-primary)',
-                  color: 'var(--text-primary)',
+                  backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+                  borderColor: isDark ? '#374151' : '#E5E7EB',
+                  color: isDark ? '#F3F4F6' : '#111827',
                   borderRadius: '8px'
                 }}
               />
-              <Legend />
+              <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
               <Line type="monotone" dataKey="incomeGrowth" stroke="#10B981" strokeWidth={2} name="Income Growth %" />
               <Line type="monotone" dataKey="expenseGrowth" stroke="#EF4444" strokeWidth={2} name="Expense Growth %" />
               <Line type="monotone" dataKey="savingsGrowth" stroke="#3B82F6" strokeWidth={2} name="Savings Growth %" />

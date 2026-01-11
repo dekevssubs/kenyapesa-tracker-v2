@@ -1,13 +1,35 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { supabase } from '../../utils/supabase'
 import { formatCurrency } from '../../utils/calculations'
 import { ReportsService } from '../../utils/reportsService'
 import { TrendingUp, TrendingDown, DollarSign, Calendar, AlertCircle, CheckCircle } from 'lucide-react'
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
 
+// Custom Tooltip component for dark mode support
+const CustomTooltip = ({ active, payload, label, isDark }) => {
+  if (!active || !payload || !payload.length) return null
+
+  return (
+    <div className={`px-3 py-2 rounded-lg shadow-lg border ${
+      isDark
+        ? 'bg-gray-800 border-gray-700 text-gray-100'
+        : 'bg-white border-gray-200 text-gray-900'
+    }`}>
+      {label && <p className="font-medium mb-1">{label}</p>}
+      {payload.map((entry, index) => (
+        <p key={index} style={{ color: entry.color }} className="text-sm">
+          {entry.name}: {formatCurrency(entry.value)}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 export default function CashFlowTab({ dateRange }) {
   const { user } = useAuth()
+  const { isDark } = useTheme()
   const [loading, setLoading] = useState(true)
   const [cashFlowData, setCashFlowData] = useState([])
   const [dailyData, setDailyData] = useState([])
@@ -306,18 +328,10 @@ export default function CashFlowTab({ dateRange }) {
                 <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-            <XAxis dataKey="dateFormatted" stroke="var(--text-secondary)" />
-            <YAxis stroke="var(--text-secondary)" />
-            <Tooltip
-              formatter={(value) => formatCurrency(value)}
-              contentStyle={{
-                backgroundColor: 'var(--card-bg)',
-                borderColor: 'var(--border-primary)',
-                color: 'var(--text-primary)',
-                borderRadius: '8px'
-              }}
-            />
+            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+            <XAxis dataKey="dateFormatted" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+            <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+            <Tooltip content={<CustomTooltip isDark={isDark} />} />
             <Area
               type="monotone"
               dataKey="cumulativeFlow"
@@ -335,19 +349,11 @@ export default function CashFlowTab({ dateRange }) {
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Daily Cash Flow</h3>
         <ResponsiveContainer width="100%" height={400}>
           <LineChart data={dailyData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-            <XAxis dataKey="dateFormatted" stroke="var(--text-secondary)" />
-            <YAxis stroke="var(--text-secondary)" />
-            <Tooltip
-              formatter={(value) => formatCurrency(value)}
-              contentStyle={{
-                backgroundColor: 'var(--card-bg)',
-                borderColor: 'var(--border-primary)',
-                color: 'var(--text-primary)',
-                borderRadius: '8px'
-              }}
-            />
-            <Legend />
+            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+            <XAxis dataKey="dateFormatted" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+            <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+            <Tooltip content={<CustomTooltip isDark={isDark} />} />
+            <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
             <Line type="monotone" dataKey="inflow" stroke="#10B981" strokeWidth={2} name="Inflow" />
             <Line type="monotone" dataKey="outflow" stroke="#EF4444" strokeWidth={2} name="Outflow" />
             <Line type="monotone" dataKey="netFlow" stroke="#3B82F6" strokeWidth={2} name="Net Flow" />
@@ -361,19 +367,11 @@ export default function CashFlowTab({ dateRange }) {
           <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Weekly Cash Flow Summary</h3>
           <ResponsiveContainer width="100%" height={350}>
             <BarChart data={weeklyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-              <XAxis dataKey="weekLabel" stroke="var(--text-secondary)" />
-              <YAxis stroke="var(--text-secondary)" />
-              <Tooltip
-                formatter={(value) => formatCurrency(value)}
-                contentStyle={{
-                  backgroundColor: 'var(--card-bg)',
-                  borderColor: 'var(--border-primary)',
-                  color: 'var(--text-primary)',
-                  borderRadius: '8px'
-                }}
-              />
-              <Legend />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+              <XAxis dataKey="weekLabel" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Tooltip content={<CustomTooltip isDark={isDark} />} cursor={false} />
+              <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
               <Bar dataKey="inflow" fill="#10B981" name="Inflow" />
               <Bar dataKey="outflow" fill="#EF4444" name="Outflow" />
               <Bar dataKey="netFlow" fill="#3B82F6" name="Net Flow" />

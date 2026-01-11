@@ -314,7 +314,7 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
               <XAxis dataKey="month" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
               <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
-              <Tooltip content={<CustomTooltip isDark={isDark} />} />
+              <Tooltip content={<CustomTooltip isDark={isDark} />} cursor={false} />
               <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
               <Bar dataKey="income" fill="#10B981" radius={[8, 8, 0, 0]} name="Income" />
               <Bar dataKey="expenses" fill="#EF4444" radius={[8, 8, 0, 0]} name="Expenses" />
