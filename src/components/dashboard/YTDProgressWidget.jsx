@@ -1,7 +1,86 @@
+import { useState, useEffect } from 'react'
 import { Calendar, TrendingUp, Target, AlertCircle } from 'lucide-react'
 import { formatCurrency } from '../../utils/calculations'
+import { supabase } from '../../utils/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function YTDProgressWidget({ comparisons, stats }) {
+  const { user } = useAuth()
+  const [topCategories, setTopCategories] = useState([])
+  const [overBudgetCategories, setOverBudgetCategories] = useState([])
+
+  useEffect(() => {
+    if (user) {
+      fetchSpendingInsights()
+    }
+  }, [user])
+
+  const fetchSpendingInsights = async () => {
+    try {
+      const ytdStart = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]
+      const today = new Date().toISOString().split('T')[0]
+
+      // Get top spending categories
+      const { data: expenses } = await supabase
+        .from('expenses')
+        .select('category, amount')
+        .eq('user_id', user.id)
+        .gte('date', ytdStart)
+        .lte('date', today)
+        .is('reversed_at', null)
+
+      if (expenses) {
+        const categoryTotals = {}
+        expenses.forEach(e => {
+          const cat = e.category || 'Uncategorized'
+          categoryTotals[cat] = (categoryTotals[cat] || 0) + parseFloat(e.amount)
+        })
+
+        const sorted = Object.entries(categoryTotals)
+          .map(([name, total]) => ({ name, total }))
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 3)
+
+        setTopCategories(sorted)
+      }
+
+      // Get over-budget categories
+      const { data: budgets } = await supabase
+        .from('budgets')
+        .select('category, amount')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+
+      if (budgets && expenses) {
+        const currentMonth = new Date().getMonth()
+        const monthStart = new Date(new Date().getFullYear(), currentMonth, 1).toISOString().split('T')[0]
+
+        const monthlyExpenses = {}
+        expenses.forEach(e => {
+          if (e.date >= monthStart) {
+            const cat = e.category || 'Uncategorized'
+            monthlyExpenses[cat] = (monthlyExpenses[cat] || 0) + parseFloat(e.amount)
+          }
+        })
+
+        const overBudget = budgets
+          .filter(b => monthlyExpenses[b.category] > parseFloat(b.amount))
+          .map(b => ({
+            name: b.category,
+            budget: parseFloat(b.amount),
+            spent: monthlyExpenses[b.category],
+            over: monthlyExpenses[b.category] - parseFloat(b.amount)
+          }))
+          .sort((a, b) => b.over - a.over)
+          .slice(0, 2)
+
+        setOverBudgetCategories(overBudget)
+      }
+    } catch (error) {
+      console.error('Error fetching spending insights:', error)
+    }
+  }
+
   if (!comparisons?.ytd) {
     return null
   }
@@ -227,14 +306,36 @@ export default function YTDProgressWidget({ comparisons, stats }) {
         <div className="mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
           <div className="flex items-start">
             <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 mr-2" />
-            <div>
+            <div className="flex-1">
               <p className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">Action Required</p>
-              <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-1">
+              <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-2">
                 {!incomeOnTrack && (
                   <li>• Increase income to stay on track for projected annual target</li>
                 )}
                 {!expensesOnTrack && (
-                  <li>• Reduce expenses to stay within projected annual budget</li>
+                  <li className="space-y-1">
+                    <span>• Reduce expenses to stay within projected annual budget</span>
+                    {overBudgetCategories.length > 0 && (
+                      <div className="ml-4 mt-1 p-2 bg-amber-100 dark:bg-amber-900/40 rounded text-xs">
+                        <p className="font-medium mb-1">Over-budget categories this month:</p>
+                        {overBudgetCategories.map((cat, idx) => (
+                          <p key={idx} className="text-amber-700 dark:text-amber-300">
+                            → {cat.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}: {formatCurrency(cat.over)} over budget
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    {topCategories.length > 0 && overBudgetCategories.length === 0 && (
+                      <div className="ml-4 mt-1 p-2 bg-amber-100 dark:bg-amber-900/40 rounded text-xs">
+                        <p className="font-medium mb-1">Top spending categories to review:</p>
+                        {topCategories.map((cat, idx) => (
+                          <p key={idx} className="text-amber-700 dark:text-amber-300">
+                            → {cat.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}: {formatCurrency(cat.total)} YTD
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </li>
                 )}
                 {!savingsOnTrack && (
                   <li>• Increase savings rate to meet annual savings goal</li>

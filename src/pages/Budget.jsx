@@ -32,9 +32,14 @@ export default function Budget() {
 
   useEffect(() => {
     if (user) {
-      fetchBudgetableCategories()
-      fetchBudgetsWithSpending()
-      calculatePredictions()
+      // Load categories and budgets first (parallel)
+      Promise.all([
+        fetchBudgetableCategories(),
+        fetchBudgetsWithSpending()
+      ]).then(() => {
+        // Load AI predictions after main data (non-blocking, advisory only)
+        calculatePredictions()
+      })
     }
   }, [user])
 
@@ -42,8 +47,6 @@ export default function Budget() {
   const fetchBudgetableCategories = async () => {
     try {
       const categories = await budgetService.getBudgetableCategories(user.id)
-      console.log('✅ Fetched budgetable categories:', categories)
-      console.log('✅ Total categories:', categories.length)
       setBudgetableCategories(categories)
 
       // Set default category if available
@@ -54,7 +57,7 @@ export default function Budget() {
         }))
       }
     } catch (error) {
-      console.error('❌ Error fetching budgetable categories:', error)
+      console.error('Error fetching budgetable categories:', error)
       toast.error('Failed to load categories')
     }
   }

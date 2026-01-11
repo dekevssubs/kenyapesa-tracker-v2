@@ -1,11 +1,31 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { supabase } from '../../utils/supabase'
 import { formatCurrency } from '../../utils/calculations'
 import { Briefcase, TrendingUp, TrendingDown, Wallet, CreditCard, PiggyBank, Building2 } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
 
 const COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4']
+
+// Custom Tooltip component for dark mode support
+const CustomTooltip = ({ active, payload, isDark }) => {
+  if (!active || !payload || !payload.length) return null
+
+  return (
+    <div className={`px-3 py-2 rounded-lg shadow-lg border ${
+      isDark
+        ? 'bg-gray-800 border-gray-700 text-gray-100'
+        : 'bg-white border-gray-200 text-gray-900'
+    }`}>
+      {payload.map((entry, index) => (
+        <p key={index} style={{ color: entry.payload?.fill || entry.color }} className="text-sm font-medium">
+          {entry.name || entry.payload?.name}: {formatCurrency(entry.value)}
+        </p>
+      ))}
+    </div>
+  )
+}
 
 const ACCOUNT_TYPE_ICONS = {
   cash: Wallet,
@@ -18,6 +38,7 @@ const ACCOUNT_TYPE_ICONS = {
 
 export default function PortfolioSummaryTab() {
   const { user } = useAuth()
+  const { isDark } = useTheme()
   const [loading, setLoading] = useState(true)
   const [accounts, setAccounts] = useState([])
   const [summary, setSummary] = useState({
@@ -207,15 +228,7 @@ export default function PortfolioSummaryTab() {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip
-                  formatter={(value) => formatCurrency(value)}
-                  contentStyle={{
-                    backgroundColor: 'var(--card-bg)',
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-primary)',
-                    borderRadius: '8px'
-                  }}
-                />
+                <Tooltip content={<CustomTooltip isDark={isDark} />} />
               </PieChart>
             </ResponsiveContainer>
           </div>

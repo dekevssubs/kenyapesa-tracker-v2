@@ -624,12 +624,6 @@ export async function getBudgetableCategories(userId) {
     const parents = allCategories.filter(c => !c.parent_category_id)
     const subcategories = allCategories.filter(c => c.parent_category_id)
 
-    console.log('📊 Categories breakdown:', {
-      total: allCategories.length,
-      parents: parents.length,
-      subcategories: subcategories.length
-    })
-
     // Excluded slugs per canonical spec (non-budgetable categories)
     const excludedSlugs = [
       'transfers',
@@ -656,8 +650,6 @@ export async function getBudgetableCategories(userId) {
         }
       })
 
-    console.log('📊 Budgetable subcategories:', budgetableSubcategories.length)
-
     // Also include parent categories that have NO subcategories (standalone categories)
     const standaloneParents = parents
       .filter(parent => {
@@ -673,12 +665,7 @@ export async function getBudgetableCategories(userId) {
         is_subcategory: false
       }))
 
-    console.log('📊 Standalone parents:', standaloneParents.length)
-
     const result = [...budgetableSubcategories, ...standaloneParents]
-    console.log('📊 Total budgetable categories:', result.length)
-    console.log('📊 Sample categories:', result.slice(0, 5))
-
     return result
   } catch (err) {
     console.error('Error getting budgetable categories:', err)

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { supabase } from '../utils/supabase'
 import { PortfolioService } from '../utils/portfolioService'
 import { formatCurrency } from '../utils/calculations'
@@ -37,8 +38,28 @@ import {
   Legend
 } from 'recharts'
 
+// Custom Tooltip component for dark mode support
+const CustomTooltip = ({ active, payload, isDark }) => {
+  if (!active || !payload || !payload.length) return null
+
+  return (
+    <div className={`px-3 py-2 rounded-lg shadow-lg border ${
+      isDark
+        ? 'bg-gray-800 border-gray-700 text-gray-100'
+        : 'bg-white border-gray-200 text-gray-900'
+    }`}>
+      {payload.map((entry, index) => (
+        <p key={index} style={{ color: entry.payload?.color || entry.color }} className="text-sm font-medium">
+          {entry.name || entry.payload?.name}: {formatCurrency(entry.value)}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 export default function Portfolio() {
   const { user } = useAuth()
+  const { isDark } = useTheme()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [portfolioData, setPortfolioData] = useState(null)
@@ -238,14 +259,7 @@ export default function Portfolio() {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip
-                        formatter={(value) => formatCurrency(value)}
-                        contentStyle={{
-                          backgroundColor: 'var(--bg-secondary)',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '8px'
-                        }}
-                      />
+                      <Tooltip content={<CustomTooltip isDark={isDark} />} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>

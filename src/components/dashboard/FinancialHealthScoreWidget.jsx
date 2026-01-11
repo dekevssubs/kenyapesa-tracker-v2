@@ -110,7 +110,7 @@ export default function FinancialHealthScoreWidget({ stats, comparisons }) {
   }
 
   const scoreColor = getScoreColor(healthMetrics.overallScore)
-  const circumference = 2 * Math.PI * 70
+  const circumference = 2 * Math.PI * 80
   const offset = circumference - (healthMetrics.overallScore / 100) * circumference
 
   return (
@@ -131,21 +131,21 @@ export default function FinancialHealthScoreWidget({ stats, comparisons }) {
       {/* Overall Score Circle */}
       <div className="flex items-center justify-center mb-8">
         <div className="relative">
-          <svg className="w-48 h-48 transform -rotate-90">
+          <svg className="w-52 h-52 transform -rotate-90">
             {/* Background circle */}
             <circle
-              cx="96"
-              cy="96"
-              r="70"
+              cx="104"
+              cy="104"
+              r="80"
               className="stroke-gray-200 dark:stroke-gray-700"
               strokeWidth="12"
               fill="none"
             />
             {/* Progress circle */}
             <circle
-              cx="96"
-              cy="96"
-              r="70"
+              cx="104"
+              cy="104"
+              r="80"
               stroke="currentColor"
               strokeWidth="12"
               fill="none"
@@ -156,13 +156,13 @@ export default function FinancialHealthScoreWidget({ stats, comparisons }) {
               style={{ transition: 'stroke-dashoffset 1s ease-in-out' }}
             />
           </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-5xl font-bold text-gray-900 dark:text-gray-100">
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-4">
+            <span className="text-4xl font-bold text-gray-900 dark:text-gray-100">
               {healthMetrics.overallScore}
             </span>
-            <span className="text-sm text-gray-600 dark:text-gray-400 mt-1">out of 100</span>
-            <span className="text-2xl mt-2">{scoreColor.emoji}</span>
-            <span className={`text-sm font-semibold mt-1 ${scoreColor.text}`}>
+            <span className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">out of 100</span>
+            <span className="text-xl mt-1">{scoreColor.emoji}</span>
+            <span className={`text-xs font-semibold mt-0.5 ${scoreColor.text}`}>
               {scoreColor.label}
             </span>
           </div>

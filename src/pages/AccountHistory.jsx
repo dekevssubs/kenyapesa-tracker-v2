@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency } from '../utils/calculations'
@@ -32,13 +33,17 @@ const TRANSACTION_TYPES = [
 
 export default function AccountHistory() {
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [accounts, setAccounts] = useState([])
   const [transactions, setTransactions] = useState([])
   const [filteredTransactions, setFilteredTransactions] = useState([])
 
+  // Get account from URL query parameter
+  const accountFromUrl = searchParams.get('account')
+
   // Filters
-  const [selectedAccount, setSelectedAccount] = useState('all')
+  const [selectedAccount, setSelectedAccount] = useState(accountFromUrl || 'all')
   const [selectedType, setSelectedType] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [dateRange, setDateRange] = useState({
@@ -46,6 +51,13 @@ export default function AccountHistory() {
     to: new Date().toISOString().split('T')[0]
   })
   const [showFilters, setShowFilters] = useState(true)
+
+  // Update selectedAccount when URL changes
+  useEffect(() => {
+    if (accountFromUrl) {
+      setSelectedAccount(accountFromUrl)
+    }
+  }, [accountFromUrl])
 
   useEffect(() => {
     if (user) {

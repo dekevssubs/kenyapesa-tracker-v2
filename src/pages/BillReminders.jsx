@@ -586,19 +586,19 @@ export default function BillReminders() {
               return (
                 <div
                   key={bill.id}
-                  className="flex items-center justify-between p-3 bg-white rounded-lg"
+                  className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg"
                 >
                   <div className="flex items-center space-x-3">
-                    <CategoryIcon className="h-5 w-5 text-gray-700" />
+                    <CategoryIcon className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                     <div>
-                      <p className="font-semibold text-gray-900">{bill.name}</p>
-                      <p className="text-xs text-red-600">
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">{bill.name}</p>
+                      <p className="text-xs text-red-600 dark:text-red-400">
                         {daysOverdue} {daysOverdue === 1 ? 'day' : 'days'} overdue
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
-                    <p className="font-bold text-red-600">{formatCurrency(bill.amount)}</p>
+                    <p className="font-bold text-red-600 dark:text-red-400">{formatCurrency(bill.amount)}</p>
                     <button
                       onClick={() => openPayModal(bill)}
                       className="px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors"
@@ -662,43 +662,43 @@ export default function BillReminders() {
                 <div
                   key={bill.id}
                   className={`p-4 rounded-lg transition-colors ${
-                    daysUntil < 0 ? 'bg-red-50 border border-red-200' :
-                    daysUntil <= 7 ? 'bg-amber-50 border border-amber-200' :
-                    'bg-gray-50 hover:bg-gray-100'
+                    daysUntil < 0 ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' :
+                    daysUntil <= 7 ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800' :
+                    'bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700'
                   }`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start space-x-4 flex-1">
-                      <div className="p-2.5 rounded-lg bg-white">
-                        <CategoryIcon className="h-7 w-7 text-gray-700" />
+                      <div className="p-2.5 rounded-lg bg-white dark:bg-gray-600">
+                        <CategoryIcon className="h-7 w-7 text-gray-700 dark:text-gray-300" />
                       </div>
 
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
-                          <p className="text-lg font-semibold text-gray-900">
+                          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                             {bill.name}
                           </p>
-                          <span className="badge bg-blue-100 text-blue-700 capitalize">
+                          <span className="badge bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 capitalize">
                             {bill.frequency}
                           </span>
-                          <span className="flex items-center text-xs text-gray-500">
+                          <span className="flex items-center text-xs text-gray-500 dark:text-gray-400">
                             <PaymentIcon className="h-3.5 w-3.5 mr-1" />
                             {bill.payment_method}
                           </span>
                         </div>
 
-                        <p className="text-sm text-gray-600 capitalize mb-1">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 capitalize mb-1">
                           Category: {bill.category}
                         </p>
 
                         {bill.notes && (
-                          <p className="text-sm text-gray-600 mb-2">
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                             {bill.notes}
                           </p>
                         )}
 
                         <div className="flex items-center space-x-4 text-sm">
-                          <span className="flex items-center text-gray-600">
+                          <span className="flex items-center text-gray-600 dark:text-gray-400">
                             <Calendar className="h-4 w-4 mr-1" />
                             Due: {new Date(bill.due_date).toLocaleDateString('en-KE', {
                               year: 'numeric',
@@ -715,7 +715,7 @@ export default function BillReminders() {
                     </div>
 
                     <div className="flex flex-col items-end space-y-2 ml-4">
-                      <p className="text-2xl font-bold text-gray-900">
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                         {formatCurrency(bill.amount)}
                       </p>
 
@@ -772,10 +772,10 @@ export default function BillReminders() {
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-full sm:max-w-md w-full p-4 sm:p-6 animate-slideIn">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-full sm:max-w-md w-full p-4 sm:p-6 animate-slideIn max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-gray-900">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                 {editingBill ? 'Edit Bill Reminder' : 'Add New Bill Reminder'}
               </h3>
               <button
@@ -783,7 +783,7 @@ export default function BillReminders() {
                   setShowModal(false)
                   setEditingBill(null)
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -791,10 +791,10 @@ export default function BillReminders() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="form-group">
-                <label className="label">Bill Name *</label>
+                <label className="label text-gray-700 dark:text-gray-300">Bill Name *</label>
                 <input
                   type="text"
-                  className="input"
+                  className="input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   placeholder="e.g., Electricity Bill, Rent"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -803,11 +803,11 @@ export default function BillReminders() {
               </div>
 
               <div className="form-group">
-                <label className="label">Amount (KES) *</label>
+                <label className="label text-gray-700 dark:text-gray-300">Amount (KES) *</label>
                 <input
                   type="number"
                   step="0.01"
-                  className="input"
+                  className="input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   placeholder="2000"
                   value={formData.amount}
                   onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
@@ -816,9 +816,9 @@ export default function BillReminders() {
               </div>
 
               <div className="form-group">
-                <label className="label">Category *</label>
+                <label className="label text-gray-700 dark:text-gray-300">Category *</label>
                 <select
-                  className="select"
+                  className="select dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   required
@@ -832,9 +832,9 @@ export default function BillReminders() {
               </div>
 
               <div className="form-group">
-                <label className="label">Payment Method *</label>
+                <label className="label text-gray-700 dark:text-gray-300">Payment Method *</label>
                 <select
-                  className="select"
+                  className="select dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   value={formData.payment_method}
                   onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
                   required
@@ -848,10 +848,10 @@ export default function BillReminders() {
               </div>
 
               <div className="form-group">
-                <label className="label">Due Date *</label>
+                <label className="label text-gray-700 dark:text-gray-300">Due Date *</label>
                 <input
                   type="date"
-                  className="input"
+                  className="input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   value={formData.due_date}
                   onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
                   required
@@ -859,9 +859,9 @@ export default function BillReminders() {
               </div>
 
               <div className="form-group">
-                <label className="label">Frequency *</label>
+                <label className="label text-gray-700 dark:text-gray-300">Frequency *</label>
                 <select
-                  className="select"
+                  className="select dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   value={formData.frequency}
                   onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
                   required
@@ -875,9 +875,9 @@ export default function BillReminders() {
               </div>
 
               <div className="form-group">
-                <label className="label">Notes (Optional)</label>
+                <label className="label text-gray-700 dark:text-gray-300">Notes (Optional)</label>
                 <textarea
-                  className="textarea"
+                  className="textarea dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   placeholder="Add any notes..."
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}

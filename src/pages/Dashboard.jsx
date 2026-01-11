@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { formatCurrency } from '../utils/calculations'
 import { useBudgetAlerts } from '../hooks/useBudgetAlerts'
 import { useRecurringExpenses } from '../hooks/useRecurringExpenses'
@@ -38,8 +39,29 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis
 
 const COLORS = ['#006B3F', '#BB0000', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899']
 
+// Custom Tooltip component for dark mode support
+const CustomTooltip = ({ active, payload, label, isDark }) => {
+  if (!active || !payload || !payload.length) return null
+
+  return (
+    <div className={`px-3 py-2 rounded-lg shadow-lg border ${
+      isDark
+        ? 'bg-gray-800 border-gray-700 text-gray-100'
+        : 'bg-white border-gray-200 text-gray-900'
+    }`}>
+      <p className="font-medium mb-1">{label}</p>
+      {payload.map((entry, index) => (
+        <p key={index} style={{ color: entry.color }} className="text-sm">
+          {entry.name}: {formatCurrency(entry.value)}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { user } = useAuth()
+  const { isDark } = useTheme()
   const [loading, setLoading] = useState(true)
   const [selectedPeriod, setSelectedPeriod] = useState(PERIOD_TYPES.THIS_MONTH)
   const [customRange, setCustomRange] = useState({ from: '', to: '' })
@@ -289,19 +311,11 @@ export default function Dashboard() {
           <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Monthly Comparison</h3>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={monthlyComparison}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-              <XAxis dataKey="month" stroke="var(--text-secondary)" />
-              <YAxis stroke="var(--text-secondary)" />
-              <Tooltip
-                formatter={(value) => formatCurrency(value)}
-                contentStyle={{
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-primary)',
-                  backgroundColor: 'var(--card-bg)',
-                  color: 'var(--text-primary)'
-                }}
-              />
-              <Legend />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+              <XAxis dataKey="month" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Tooltip content={<CustomTooltip isDark={isDark} />} />
+              <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
               <Bar dataKey="income" fill="#10B981" radius={[8, 8, 0, 0]} name="Income" />
               <Bar dataKey="expenses" fill="#EF4444" radius={[8, 8, 0, 0]} name="Expenses" />
             </BarChart>
@@ -331,15 +345,7 @@ export default function Dashboard() {
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip
-                      formatter={(value) => formatCurrency(value)}
-                      contentStyle={{
-                        borderRadius: '8px',
-                        border: '1px solid var(--border-primary)',
-                        backgroundColor: 'var(--card-bg)',
-                        color: 'var(--text-primary)'
-                      }}
-                    />
+                    <Tooltip content={<CustomTooltip isDark={isDark} />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
