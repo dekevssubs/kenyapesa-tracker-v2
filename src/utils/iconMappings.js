@@ -53,7 +53,12 @@ import {
   CircleDollarSign,
   HelpCircle,
   Wrench,
-  Banknote
+  Banknote,
+  Church,
+  HandHeart,
+  HeartHandshake,
+  UsersRound,
+  HandCoins
 } from 'lucide-react'
 
 // ========================================
@@ -128,9 +133,24 @@ export const CATEGORY_ICONS = {
   'bank-fees': Building2,
   'transaction-charges': Receipt,
 
-  // Family & Social
+  // Family & Social (legacy)
   'gifts': Gift,
   'donations': Heart,
+
+  // Social (new parent)
+  'social': Users,
+  'tithing': Church,
+  'harambee': HandCoins,
+  'donation': HandHeart,
+
+  // Family (new parent)
+  'family': HeartHandshake,
+  'family-expense': UsersRound,
+  'family-support': HeartHandshake,
+  'black-tax': HandCoins,
+
+  // Housing (new subcategory)
+  'general-shopping': ShoppingBag,
 
   // Business
   'business-expenses': Briefcase,
@@ -328,9 +348,24 @@ export const CATEGORY_COLORS = {
   'bank-fees': 'text-slate-600 bg-slate-100 dark:text-slate-400 dark:bg-slate-900/30',
   'transaction-charges': 'text-slate-500 bg-slate-50 dark:text-slate-300 dark:bg-slate-900/20',
 
-  // Family & Social subcategories
+  // Family & Social subcategories (legacy)
   'gifts': 'text-pink-600 bg-pink-100 dark:text-pink-400 dark:bg-pink-900/30',
   'donations': 'text-rose-500 bg-rose-50 dark:text-rose-300 dark:bg-rose-900/20',
+
+  // Social parent and subcategories (new)
+  'social': 'text-violet-600 bg-violet-100 dark:text-violet-400 dark:bg-violet-900/30',
+  'tithing': 'text-violet-600 bg-violet-100 dark:text-violet-400 dark:bg-violet-900/30',
+  'harambee': 'text-violet-500 bg-violet-50 dark:text-violet-300 dark:bg-violet-900/20',
+  'donation': 'text-purple-500 bg-purple-50 dark:text-purple-300 dark:bg-purple-900/20',
+
+  // Family parent and subcategories (new)
+  'family': 'text-pink-600 bg-pink-100 dark:text-pink-400 dark:bg-pink-900/30',
+  'family-expense': 'text-pink-600 bg-pink-100 dark:text-pink-400 dark:bg-pink-900/30',
+  'family-support': 'text-pink-500 bg-pink-50 dark:text-pink-300 dark:bg-pink-900/20',
+  'black-tax': 'text-rose-600 bg-rose-100 dark:text-rose-400 dark:bg-rose-900/30',
+
+  // Housing subcategory (new)
+  'general-shopping': 'text-purple-500 bg-purple-50 dark:text-purple-300 dark:bg-purple-900/20',
 
   // Business subcategories
   'business-expenses': 'text-sky-600 bg-sky-100 dark:text-sky-400 dark:bg-sky-900/30',
