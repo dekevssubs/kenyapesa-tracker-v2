@@ -4,6 +4,18 @@ import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { GoalService } from '../utils/goalService'
 import { formatCurrency } from '../utils/calculations'
+import TransactionMessageParser from '../components/TransactionMessageParser'
+import { ACCOUNT_CATEGORIES } from '../constants'
+
+// Helper to determine parser type based on account category
+const getParserType = (account) => {
+  if (!account) return 'transaction'
+  const category = account.category?.toLowerCase()
+  if (ACCOUNT_CATEGORIES.MOBILE_MONEY.includes(category)) return 'mpesa'
+  if (ACCOUNT_CATEGORIES.BANK.includes(category)) return 'bank'
+  return 'transaction' // Default for cash, investment, etc.
+}
+
 import {
   Target,
   Plus,
@@ -21,7 +33,8 @@ import {
   AlertCircle,
   Clock,
   Eye,
-  Link2
+  Link2,
+  MessageSquare
 } from 'lucide-react'
 
 export default function Goals() {
@@ -39,6 +52,8 @@ export default function Goals() {
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [selectedGoal, setSelectedGoal] = useState(null)
   const [goalContributions, setGoalContributions] = useState([])
+  const [linkedAccountAllocations, setLinkedAccountAllocations] = useState(0) // Total allocations for linked account
+  const [showContributeMessageParser, setShowContributeMessageParser] = useState(false) // SMS parser for contributions
 
   // Form states
   const [formData, setFormData] = useState({
@@ -146,6 +161,27 @@ export default function Goals() {
     }
   }
 
+  // Handle parsed contribution message
+  const handleContributeParsed = (parsedData) => {
+    // Build notes with reference code
+    let notes = contributeData.notes || ''
+    if (parsedData.reference) {
+      notes = notes ? `${notes} - Ref: ${parsedData.reference}` : `Ref: ${parsedData.reference}`
+    }
+    if (parsedData.description) {
+      notes = notes ? `${parsedData.description} - ${notes}` : parsedData.description
+    }
+
+    setContributeData(prev => ({
+      ...prev,
+      amount: parsedData.amount ? parsedData.amount.toString() : prev.amount,
+      notes: notes.trim()
+    }))
+
+    setShowContributeMessageParser(false)
+    toast.success('Transaction details extracted from message')
+  }
+
   const handleContribute = async (e) => {
     e.preventDefault()
 
@@ -236,12 +272,36 @@ export default function Goals() {
   const viewGoalDetails = async (goal) => {
     setSelectedGoal(goal)
     setShowDetailsModal(true)
+    setLinkedAccountAllocations(0)
 
     const goalService = new GoalService(supabase, user.id)
     const result = await goalService.getGoalWithContributions(goal.id)
 
     if (result.success) {
       setGoalContributions(result.contributions)
+
+      // Fetch total allocations for the linked account (all goals linked to this account)
+      if (goal.linked_account_id) {
+        const { data: allGoalsForAccount } = await supabase
+          .from('goals')
+          .select(`
+            id,
+            goal_allocations (amount)
+          `)
+          .eq('user_id', user.id)
+          .eq('linked_account_id', goal.linked_account_id)
+          .in('status', ['active', 'paused'])
+
+        if (allGoalsForAccount) {
+          const totalAllocations = allGoalsForAccount.reduce((sum, g) => {
+            const goalAlloc = (g.goal_allocations || []).reduce(
+              (s, a) => s + parseFloat(a.amount || 0), 0
+            )
+            return sum + goalAlloc
+          }, 0)
+          setLinkedAccountAllocations(totalAllocations)
+        }
+      }
     }
   }
 
@@ -645,6 +705,30 @@ export default function Goals() {
             </div>
 
             <div className="p-6 pt-4">
+              {/* SMS Parser Button */}
+              <button
+                type="button"
+                onClick={() => setShowContributeMessageParser(true)}
+                className="w-full mb-4 py-2.5 px-4 border-2 border-dashed border-green-300 dark:border-green-700 rounded-lg text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors flex items-center justify-center text-sm font-medium"
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                {(() => {
+                  const selectedAccount = accounts.find(a => a.id === contributeData.from_account_id)
+                  const parserType = getParserType(selectedAccount)
+                  return parserType === 'mpesa' ? 'Parse M-Pesa SMS' :
+                         parserType === 'bank' ? 'Parse Bank SMS' :
+                         'Parse Transaction SMS'
+                })()}
+              </button>
+
+              {/* Transaction Message Parser Modal */}
+              {showContributeMessageParser && (
+                <TransactionMessageParser
+                  onParsed={handleContributeParsed}
+                  onClose={() => setShowContributeMessageParser(false)}
+                />
+              )}
+
               <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 mb-4 border border-blue-200 dark:border-blue-800">
                 <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">{selectedGoal.name}</h4>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -882,11 +966,19 @@ export default function Goals() {
 
                 {selectedGoal.linked_account && (
                   <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <div className="flex items-center mb-2">
-                      <Link2 className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        Linked Account: {selectedGoal.linked_account.name}
-                      </span>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center">
+                        <Link2 className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          Linked Account: {selectedGoal.linked_account.name}
+                        </span>
+                      </div>
+                      {/* Percentage of account allocated to this goal */}
+                      {parseFloat(selectedGoal.linked_account.current_balance) > 0 && (
+                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
+                          {((parseFloat(selectedGoal.current_amount || 0) / parseFloat(selectedGoal.linked_account.current_balance)) * 100).toFixed(1)}% of account
+                        </span>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
@@ -899,6 +991,18 @@ export default function Goals() {
                         <p className="text-gray-500 dark:text-gray-400">Account Total</p>
                         <p className="font-semibold text-gray-900 dark:text-gray-100">
                           {formatCurrency(selectedGoal.linked_account.current_balance || 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">Available in Account</p>
+                        <p className="font-semibold text-green-600 dark:text-green-400">
+                          {formatCurrency(parseFloat(selectedGoal.linked_account.current_balance || 0) - linkedAccountAllocations)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">Total Allocated (All Goals)</p>
+                        <p className="font-semibold text-purple-600 dark:text-purple-400">
+                          {formatCurrency(linkedAccountAllocations)}
                         </p>
                       </div>
                     </div>

@@ -168,22 +168,22 @@ export default function Settings() {
 
       {/* Profile Information - FIXED SPACING */}
       <div className="card">
-        <div className="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-200">
-          <div className="bg-kenya-green bg-opacity-10 rounded-xl p-3">
+        <div className="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="bg-kenya-green bg-opacity-10 dark:bg-opacity-20 rounded-xl p-3">
             <User className="h-6 w-6 text-kenya-green" />
           </div>
-          <h3 className="text-2xl font-bold text-gray-900">Profile Information</h3>
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Profile Information</h3>
         </div>
 
         <form onSubmit={handleUpdateProfile} className="space-y-6">
           {/* Full Name - BETTER SPACING */}
           <div className="space-y-3">
-            <label className="block text-base font-semibold text-gray-700">
+            <label className="block text-base font-semibold text-gray-700 dark:text-gray-300">
               Full Name
             </label>
             <input
               type="text"
-              className="input text-base py-3.5"
+              className="input text-base py-3.5 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
               placeholder="John Kamau"
               value={profile.full_name}
               onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
@@ -193,28 +193,28 @@ export default function Settings() {
 
           {/* Email - Read Only - BETTER SPACING */}
           <div className="space-y-3">
-            <label className="block text-base font-semibold text-gray-700 flex items-center">
-              <Mail className="h-4 w-4 mr-2 text-gray-500" />
+            <label className="block text-base font-semibold text-gray-700 dark:text-gray-300 flex items-center">
+              <Mail className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" />
               Email Address
             </label>
             <input
               type="email"
-              className="input text-base py-3.5 bg-gray-100 cursor-not-allowed"
+              className="input text-base py-3.5 bg-gray-100 dark:bg-gray-600 dark:border-gray-500 dark:text-gray-300 cursor-not-allowed"
               value={user?.email}
               disabled
             />
-            <p className="text-sm text-gray-500 mt-2">Email cannot be changed</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Email cannot be changed</p>
           </div>
 
           {/* Phone Number - BETTER SPACING */}
           <div className="space-y-3">
-            <label className="block text-base font-semibold text-gray-700 flex items-center">
-              <Phone className="h-4 w-4 mr-2 text-gray-500" />
+            <label className="block text-base font-semibold text-gray-700 dark:text-gray-300 flex items-center">
+              <Phone className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" />
               Phone Number
             </label>
             <input
               type="tel"
-              className="input text-base py-3.5"
+              className="input text-base py-3.5 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
               placeholder="+254 712 345 678"
               value={profile.phone_number}
               onChange={(e) => setProfile({ ...profile, phone_number: e.target.value })}
@@ -224,26 +224,26 @@ export default function Settings() {
           {/* Salary and Currency - BETTER SPACING */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-3">
-              <label className="block text-base font-semibold text-gray-700 flex items-center">
-                <DollarSign className="h-4 w-4 mr-2 text-gray-500" />
+              <label className="block text-base font-semibold text-gray-700 dark:text-gray-300 flex items-center">
+                <DollarSign className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" />
                 Monthly Salary (Gross)
               </label>
               <input
                 type="number"
-                className="input text-base py-3.5"
+                className="input text-base py-3.5 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                 placeholder="100,000"
                 value={profile.monthly_salary}
                 onChange={(e) => setProfile({ ...profile, monthly_salary: e.target.value })}
               />
-              <p className="text-sm text-gray-500">Used for quick calculations</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Used for quick calculations</p>
             </div>
 
             <div className="space-y-3">
-              <label className="block text-base font-semibold text-gray-700">
+              <label className="block text-base font-semibold text-gray-700 dark:text-gray-300">
                 Currency
               </label>
               <select
-                className="select text-base py-3.5"
+                className="select text-base py-3.5 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                 value={profile.currency}
                 onChange={(e) => setProfile({ ...profile, currency: e.target.value })}
               >
@@ -279,54 +279,54 @@ export default function Settings() {
 
       {/* Account Statistics - BETTER LAYOUT */}
       <div className="card">
-        <div className="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-200">
-          <div className="bg-blue-500 bg-opacity-10 rounded-xl p-3">
-            <Calendar className="h-6 w-6 text-blue-600" />
+        <div className="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="bg-blue-500 bg-opacity-10 dark:bg-opacity-20 rounded-xl p-3">
+            <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
           </div>
-          <h3 className="text-2xl font-bold text-gray-900">Account Statistics</h3>
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Account Statistics</h3>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border border-blue-200">
-            <p className="text-3xl font-bold text-blue-600 mb-3">
+          <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-2xl border border-blue-200 dark:border-blue-700">
+            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-3">
               {new Date(user.created_at).toLocaleDateString('en-KE', { month: 'short', year: 'numeric' })}
             </p>
-            <p className="text-sm text-gray-600 font-medium">Member Since</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">Member Since</p>
           </div>
 
-          <div className="text-center p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-2xl border border-green-200">
-            <p className="text-3xl font-bold text-green-600 mb-3">{profile.currency}</p>
-            <p className="text-sm text-gray-600 font-medium">Currency</p>
+          <div className="text-center p-6 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 rounded-2xl border border-green-200 dark:border-green-700">
+            <p className="text-3xl font-bold text-green-600 dark:text-green-400 mb-3">{profile.currency}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">Currency</p>
           </div>
 
-          <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl border border-purple-200">
-            <p className="text-3xl font-bold text-purple-600 mb-3">Active</p>
-            <p className="text-sm text-gray-600 font-medium">Status</p>
+          <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-2xl border border-purple-200 dark:border-purple-700">
+            <p className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-3">Active</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">Status</p>
           </div>
 
-          <div className="text-center p-6 bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl border border-orange-200">
-            <p className="text-3xl font-bold text-orange-600 mb-3">Free</p>
-            <p className="text-sm text-gray-600 font-medium">Plan</p>
+          <div className="text-center p-6 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/30 rounded-2xl border border-orange-200 dark:border-orange-700">
+            <p className="text-3xl font-bold text-orange-600 dark:text-orange-400 mb-3">Free</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">Plan</p>
           </div>
         </div>
       </div>
 
       {/* Data Management - BETTER SPACING */}
       <div className="card">
-        <div className="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-200">
-          <div className="bg-orange-500 bg-opacity-10 rounded-xl p-3">
-            <AlertCircle className="h-6 w-6 text-orange-600" />
+        <div className="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="bg-orange-500 bg-opacity-10 dark:bg-opacity-20 rounded-xl p-3">
+            <AlertCircle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
           </div>
-          <h3 className="text-2xl font-bold text-gray-900">Data Management</h3>
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Data Management</h3>
         </div>
 
         <div className="space-y-6">
           {/* Export Data - BETTER PADDING */}
-          <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border-2 border-blue-200">
+          <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-2xl border-2 border-blue-200 dark:border-blue-700">
             <div className="flex items-start justify-between gap-6">
               <div className="flex-1">
-                <h4 className="text-lg font-bold text-gray-900 mb-3">Export Your Data</h4>
-                <p className="text-sm text-gray-700 leading-relaxed">
+                <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-3">Export Your Data</h4>
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                   Download all your financial data including income, expenses, deductions, and savings goals in JSON format for your records.
                 </p>
               </div>
@@ -341,11 +341,11 @@ export default function Settings() {
           </div>
 
           {/* Delete Account - BETTER PADDING */}
-          <div className="p-6 bg-gradient-to-br from-red-50 to-red-100 rounded-2xl border-2 border-red-200">
+          <div className="p-6 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/30 rounded-2xl border-2 border-red-200 dark:border-red-700">
             <div className="flex items-start justify-between gap-6">
               <div className="flex-1">
-                <h4 className="text-lg font-bold text-red-900 mb-3">Delete Account</h4>
-                <p className="text-sm text-red-700 leading-relaxed">
+                <h4 className="text-lg font-bold text-red-900 dark:text-red-300 mb-3">Delete Account</h4>
+                <p className="text-sm text-red-700 dark:text-red-400 leading-relaxed">
                   Permanently delete your account and all associated data. This action cannot be undone and you will lose all your financial records.
                 </p>
               </div>
@@ -362,32 +362,32 @@ export default function Settings() {
       </div>
 
       {/* App Information - BETTER LAYOUT */}
-      <div className="card bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200">
-        <h3 className="text-xl font-bold text-gray-900 mb-6">About KenyaPesa Tracker</h3>
+      <div className="card bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-2 border-gray-200 dark:border-gray-700">
+        <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">About KenyaPesa Tracker</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
-            <div className="flex justify-between items-center py-3 border-b border-gray-300">
-              <span className="text-sm font-medium text-gray-600">Version</span>
-              <span className="text-sm font-bold text-gray-900">1.0.0 (MVP)</span>
+            <div className="flex justify-between items-center py-3 border-b border-gray-300 dark:border-gray-600">
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Version</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">1.0.0 (MVP)</span>
             </div>
-            <div className="flex justify-between items-center py-3 border-b border-gray-300">
-              <span className="text-sm font-medium text-gray-600">Last Updated</span>
-              <span className="text-sm font-bold text-gray-900">January 2026</span>
+            <div className="flex justify-between items-center py-3 border-b border-gray-300 dark:border-gray-600">
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Last Updated</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">January 2026</span>
             </div>
           </div>
           <div className="space-y-4">
-            <div className="flex justify-between items-center py-3 border-b border-gray-300">
-              <span className="text-sm font-medium text-gray-600">Built For</span>
-              <span className="text-sm font-bold text-gray-900">Kenyan Employees</span>
+            <div className="flex justify-between items-center py-3 border-b border-gray-300 dark:border-gray-600">
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Built For</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Kenyan Employees</span>
             </div>
-            <div className="flex justify-between items-center py-3 border-b border-gray-300">
-              <span className="text-sm font-medium text-gray-600">Tax Year</span>
-              <span className="text-sm font-bold text-gray-900">2024/2025</span>
+            <div className="flex justify-between items-center py-3 border-b border-gray-300 dark:border-gray-600">
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Tax Year</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">2024/2025</span>
             </div>
           </div>
         </div>
-        <div className="mt-8 pt-6 border-t-2 border-gray-300 text-center">
-          <p className="text-gray-600 font-medium">Built with ❤️ for Kenyan employees</p>
+        <div className="mt-8 pt-6 border-t-2 border-gray-300 dark:border-gray-600 text-center">
+          <p className="text-gray-600 dark:text-gray-400 font-medium">Built with ❤️ for Kenyan employees</p>
         </div>
       </div>
     </div>

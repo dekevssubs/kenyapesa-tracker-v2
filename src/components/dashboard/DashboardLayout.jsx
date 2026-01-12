@@ -378,36 +378,6 @@ export default function DashboardLayout({ children }) {
               )
             })}
 
-            {/* Settings - Always visible */}
-            <div className="pt-2 mt-2 border-t border-[var(--border-primary)]">
-              <Link
-                to="/settings"
-                className={`
-                  group flex items-center justify-between px-3 py-2.5 rounded-lg
-                  text-sm font-medium transition-all duration-200
-                  ${isActive('/settings')
-                    ? 'bg-gradient-to-r from-primary-500/90 to-primary-600 text-white shadow-md shadow-primary-500/20'
-                    : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-item-hover)] hover:text-[var(--text-primary)]'
-                  }
-                `}
-              >
-                <div className="flex items-center">
-                  <div className={`
-                    p-1.5 rounded-lg mr-3 transition-colors duration-200
-                    ${isActive('/settings')
-                      ? 'bg-white/20'
-                      : 'bg-[var(--bg-secondary)]'
-                    }
-                  `}>
-                    <Settings className={`h-4 w-4 ${isActive('/settings') ? 'text-white' : 'text-[var(--text-muted)]'}`} />
-                  </div>
-                  <span>Settings</span>
-                </div>
-                {isActive('/settings') && (
-                  <ChevronRight className="h-4 w-4 opacity-70" />
-                )}
-              </Link>
-            </div>
           </nav>
         </div>
       </aside>

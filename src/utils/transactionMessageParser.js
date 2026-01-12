@@ -159,6 +159,33 @@ export function parseMpesaMessage(message) {
       if (result.transactionCost === null) {
         result.transactionCost = 0
       }
+
+    } else if (cleanMessage.toLowerCase().includes('bought') && cleanMessage.toLowerCase().includes('airtime')) {
+      // Airtime purchase: "You bought Ksh30.00 of airtime on 5/1/26 at 1:32 PM"
+      result.transactionType = 'airtime_purchase'
+
+      // Check if it's for self or another number
+      // "You bought Ksh30.00 of airtime for 0712345678" vs "You bought Ksh30.00 of airtime on..."
+      const forNumberMatch = cleanMessage.match(/airtime\s+for\s+(\d{10,})/i)
+      if (forNumberMatch) {
+        result.recipient = `Airtime for ${forNumberMatch[1]}`
+        result.recipientNumber = forNumberMatch[1]
+      } else {
+        result.recipient = 'Airtime (Self)'
+      }
+
+      // Extract amount from "bought Ksh30.00 of airtime"
+      const airtimeAmountMatch = cleanMessage.match(/bought\s+(?:Ksh|KES)\s*([\d,]+(?:\.\d{2})?)\s+of\s+airtime/i)
+      if (airtimeAmountMatch) {
+        result.amount = parseFloat(airtimeAmountMatch[1].replace(/,/g, ''))
+      } else if (amounts.length >= 1) {
+        result.amount = amounts[0]
+      }
+
+      // Default to 0 fee for airtime (usually free)
+      if (result.transactionCost === null) {
+        result.transactionCost = 0
+      }
     }
 
     // Balance was already extracted at the top (lines 57-60)
@@ -583,6 +610,10 @@ export const SAMPLE_MESSAGES = {
   mpesa_withdraw: "SMN4GHI012 Confirmed. Ksh5,000.00 withdrawn from MAMA NJERI - WESTLANDS on 23/12/24 at 4:20 PM. Transaction cost, Ksh33.00. New M-PESA balance is Ksh9,194.50.",
 
   mpesa_received: "SRP5JKL345 Confirmed. You have received Ksh3,000.00 from JANE WANJIKU 254722334455 on 23/12/24 at 11:00 AM. New M-PESA balance is Ksh18,194.50.",
+
+  mpesa_airtime_self: "UA50X2W2MA confirmed.You bought Ksh30.00 of airtime on 5/1/26 at 1:32 PM.New M-PESA balance is Ksh10,118.00. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,970.00. Start Investing today with Ziidi MMF & earn daily. Dial *334#.",
+
+  mpesa_airtime_other: "UB51Y3Z3NB confirmed.You bought Ksh100.00 of airtime for 0712345678 on 5/1/26 at 2:15 PM.New M-PESA balance is Ksh10,018.00. Transaction cost, Ksh0.00.",
 
   // Bank to Till (NCBA style)
   bank_to_till: `Your account 992****013 has been debited with KES 8,247.00 on 16/11/2025 at 17:29. Ref: FTX25320XAREM. For queries, call 0711056444 / 0732156444 or WhatsApp: 0717804444.

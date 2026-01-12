@@ -132,12 +132,19 @@ export default function Income() {
       const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
 
+      // Calculate monthly total, excluding reversed incomes
+      // Use the deposited amount (from account_transactions) for accurate total
       const monthlyTotal = (incomesWithDeposits || [])
         .filter(income => {
           const incomeDate = new Date(income.date)
-          return incomeDate >= firstDay && incomeDate <= lastDay
+          // Exclude reversed incomes from the total
+          return incomeDate >= firstDay && incomeDate <= lastDay && !income.is_reversed
         })
-        .reduce((sum, income) => sum + parseFloat(income.amount), 0)
+        .reduce((sum, income) => {
+          // Use deposited amount if available (accounts for deductions), otherwise fall back to income amount
+          const depositedAmount = income.deposited_transaction?.[0]?.amount || income.amount
+          return sum + parseFloat(depositedAmount)
+        }, 0)
 
       setTotalIncome(monthlyTotal)
       setLoading(false)
@@ -602,7 +609,8 @@ export default function Income() {
             {incomes.filter(i => {
               const d = new Date(i.date)
               const now = new Date()
-              return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+              // Exclude reversed incomes from the count
+              return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && !i.is_reversed
             }).length} transactions this month
           </p>
         </div>

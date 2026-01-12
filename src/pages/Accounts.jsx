@@ -30,7 +30,8 @@ import {
   CheckCircle,
   XCircle,
   PauseCircle,
-  CreditCard
+  CreditCard,
+  Target
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -61,6 +62,7 @@ export default function Accounts() {
     variant: 'danger',
     onConfirm: () => {}
   })
+  const [accountGoals, setAccountGoals] = useState({}) // Goals per account with allocations
 
   useEffect(() => {
     if (user) {
@@ -77,6 +79,49 @@ export default function Accounts() {
 
       setAccounts(accountsData)
       setBalances(balancesData)
+
+      // Fetch goals with allocations for each account
+      const { data: goalsData, error: goalsError } = await supabase
+        .from('goals')
+        .select(`
+          id,
+          name,
+          target_amount,
+          linked_account_id,
+          status,
+          goal_allocations (
+            amount
+          )
+        `)
+        .eq('user_id', user.id)
+        .in('status', ['active', 'paused'])
+
+      if (goalsError) throw goalsError
+
+      // Group goals by linked_account_id with calculated allocations
+      const goalsMap = {}
+      if (goalsData) {
+        goalsData.forEach(goal => {
+          if (goal.linked_account_id) {
+            if (!goalsMap[goal.linked_account_id]) {
+              goalsMap[goal.linked_account_id] = []
+            }
+            // Calculate current amount from allocations
+            const currentAmount = (goal.goal_allocations || [])
+              .reduce((sum, alloc) => sum + parseFloat(alloc.amount || 0), 0)
+
+            goalsMap[goal.linked_account_id].push({
+              id: goal.id,
+              name: goal.name,
+              target_amount: parseFloat(goal.target_amount || 0),
+              current_amount: currentAmount,
+              status: goal.status
+            })
+          }
+        })
+      }
+      setAccountGoals(goalsMap)
+
       setLoading(false)
     } catch (error) {
       console.error('Error fetching accounts:', error)
@@ -556,6 +601,11 @@ export default function Accounts() {
               const StatusIcon = statusConfig.icon
               const isInactive = account.is_active === false
 
+              // Calculate goal allocations for this account
+              const linkedGoals = accountGoals[account.id] || []
+              const totalGoalAllocations = linkedGoals.reduce((sum, g) => sum + g.current_amount, 0)
+              const availableBalance = parseFloat(account.current_balance || 0) - totalGoalAllocations
+
               return (
                 <div
                   key={account.id}
@@ -647,10 +697,35 @@ export default function Accounts() {
 
                     {/* Balance */}
                     <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 mb-4">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium uppercase tracking-wider">Current Balance</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium uppercase tracking-wider">Total Balance</p>
                       <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                         {showBalances ? formatCurrency(account.current_balance) : '••••••'}
                       </p>
+
+                      {/* Show Available vs Goal Allocations if account has linked goals */}
+                      {linkedGoals.length > 0 && showBalances && (
+                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-gray-600 dark:text-gray-400">Available</span>
+                            <span className="font-semibold text-green-600 dark:text-green-400">
+                              {formatCurrency(availableBalance)}
+                            </span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {linkedGoals.map((goal) => (
+                              <div key={goal.id} className="flex justify-between items-center text-sm">
+                                <span className="flex items-center text-gray-600 dark:text-gray-400">
+                                  <Target className="h-3 w-3 mr-1.5 text-purple-500" />
+                                  <span className="truncate max-w-[120px]" title={goal.name}>{goal.name}</span>
+                                </span>
+                                <span className="font-medium text-purple-600 dark:text-purple-400">
+                                  {formatCurrency(goal.current_amount)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Meta Info */}

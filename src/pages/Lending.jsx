@@ -27,6 +27,16 @@ import ForgivenessModal from '../components/lending/ForgivenessModal'
 import TransactionMessageParser from '../components/TransactionMessageParser'
 import MpesaFeePreview from '../components/MpesaFeePreview'
 import { FEE_METHODS } from '../utils/kenyaTransactionFees'
+import { ACCOUNT_CATEGORIES } from '../constants'
+
+// Helper to determine parser type based on account category
+const getParserType = (account) => {
+  if (!account) return 'transaction'
+  const category = account.category?.toLowerCase()
+  if (ACCOUNT_CATEGORIES.MOBILE_MONEY.includes(category)) return 'mpesa'
+  if (ACCOUNT_CATEGORIES.BANK.includes(category)) return 'bank'
+  return 'transaction' // Default for cash, investment, etc.
+}
 
 const STATUS_CONFIG = {
   pending: {
@@ -87,6 +97,8 @@ export default function Lending() {
   const [transactionFee, setTransactionFee] = useState(0)
   const [isBankTransfer, setIsBankTransfer] = useState(false) // Track if parsed message is bank transfer
   const [manualFeeEntry, setManualFeeEntry] = useState('') // Manual fee entry for bank transfers
+  const [feeOverride, setFeeOverride] = useState(false) // When true, use parsed fee instead of calculated
+  const [showRepaymentMessageParser, setShowRepaymentMessageParser] = useState(false) // SMS parser for repayments
 
   // Form data
   const [formData, setFormData] = useState({
@@ -241,11 +253,13 @@ export default function Lending() {
         // Reset fee for bank transfers - user will enter manually
         setManualFeeEntry('')
         setTransactionFee(0)
+        setFeeOverride(false) // Allow manual entry
         showToast('Success', 'Bank transfer details extracted. Please enter the transaction fee manually.', 'success')
       } else {
-        // M-Pesa messages include fee
-        if (parsedData.transactionFee && parsedData.transactionFee > 0) {
+        // M-Pesa messages include fee - USE THE PARSED FEE (truth is in the SMS!)
+        if (parsedData.transactionFee !== null && parsedData.transactionFee !== undefined) {
           setTransactionFee(parsedData.transactionFee)
+          setFeeOverride(true) // Lock the fee from being recalculated
         }
         showToast('Success', 'Transaction details extracted from message', 'success')
       }
@@ -255,8 +269,11 @@ export default function Lending() {
   }
 
   // Handle fee calculation from MpesaFeePreview
+  // Only update fee if not overridden by parsed message (truth is in the SMS)
   const handleFeeCalculated = (fee) => {
-    setTransactionFee(fee)
+    if (!feeOverride) {
+      setTransactionFee(fee)
+    }
   }
 
   // Handle manual fee entry for bank transfers
@@ -324,6 +341,40 @@ export default function Lending() {
       console.error('Error adding lending:', error)
       showToast('Error', error.message || 'Failed to save lending record', 'error')
     }
+  }
+
+  // Handle parsed repayment message
+  const handleRepaymentParsed = (parsedData) => {
+    // Parse date from SMS (format: "25/12/24 10:30 AM" or similar) to YYYY-MM-DD
+    let parsedDate = repaymentData.date // Keep current date as fallback
+    if (parsedData.transactionDate) {
+      try {
+        const datePart = parsedData.transactionDate.split(' ')[0]
+        const parts = datePart.split('/')
+        if (parts.length === 3) {
+          let [month, day, year] = parts
+          // Handle 2-digit year
+          if (year.length === 2) {
+            year = parseInt(year) > 50 ? `19${year}` : `20${year}`
+          }
+          // Pad month and day
+          month = month.padStart(2, '0')
+          day = day.padStart(2, '0')
+          parsedDate = `${year}-${month}-${day}`
+        }
+      } catch (e) {
+        console.error('Error parsing date from SMS:', e)
+      }
+    }
+
+    setRepaymentData(prev => ({
+      ...prev,
+      amount: parsedData.amount ? parsedData.amount.toString() : prev.amount,
+      date: parsedDate
+    }))
+
+    setShowRepaymentMessageParser(false)
+    showToast('Success', 'Transaction details extracted from message', 'success')
   }
 
   const handleRepayment = async (e) => {
@@ -437,6 +488,7 @@ export default function Lending() {
     setSelectedFeeMethod(FEE_METHODS.MPESA_SEND)
     setIsBankTransfer(false)
     setManualFeeEntry('')
+    setFeeOverride(false) // Reset fee override for fresh entry
   }
 
   const resetRepaymentData = () => {
@@ -915,6 +967,30 @@ export default function Lending() {
                 <X className="h-6 w-6" />
               </button>
             </div>
+
+            {/* SMS Parser Button */}
+            <button
+              type="button"
+              onClick={() => setShowRepaymentMessageParser(true)}
+              className="w-full mb-4 py-2.5 px-4 border-2 border-dashed border-green-300 dark:border-green-700 rounded-lg text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors flex items-center justify-center text-sm font-medium"
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              {(() => {
+                const selectedAccount = accounts.find(a => a.id === repaymentData.repay_to_account_id)
+                const parserType = getParserType(selectedAccount)
+                return parserType === 'mpesa' ? 'Parse M-Pesa SMS' :
+                       parserType === 'bank' ? 'Parse Bank SMS' :
+                       'Parse Transaction SMS'
+              })()}
+            </button>
+
+            {/* Transaction Message Parser Modal */}
+            {showRepaymentMessageParser && (
+              <TransactionMessageParser
+                onParsed={handleRepaymentParsed}
+                onClose={() => setShowRepaymentMessageParser(false)}
+              />
+            )}
 
             <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">

@@ -12,8 +12,18 @@ import { calculateTransactionFee, getAvailableFeeMethods, formatFeeBreakdown, FE
 import TransactionMessageParser from '../components/TransactionMessageParser'
 import MpesaFeePreview from '../components/MpesaFeePreview'
 import { getCategoriesGroupedByParent, getExpenseCategoriesForSelection } from '../utils/categoryService'
+import { ACCOUNT_CATEGORIES } from '../constants'
 
 const PAYMENT_METHODS = ['mpesa', 'cash', 'bank', 'card']
+
+// Helper to determine parser type based on account category
+const getParserType = (account) => {
+  if (!account) return 'transaction'
+  const category = account.category?.toLowerCase()
+  if (ACCOUNT_CATEGORIES.MOBILE_MONEY.includes(category)) return 'mpesa'
+  if (ACCOUNT_CATEGORIES.BANK.includes(category)) return 'bank'
+  return 'transaction' // Default for cash, investment, etc.
+}
 
 export default function Expenses() {
   const { user } = useAuth()
@@ -595,12 +605,36 @@ export default function Expenses() {
   }
 
   const handleParsedMessage = (parsedData) => {
-    // Update form data with parsed transaction details
+    // Parse the date from SMS (format: "5/1/26 1:32 PM" or "23/12/24") to YYYY-MM-DD
+    let parsedDate = formData.date // Keep current date as fallback
+    if (parsedData.transactionDate) {
+      try {
+        // Extract just the date part (before time)
+        const datePart = parsedData.transactionDate.split(' ')[0]
+        const parts = datePart.split('/')
+        if (parts.length === 3) {
+          let [month, day, year] = parts
+          // Handle 2-digit year
+          if (year.length === 2) {
+            year = parseInt(year) > 50 ? `19${year}` : `20${year}`
+          }
+          // Pad month and day
+          month = month.padStart(2, '0')
+          day = day.padStart(2, '0')
+          parsedDate = `${year}-${month}-${day}`
+        }
+      } catch (e) {
+        console.error('Error parsing date from SMS:', e)
+      }
+    }
+
+    // Update form data with parsed transaction details including date
     setFormData(prev => ({
       ...prev,
       amount: parsedData.amount.toString(),
       transaction_fee: parsedData.transactionFee.toString(),
-      description: `${parsedData.description}${parsedData.reference ? ' - Ref: ' + parsedData.reference : ''}`.trim()
+      description: `${parsedData.description}${parsedData.reference ? ' - Ref: ' + parsedData.reference : ''}`.trim(),
+      date: parsedDate
     }))
 
     // Set fee override since we got it from the message
@@ -1031,7 +1065,13 @@ export default function Expenses() {
                   className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium flex items-center mt-1"
                 >
                   <MessageSquare className="h-4 w-4 mr-1" />
-                  Parse Transaction Message
+                  {(() => {
+                    const selectedAccount = accounts.find(a => a.id === formData.account_id)
+                    const parserType = getParserType(selectedAccount)
+                    return parserType === 'mpesa' ? 'Parse M-Pesa SMS' :
+                           parserType === 'bank' ? 'Parse Bank SMS' :
+                           'Parse Transaction Message'
+                  })()}
                 </button>
               </div>
               <button
