@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Background circle with gradient -->
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981"/>
+      <stop offset="100%" style="stop-color:#059669"/>
+    </linearGradient>
+    <linearGradient id="arrowGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#ffffff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Main circle background -->
+  <circle cx="32" cy="32" r="30" fill="url(#bgGrad)"/>
+
+  <!-- Stylized "K" formed by bars and arrow -->
+  <!-- Left vertical bar -->
+  <rect x="16" y="18" width="6" height="28" rx="3" fill="white"/>
+
+  <!-- Growth arrow going up-right -->
+  <path d="M22 36 L32 26 L42 36" stroke="url(#arrowGrad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Arrow head pointing up-right -->
+  <path d="M38 20 L46 18 L44 26" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="46" cy="18" r="3" fill="#34d399"/>
+
+  <!-- Small coins/dots representing money -->
+  <circle cx="20" cy="50" r="2.5" fill="#34d399" opacity="0.8"/>
+  <circle cx="28" cy="48" r="2" fill="white" opacity="0.6"/>
+  <circle cx="36" cy="46" r="2.5" fill="#34d399" opacity="0.8"/>
+</svg>

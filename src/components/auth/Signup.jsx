@@ -107,9 +107,9 @@ export default function Signup() {
           <div className="mb-10">
             <div className="flex items-center space-x-3 mb-8">
               <img
-                src="/KenyaPesa-Logo.png"
+                src="/logo-full.svg"
                 alt="KenyaPesa"
-                className="h-16 w-auto drop-shadow-lg"
+                className="h-14 w-auto drop-shadow-lg"
               />
             </div>
 
@@ -172,9 +172,9 @@ export default function Signup() {
           <div className="lg:hidden text-center mb-8">
             <div className="flex justify-center mb-4">
               <img
-                src="/KenyaPesa-Logo.png"
+                src="/logo-full.svg"
                 alt="KenyaPesa"
-                className="h-20 w-auto"
+                className="h-16 w-auto"
               />
             </div>
             <p className="mt-2 text-sm text-[var(--text-secondary)]">

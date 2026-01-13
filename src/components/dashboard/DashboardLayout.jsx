@@ -265,9 +265,9 @@ export default function DashboardLayout({ children }) {
           <div className="flex items-center justify-between h-16 px-5 border-b border-[var(--border-primary)] flex-shrink-0">
             <Link to="/dashboard" className="flex items-center space-x-3 group">
               <img
-                src="/logo.png"
+                src="/logo.svg"
                 alt="KenyaPesa"
-                className="h-10 w-auto group-hover:scale-105 transition-transform duration-300"
+                className="h-10 w-10 group-hover:scale-105 transition-transform duration-300"
               />
               <div>
                 <span className="text-lg font-bold text-[var(--text-primary)]">KenyaPesa</span>
