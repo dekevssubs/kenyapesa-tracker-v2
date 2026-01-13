@@ -22,7 +22,12 @@
       "Bash(ls:*)",
       "Bash(npm run dev)",
       "Bash(supabase status:*)",
-      "Bash(del \"C:\\\\Users\\\\kelvin.ruttoh\\\\Downloads\\\\kenyapesa-tracker2\\\\kenyapesa-tracker\\\\src\\\\utils\\\\dataMigrationService.js\")"
+      "Bash(del \"C:\\\\Users\\\\kelvin.ruttoh\\\\Downloads\\\\kenyapesa-tracker2\\\\kenyapesa-tracker\\\\src\\\\utils\\\\dataMigrationService.js\")",
+      "Bash(npx supabase db reset)",
+      "Bash(npx supabase:*)",
+      "Bash(done)",
+      "Bash(set:*)",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_f50355a4c15f7c817ecff690d4775adf416a7b94 npx supabase:*)"
     ]
   }
 }

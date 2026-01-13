@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../utils/supabase'
-import { Settings as SettingsIcon, User, DollarSign, AlertCircle, Trash2, Download, Mail, Phone, Calendar, CheckCircle } from 'lucide-react'
+import { Settings as SettingsIcon, User, DollarSign, AlertCircle, Trash2, Download, Mail, Phone, Calendar, CheckCircle, Bell } from 'lucide-react'
+import EmailPreferences from '../components/settings/EmailPreferences'
 
 export default function Settings() {
   const { user, signOut } = useAuth()
@@ -275,6 +276,18 @@ export default function Settings() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Email Notifications */}
+      <div className="card">
+        <div className="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="bg-purple-500 bg-opacity-10 dark:bg-opacity-20 rounded-xl p-3">
+            <Bell className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Email Notifications</h3>
+        </div>
+
+        <EmailPreferences />
       </div>
 
       {/* Account Statistics - BETTER LAYOUT */}

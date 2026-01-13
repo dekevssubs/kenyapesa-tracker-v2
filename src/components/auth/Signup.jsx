@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
+import { useToast } from '../../contexts/ToastContext'
+import { sendVerificationEmail } from '../../services/emailService'
 import {
   Wallet,
   Mail,
@@ -16,7 +18,9 @@ import {
   Zap,
   BarChart3,
   PiggyBank,
-  ArrowRight
+  ArrowRight,
+  MailCheck,
+  Loader2
 } from 'lucide-react'
 
 export default function Signup() {
@@ -29,9 +33,12 @@ export default function Signup() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [verificationSent, setVerificationSent] = useState(false)
+  const [sendingVerification, setSendingVerification] = useState(false)
 
   const { signUp } = useAuth()
   const { toggleTheme, isDark } = useTheme()
+  const { toast } = useToast()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
@@ -63,9 +70,32 @@ export default function Signup() {
     } else {
       setSuccess(true)
       setLoading(false)
+
+      // Try to send verification email (non-blocking)
+      try {
+        await sendVerificationEmail()
+        setVerificationSent(true)
+      } catch (err) {
+        console.log('Verification email not sent:', err)
+        // Continue anyway - user can verify later
+      }
+
       setTimeout(() => {
         navigate('/dashboard')
-      }, 2000)
+      }, 3000)
+    }
+  }
+
+  const handleResendVerification = async () => {
+    setSendingVerification(true)
+    try {
+      await sendVerificationEmail()
+      setVerificationSent(true)
+      toast.success('Verification email sent!')
+    } catch (err) {
+      toast.error('Failed to send verification email')
+    } finally {
+      setSendingVerification(false)
     }
   }
 
@@ -194,9 +224,23 @@ export default function Signup() {
 
             {/* Success message */}
             {success && (
-              <div className="mb-6 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 text-sm flex items-center animate-fade-in">
-                <CheckCircle className="h-5 w-5 mr-2 flex-shrink-0" />
-                Account created successfully! Redirecting...
+              <div className="mb-6 p-5 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 animate-fade-in">
+                <div className="flex items-center text-green-600 dark:text-green-400 mb-3">
+                  <CheckCircle className="h-5 w-5 mr-2 flex-shrink-0" />
+                  <span className="font-semibold">Account created successfully!</span>
+                </div>
+                {verificationSent && (
+                  <div className="flex items-start text-green-700 dark:text-green-300 text-sm mt-2">
+                    <MailCheck className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>
+                      A verification email has been sent to <strong>{email}</strong>.
+                      Please check your inbox to verify your account.
+                    </span>
+                  </div>
+                )}
+                <p className="text-sm text-green-600 dark:text-green-400 mt-3">
+                  Redirecting to dashboard...
+                </p>
               </div>
             )}
 

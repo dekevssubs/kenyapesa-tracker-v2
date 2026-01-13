@@ -10,6 +10,9 @@ import { PageSkeleton, CompactPageSkeleton } from './components/ui/Skeleton'
 import Login from './components/auth/Login'
 import Signup from './components/auth/Signup'
 
+// Public pages - lazy loaded
+const Unsubscribe = lazy(() => import('./pages/Unsubscribe'))
+
 // Dashboard pages - lazy loaded for code splitting
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Income = lazy(() => import('./pages/Income'))
@@ -49,6 +52,7 @@ function App() {
               {/* Public routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/unsubscribe" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="spinner" /></div>}><Unsubscribe /></Suspense>} />
 
               {/* Protected routes with lazy loading */}
               <Route path="/dashboard" element={<LazyPrivateRoute><Dashboard /></LazyPrivateRoute>} />

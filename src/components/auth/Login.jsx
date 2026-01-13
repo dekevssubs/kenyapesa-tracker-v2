@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useToast } from '../../contexts/ToastContext'
+import { requestOTP, verifyOTP } from '../../services/emailService'
 import {
   Wallet,
   Mail,
@@ -18,7 +19,10 @@ import {
   Shield,
   Smartphone,
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  KeyRound,
+  ArrowLeft,
+  Loader2
 } from 'lucide-react'
 
 export default function Login() {
@@ -28,12 +32,19 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // OTP Login State
+  const [loginMode, setLoginMode] = useState('password') // 'password' | 'otp'
+  const [otpStep, setOtpStep] = useState('email') // 'email' | 'code'
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSending, setOtpSending] = useState(false)
+  const [otpExpiresIn, setOtpExpiresIn] = useState(0)
+
   const { signIn } = useAuth()
   const { toggleTheme, isDark } = useTheme()
   const { showToast } = useToast()
   const navigate = useNavigate()
 
-  const handleSubmit = async (e) => {
+  const handlePasswordLogin = async (e) => {
     e.preventDefault()
 
     if (!email || !password) {
@@ -54,6 +65,86 @@ export default function Login() {
       showToast('Welcome Back!', `Welcome back, ${userName}! Good to see you again.`, 'success', 5000)
       navigate('/dashboard')
     }
+  }
+
+  const handleRequestOTP = async (e) => {
+    e.preventDefault()
+
+    if (!email) {
+      setError('Please enter your email address')
+      return
+    }
+
+    setError('')
+    setOtpSending(true)
+
+    try {
+      const result = await requestOTP(email, 'login')
+      setOtpStep('code')
+      setOtpExpiresIn(result.expiresIn || 600)
+      showToast('OTP Sent', 'Check your email for the login code', 'success')
+
+      // Start countdown
+      const interval = setInterval(() => {
+        setOtpExpiresIn((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    } catch (err) {
+      setError(err.message || 'Failed to send OTP. Please try again.')
+    } finally {
+      setOtpSending(false)
+    }
+  }
+
+  const handleVerifyOTP = async (e) => {
+    e.preventDefault()
+
+    if (!otpCode || otpCode.length !== 6) {
+      setError('Please enter the 6-digit code')
+      return
+    }
+
+    setError('')
+    setLoading(true)
+
+    try {
+      const result = await verifyOTP(email, otpCode, 'login')
+
+      if (result.redirectUrl) {
+        // Redirect to the magic link for session creation
+        window.location.href = result.redirectUrl
+      } else {
+        showToast('Success!', 'Login verified successfully', 'success')
+        navigate('/dashboard')
+      }
+    } catch (err) {
+      if (err.message?.includes('expired')) {
+        setError('Code expired. Please request a new one.')
+      } else if (err.message?.includes('attempts')) {
+        setError('Too many attempts. Please request a new code.')
+      } else {
+        setError(err.message || 'Invalid code. Please try again.')
+      }
+      setLoading(false)
+    }
+  }
+
+  const resetOTPFlow = () => {
+    setOtpStep('email')
+    setOtpCode('')
+    setOtpExpiresIn(0)
+    setError('')
+  }
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
   const features = [
@@ -192,6 +283,41 @@ export default function Login() {
               </p>
             </div>
 
+            {/* Login Mode Toggle */}
+            <div className="flex bg-[var(--bg-tertiary)] rounded-xl p-1 mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMode('password')
+                  resetOTPFlow()
+                  setError('')
+                }}
+                className={`flex-1 flex items-center justify-center py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                  loginMode === 'password'
+                    ? 'bg-white dark:bg-gray-700 text-[var(--text-primary)] shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <Lock className="h-4 w-4 mr-2" />
+                Password
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMode('otp')
+                  setError('')
+                }}
+                className={`flex-1 flex items-center justify-center py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                  loginMode === 'otp'
+                    ? 'bg-white dark:bg-gray-700 text-[var(--text-primary)] shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <KeyRound className="h-4 w-4 mr-2" />
+                Email Code
+              </button>
+            </div>
+
             {/* Error message */}
             {error && (
               <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm animate-fade-in">
@@ -199,79 +325,214 @@ export default function Login() {
               </div>
             )}
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="form-group">
-                <label htmlFor="email" className="label">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-[var(--text-muted)]" />
+            {/* Password Login Form */}
+            {loginMode === 'password' && (
+              <form onSubmit={handlePasswordLogin} className="space-y-5">
+                <div className="form-group">
+                  <label htmlFor="email" className="label">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Mail className="h-5 w-5 text-[var(--text-muted)]" />
+                    </div>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      className="input pl-12"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={loading}
+                    />
                   </div>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    className="input pl-12"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={loading}
-                  />
                 </div>
-              </div>
 
-              <div className="form-group">
-                <label htmlFor="password" className="label">
-                  Password
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-[var(--text-muted)]" />
+                <div className="form-group">
+                  <label htmlFor="password" className="label">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-[var(--text-muted)]" />
+                    </div>
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      required
+                      className="input pl-12 pr-12"
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={loading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
                   </div>
-                  <input
-                    id="password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    required
-                    className="input pl-12 pr-12"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full btn-primary py-3.5 text-base flex items-center justify-center group"
-              >
-                {loading ? (
-                  <>
-                    <span className="spinner-sm mr-2" />
-                    Signing in...
-                  </>
-                ) : (
-                  <>
-                    Sign In
-                    <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                  </>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full btn-primary py-3.5 text-base flex items-center justify-center group"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      Signing in...
+                    </>
+                  ) : (
+                    <>
+                      Sign In
+                      <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* OTP Login Form */}
+            {loginMode === 'otp' && (
+              <>
+                {otpStep === 'email' && (
+                  <form onSubmit={handleRequestOTP} className="space-y-5">
+                    <div className="form-group">
+                      <label htmlFor="otp-email" className="label">
+                        Email Address
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <Mail className="h-5 w-5 text-[var(--text-muted)]" />
+                        </div>
+                        <input
+                          id="otp-email"
+                          name="email"
+                          type="email"
+                          autoComplete="email"
+                          required
+                          className="input pl-12"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          disabled={otpSending}
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      We'll send a 6-digit code to your email that you can use to sign in.
+                    </p>
+
+                    <button
+                      type="submit"
+                      disabled={otpSending}
+                      className="w-full btn-primary py-3.5 text-base flex items-center justify-center group"
+                    >
+                      {otpSending ? (
+                        <>
+                          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                          Sending code...
+                        </>
+                      ) : (
+                        <>
+                          Send Login Code
+                          <Mail className="ml-2 h-5 w-5" />
+                        </>
+                      )}
+                    </button>
+                  </form>
                 )}
-              </button>
-            </form>
+
+                {otpStep === 'code' && (
+                  <form onSubmit={handleVerifyOTP} className="space-y-5">
+                    <button
+                      type="button"
+                      onClick={resetOTPFlow}
+                      className="flex items-center text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-2"
+                    >
+                      <ArrowLeft className="h-4 w-4 mr-1" />
+                      Change email
+                    </button>
+
+                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                      <p className="text-sm text-green-700 dark:text-green-300">
+                        Code sent to <strong>{email}</strong>
+                      </p>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="otp-code" className="label">
+                        Enter 6-digit Code
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <KeyRound className="h-5 w-5 text-[var(--text-muted)]" />
+                        </div>
+                        <input
+                          id="otp-code"
+                          name="code"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={6}
+                          required
+                          className="input pl-12 text-center text-2xl tracking-[0.5em] font-mono"
+                          placeholder="000000"
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          disabled={loading}
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    {otpExpiresIn > 0 && (
+                      <p className="text-sm text-center text-[var(--text-secondary)]">
+                        Code expires in <span className="font-mono font-medium">{formatTime(otpExpiresIn)}</span>
+                      </p>
+                    )}
+
+                    {otpExpiresIn === 0 && (
+                      <button
+                        type="button"
+                        onClick={handleRequestOTP}
+                        className="text-sm text-green-600 dark:text-green-400 hover:underline"
+                      >
+                        Resend code
+                      </button>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={loading || otpCode.length !== 6}
+                      className="w-full btn-primary py-3.5 text-base flex items-center justify-center group"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                          Verifying...
+                        </>
+                      ) : (
+                        <>
+                          Verify & Sign In
+                          <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                        </>
+                      )}
+                    </button>
+                  </form>
+                )}
+              </>
+            )}
 
             {/* Sign up link */}
             <div className="mt-6 text-center">
