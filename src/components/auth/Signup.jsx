@@ -106,10 +106,11 @@ export default function Signup() {
           {/* Logo & Brand */}
           <div className="mb-10">
             <div className="flex items-center space-x-3 mb-8">
-              <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-3">
-                <Wallet className="h-10 w-10 text-white" />
-              </div>
-              <span className="text-3xl font-bold text-white">KenyaPesa</span>
+              <img
+                src="/KenyaPesa-Logo.png"
+                alt="KenyaPesa"
+                className="h-16 w-auto drop-shadow-lg"
+              />
             </div>
 
             <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-4">
@@ -170,11 +171,12 @@ export default function Signup() {
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
             <div className="flex justify-center mb-4">
-              <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-4 shadow-lg">
-                <Wallet className="h-10 w-10 text-white" />
-              </div>
+              <img
+                src="/KenyaPesa-Logo.png"
+                alt="KenyaPesa"
+                className="h-20 w-auto"
+              />
             </div>
-            <h1 className="text-2xl font-bold text-[var(--text-primary)]">KenyaPesa</h1>
             <p className="mt-2 text-sm text-[var(--text-secondary)]">
               Start your financial journey today
             </p>

@@ -264,12 +264,11 @@ export default function DashboardLayout({ children }) {
           {/* Logo Header */}
           <div className="flex items-center justify-between h-16 px-5 border-b border-[var(--border-primary)] flex-shrink-0">
             <Link to="/dashboard" className="flex items-center space-x-3 group">
-              <div className="relative">
-                <div className="bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl p-2.5 shadow-md group-hover:shadow-glow transition-shadow duration-300">
-                  <DollarSign className="h-6 w-6 text-white" />
-                </div>
-                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-[var(--sidebar-bg)]" />
-              </div>
+              <img
+                src="/logo.png"
+                alt="KenyaPesa"
+                className="h-10 w-auto group-hover:scale-105 transition-transform duration-300"
+              />
               <div>
                 <span className="text-lg font-bold text-[var(--text-primary)]">KenyaPesa</span>
                 <span className="block text-xs text-[var(--text-muted)] -mt-0.5">Finance Tracker</span>
