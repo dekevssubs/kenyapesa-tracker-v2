@@ -9,6 +9,7 @@ import { PageSkeleton, CompactPageSkeleton } from './components/ui/Skeleton'
 // Auth pages - loaded eagerly (small, needed immediately)
 import Login from './components/auth/Login'
 import Signup from './components/auth/Signup'
+import ForgotPassword from './components/auth/ForgotPassword'
 
 // Public pages - lazy loaded
 const Unsubscribe = lazy(() => import('./pages/Unsubscribe'))
@@ -52,6 +53,7 @@ function App() {
               {/* Public routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/unsubscribe" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="spinner" /></div>}><Unsubscribe /></Suspense>} />
 
               {/* Protected routes with lazy loading */}

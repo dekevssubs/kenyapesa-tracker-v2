@@ -11,7 +11,7 @@ import { ExpenseService } from '../utils/expenseService'
 import { calculateTransactionFee, getAvailableFeeMethods, formatFeeBreakdown, FEE_METHODS } from '../utils/kenyaTransactionFees'
 import TransactionMessageParser from '../components/TransactionMessageParser'
 import MpesaFeePreview from '../components/MpesaFeePreview'
-import { getCategoriesGroupedByParent, getExpenseCategoriesForSelection } from '../utils/categoryService'
+import { getCategoriesGroupedByParent, getExpenseCategoriesForSelection, ensureUserHasCategories } from '../utils/categoryService'
 import { ACCOUNT_CATEGORIES } from '../constants'
 
 const PAYMENT_METHODS = ['mpesa', 'cash', 'bank', 'card']
@@ -126,6 +126,12 @@ export default function Expenses() {
   // Fetch categories from database (per canonical spec)
   const fetchCategories = async () => {
     try {
+      // First ensure user has categories (seeds them if needed)
+      const ensureResult = await ensureUserHasCategories(user.id)
+      if (ensureResult.seeded) {
+        console.log('Categories were seeded for new user')
+      }
+
       const [grouped, flat] = await Promise.all([
         getCategoriesGroupedByParent(user.id),
         getExpenseCategoriesForSelection(user.id)
@@ -236,12 +242,28 @@ export default function Expenses() {
       const currentMonth = new Date().toISOString().split('T')[0].slice(0, 7) + '-01'
       const { data, error } = await supabase
         .from('budgets')
-        .select('*')
+        .select(`
+          id,
+          category_id,
+          monthly_limit,
+          month,
+          expense_categories!category_id (
+            id,
+            slug,
+            name
+          )
+        `)
         .eq('user_id', user.id)
         .eq('month', currentMonth)
 
       if (error) throw error
-      setBudgets(data || [])
+      // Transform to include category slug for compatibility
+      const transformedBudgets = (data || []).map(b => ({
+        ...b,
+        category: b.expense_categories?.slug,
+        categoryName: b.expense_categories?.name
+      }))
+      setBudgets(transformedBudgets)
     } catch (error) {
       console.error('Error fetching budgets:', error)
     }
@@ -777,12 +799,15 @@ export default function Expenses() {
           <button
             onClick={() => {
               // Auto-select first budgeted category if available, otherwise default to first database category
-              const firstBudgetedCategory = budgets.length > 0 ? budgets[0].category : null
-              const defaultCategory = firstBudgetedCategory || (categoriesFlat.length > 0 ? categoriesFlat[0].slug : 'groceries')
+              const firstBudgetedCategoryId = budgets.length > 0 ? budgets[0].category_id : null
+              const defaultCategoryObj = firstBudgetedCategoryId
+                ? categoriesFlat.find(c => c.id === firstBudgetedCategoryId)
+                : categoriesFlat[0]
 
               setFormData({
                 amount: '',
-                category: defaultCategory,
+                category_id: defaultCategoryObj?.id || '',
+                category_slug: defaultCategoryObj?.slug || 'groceries',
                 description: '',
                 payment_method: 'mpesa',
                 account_id: accounts.find(a => a.is_primary)?.id || '',
@@ -921,12 +946,15 @@ export default function Expenses() {
               <button
                 onClick={() => {
                   // Auto-select first budgeted category if available, otherwise default to first database category
-                  const firstBudgetedCategory = budgets.length > 0 ? budgets[0].category : null
-                  const defaultCategory = firstBudgetedCategory || (categoriesFlat.length > 0 ? categoriesFlat[0].slug : 'groceries')
+                  const firstBudgetedCategoryId = budgets.length > 0 ? budgets[0].category_id : null
+                  const defaultCategoryObj = firstBudgetedCategoryId
+                    ? categoriesFlat.find(c => c.id === firstBudgetedCategoryId)
+                    : categoriesFlat[0]
 
                   setFormData({
                     amount: '',
-                    category: defaultCategory,
+                    category_id: defaultCategoryObj?.id || '',
+                    category_slug: defaultCategoryObj?.slug || 'groceries',
                     description: '',
                     payment_method: 'mpesa',
                     account_id: accounts.find(a => a.is_primary)?.id || '',
@@ -1295,14 +1323,7 @@ export default function Expenses() {
               </div>
 
               <div className="form-group">
-                <label className="label">
-                  Category *
-                  {budgets.length > 0 && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                      (💰 = Has budget)
-                    </span>
-                  )}
-                </label>
+                <label className="label">Category *</label>
                 <select
                   className="select"
                   value={formData.category_id}
@@ -1320,14 +1341,11 @@ export default function Expenses() {
                   {categoriesGrouped.length > 0 ? (
                     categoriesGrouped.map((group) => (
                       <optgroup key={group.parentSlug} label={group.parentName}>
-                        {group.categories.map((cat) => {
-                          const hasBudget = budgets.some(b => b.category === cat.slug || b.category_id === cat.id)
-                          return (
-                            <option key={cat.id} value={cat.id}>
-                              {hasBudget ? '💰 ' : ''}{cat.name}
-                            </option>
-                          )
-                        })}
+                        {group.categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
                       </optgroup>
                     ))
                   ) : (

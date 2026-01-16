@@ -16,10 +16,16 @@ export class BudgetAlertService {
    */
   async checkAllBudgets() {
     try {
-      // Fetch all active budgets for current month
+      // Fetch all active budgets for current month with category data
       const { data: budgets, error: budgetError } = await this.supabase
         .from('budgets')
-        .select('*')
+        .select(`
+          *,
+          expense_categories!category_id (
+            name,
+            slug
+          )
+        `)
         .eq('user_id', this.userId)
 
       if (budgetError) {
@@ -34,7 +40,13 @@ export class BudgetAlertService {
       const alerts = []
 
       for (const budget of budgets) {
-        const spent = await this.calculateCategorySpent(budget.category, budget.month)
+        // Get category info from joined data or fallback to legacy field
+        const categorySlug = budget.expense_categories?.slug || budget.category
+        const categoryName = budget.expense_categories?.name || budget.category || 'Unknown'
+
+        if (!categorySlug) continue // Skip if no category
+
+        const spent = await this.calculateCategorySpent(categorySlug, budget.month)
         const budgetLimit = parseFloat(budget.monthly_limit || 0)
         const percentage = budgetLimit > 0 ? (spent / budgetLimit) * 100 : 0
 
@@ -45,15 +57,15 @@ export class BudgetAlertService {
 
         if (percentage >= 100) {
           alertType = 'exceeded'
-          alertMessage = `Budget exceeded for ${budget.category}! You've spent KES ${spent.toFixed(2)} of KES ${budgetLimit.toFixed(2)}`
+          alertMessage = `Budget exceeded for ${categoryName}! You've spent KES ${spent.toFixed(2)} of KES ${budgetLimit.toFixed(2)}`
           toastType = 'error'
         } else if (percentage >= 90) {
           alertType = 'warning_90'
-          alertMessage = `90% budget alert: ${budget.category} (${percentage.toFixed(1)}% spent)`
+          alertMessage = `90% budget alert: ${categoryName} (${percentage.toFixed(1)}% spent)`
           toastType = 'warning'
         } else if (percentage >= 75) {
           alertType = 'warning_75'
-          alertMessage = `75% budget alert: ${budget.category} (${percentage.toFixed(1)}% spent)`
+          alertMessage = `75% budget alert: ${categoryName} (${percentage.toFixed(1)}% spent)`
           toastType = 'warning'
         }
 
@@ -73,7 +85,8 @@ export class BudgetAlertService {
 
             alerts.push({
               budgetId: budget.id,
-              category: budget.category,
+              category: categorySlug,
+              categoryName: categoryName,
               alertType,
               spent,
               budgetAmount: budgetLimit,
@@ -218,9 +231,13 @@ export class BudgetAlertService {
         .select(`
           *,
           budgets (
-            category,
-            amount,
-            month
+            category_id,
+            monthly_limit,
+            month,
+            expense_categories!category_id (
+              name,
+              slug
+            )
           )
         `)
         .eq('user_id', this.userId)
@@ -246,7 +263,13 @@ export class BudgetAlertService {
     try {
       const { data: budget, error: budgetError } = await this.supabase
         .from('budgets')
-        .select('*')
+        .select(`
+          *,
+          expense_categories!category_id (
+            name,
+            slug
+          )
+        `)
         .eq('id', budgetId)
         .eq('user_id', this.userId)
         .single()
@@ -255,7 +278,11 @@ export class BudgetAlertService {
         return null
       }
 
-      const spent = await this.calculateCategorySpent(budget.category, budget.month)
+      // Get category info from joined data or fallback to legacy field
+      const categorySlug = budget.expense_categories?.slug || budget.category
+      const categoryName = budget.expense_categories?.name || budget.category || 'Unknown'
+
+      const spent = await this.calculateCategorySpent(categorySlug, budget.month)
       const budgetLimit = parseFloat(budget.monthly_limit || 0)
       const remaining = budgetLimit - spent
       const percentage = budgetLimit > 0 ? (spent / budgetLimit) * 100 : 0
@@ -270,7 +297,11 @@ export class BudgetAlertService {
       }
 
       return {
-        budget,
+        budget: {
+          ...budget,
+          category: categorySlug,
+          categoryName: categoryName
+        },
         spent,
         remaining,
         percentage,
@@ -289,7 +320,13 @@ export class BudgetAlertService {
     try {
       const { data: budgets, error } = await this.supabase
         .from('budgets')
-        .select('*')
+        .select(`
+          *,
+          expense_categories!category_id (
+            name,
+            slug
+          )
+        `)
         .eq('user_id', this.userId)
 
       if (error || !budgets) {
@@ -298,7 +335,15 @@ export class BudgetAlertService {
 
       const statuses = await Promise.all(
         budgets.map(async (budget) => {
-          const spent = await this.calculateCategorySpent(budget.category, budget.month)
+          // Get category info from joined data or fallback to legacy field
+          const categorySlug = budget.expense_categories?.slug || budget.category
+          const categoryName = budget.expense_categories?.name || budget.category || 'Unknown'
+
+          if (!categorySlug) {
+            return null // Skip budgets without categories
+          }
+
+          const spent = await this.calculateCategorySpent(categorySlug, budget.month)
           const budgetLimit = parseFloat(budget.monthly_limit || 0)
           const remaining = budgetLimit - spent
           const percentage = budgetLimit > 0 ? (spent / budgetLimit) * 100 : 0
@@ -313,7 +358,11 @@ export class BudgetAlertService {
           }
 
           return {
-            budget,
+            budget: {
+              ...budget,
+              category: categorySlug,
+              categoryName: categoryName
+            },
             spent,
             remaining,
             percentage,
@@ -322,7 +371,7 @@ export class BudgetAlertService {
         })
       )
 
-      return statuses
+      return statuses.filter(s => s !== null)
     } catch (error) {
       console.error('Error in getAllBudgetStatuses:', error)
       return []

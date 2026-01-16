@@ -9,6 +9,7 @@ import ConfirmationModal from '../components/ConfirmationModal'
 import { useConfirmation } from '../hooks/useConfirmation'
 import { fetchAndPredict } from '../utils/aiPredictions'
 import budgetService from '../utils/budgetService'
+import { ensureUserHasCategories } from '../utils/categoryService'
 
 export default function Budget() {
   const { user } = useAuth()
@@ -46,6 +47,12 @@ export default function Budget() {
   // Fetch budgetable categories from database (per canonical spec)
   const fetchBudgetableCategories = async () => {
     try {
+      // First ensure user has categories (seeds them if needed)
+      const ensureResult = await ensureUserHasCategories(user.id)
+      if (ensureResult.seeded) {
+        console.log('Categories were seeded for new user')
+      }
+
       const categories = await budgetService.getBudgetableCategories(user.id)
       setBudgetableCategories(categories)
 

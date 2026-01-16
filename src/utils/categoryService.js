@@ -347,6 +347,71 @@ export async function getSubcategories(userId, parentId) {
 }
 
 /**
+ * Ensure user has categories (seeds default categories if none exist)
+ * This is a client-side fallback for when the database trigger fails
+ * @param {UUID} userId - User ID
+ * @returns {Object} { success, seeded, categories }
+ */
+export async function ensureUserHasCategories(userId) {
+  try {
+    // First check if user has any categories
+    const { data: existingCategories, error: checkError } = await supabase
+      .from('expense_categories')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1)
+
+    if (checkError) {
+      console.error('Error checking categories:', checkError)
+      return { success: false, seeded: false, error: checkError.message }
+    }
+
+    // If categories exist, we're good
+    if (existingCategories && existingCategories.length > 0) {
+      return { success: true, seeded: false }
+    }
+
+    // No categories found - try to seed them via database function
+    console.log('No categories found for user, attempting to seed...')
+
+    const { error: seedError } = await supabase
+      .rpc('create_default_categories_for_user', { p_user_id: userId })
+
+    if (seedError) {
+      console.error('Error seeding categories via RPC:', seedError)
+      // If RPC fails, the function might not exist in production
+      // Return error but don't block - categories might need manual seeding
+      return { success: false, seeded: false, error: seedError.message }
+    }
+
+    console.log('Successfully seeded default categories for user')
+    return { success: true, seeded: true }
+  } catch (err) {
+    console.error('Error in ensureUserHasCategories:', err)
+    return { success: false, seeded: false, error: err.message }
+  }
+}
+
+/**
+ * Get categories with auto-seeding fallback
+ * Use this instead of getAllExpenseCategories when you want to ensure categories exist
+ * @param {UUID} userId - User ID
+ * @returns {Object} { success, categories, hierarchy }
+ */
+export async function getCategoriesWithFallback(userId) {
+  // First, ensure user has categories
+  const ensureResult = await ensureUserHasCategories(userId)
+
+  if (!ensureResult.success && ensureResult.error) {
+    console.warn('Could not ensure categories exist:', ensureResult.error)
+    // Continue anyway - might have partial categories
+  }
+
+  // Now fetch categories
+  return getAllExpenseCategories(userId)
+}
+
+/**
  * Category service default export
  */
 const categoryService = {
@@ -358,7 +423,9 @@ const categoryService = {
   getCategoryIdFromSlug,
   mapLegacyCategoryToId,
   getParentCategories,
-  getSubcategories
+  getSubcategories,
+  ensureUserHasCategories,
+  getCategoriesWithFallback
 }
 
 export default categoryService

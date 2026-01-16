@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
-import { Settings as SettingsIcon, User, DollarSign, AlertCircle, Trash2, Download, Mail, Phone, Calendar, CheckCircle, Bell } from 'lucide-react'
+import { requestOTP, verifyOTP } from '../services/emailService'
+import { Settings as SettingsIcon, User, DollarSign, AlertCircle, Trash2, Download, Mail, Phone, Calendar, CheckCircle, Bell, Lock, Eye, EyeOff, KeyRound, Loader2, Shield } from 'lucide-react'
 import EmailPreferences from '../components/settings/EmailPreferences'
 
 export default function Settings() {
   const { user, signOut } = useAuth()
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
@@ -16,6 +19,20 @@ export default function Settings() {
     monthly_salary: '',
     currency: 'KES'
   })
+
+  // Password change state
+  const [passwordStep, setPasswordStep] = useState('idle') // 'idle' | 'otp' | 'password'
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSending, setOtpSending] = useState(false)
+  const [otpExpiresIn, setOtpExpiresIn] = useState(0)
+  const [passwordChanging, setPasswordChanging] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
 
   useEffect(() => {
     if (user) {
@@ -135,6 +152,119 @@ export default function Settings() {
       console.error('Error deleting account:', error)
       setMessage({ type: 'error', text: '✗ Error deleting account. Please try again.' })
     }
+  }
+
+  // Password change handlers
+  const startOtpTimer = (seconds = 600) => {
+    setOtpExpiresIn(seconds)
+    const timer = setInterval(() => {
+      setOtpExpiresIn(prev => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }
+
+  const handleStartPasswordChange = async () => {
+    setPasswordError('')
+    setOtpSending(true)
+
+    try {
+      await requestOTP(user.email, 'password_reset')
+      setPasswordStep('otp')
+      startOtpTimer(600)
+      showToast?.('Code Sent', 'Verification code sent to your email', 'success')
+    } catch (err) {
+      setPasswordError(err.message || 'Failed to send verification code')
+    } finally {
+      setOtpSending(false)
+    }
+  }
+
+  const handleVerifyPasswordOtp = async (e) => {
+    e.preventDefault()
+
+    if (!otpCode || otpCode.length !== 6) {
+      setPasswordError('Please enter the 6-digit code')
+      return
+    }
+
+    setPasswordError('')
+    setPasswordChanging(true)
+
+    try {
+      await verifyOTP(user.email, otpCode, 'password_reset')
+      setPasswordStep('password')
+      showToast?.('Verified', 'You can now set a new password', 'success')
+    } catch (err) {
+      setPasswordError(err.message || 'Invalid code. Please try again.')
+    } finally {
+      setPasswordChanging(false)
+    }
+  }
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault()
+
+    if (!newPassword || !confirmNewPassword) {
+      setPasswordError('Please fill in all fields')
+      return
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('Passwords do not match')
+      return
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters')
+      return
+    }
+
+    setPasswordError('')
+    setPasswordChanging(true)
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      })
+
+      if (error) throw error
+
+      showToast?.('Success', 'Password changed successfully!', 'success')
+      handleCancelPasswordChange()
+    } catch (err) {
+      setPasswordError(err.message || 'Failed to change password')
+    } finally {
+      setPasswordChanging(false)
+    }
+  }
+
+  const handleResendPasswordOtp = async () => {
+    setOtpSending(true)
+    setPasswordError('')
+    try {
+      await requestOTP(user.email, 'password_reset')
+      startOtpTimer(600)
+      showToast?.('Code Sent', 'New verification code sent', 'success')
+    } catch (err) {
+      setPasswordError('Failed to resend code')
+    } finally {
+      setOtpSending(false)
+    }
+  }
+
+  const handleCancelPasswordChange = () => {
+    setPasswordStep('idle')
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmNewPassword('')
+    setOtpCode('')
+    setPasswordError('')
+    setOtpExpiresIn(0)
   }
 
   if (loading) {
@@ -288,6 +418,227 @@ export default function Settings() {
         </div>
 
         <EmailPreferences />
+      </div>
+
+      {/* Security - Password Change */}
+      <div className="card">
+        <div className="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="bg-red-500 bg-opacity-10 dark:bg-opacity-20 rounded-xl p-3">
+            <Shield className="h-6 w-6 text-red-600 dark:text-red-400" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Security</h3>
+        </div>
+
+        {/* Password Error */}
+        {passwordError && (
+          <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
+            {passwordError}
+          </div>
+        )}
+
+        {/* Idle State - Show Change Password Button */}
+        {passwordStep === 'idle' && (
+          <div className="space-y-4">
+            <p className="text-gray-600 dark:text-gray-400">
+              Change your password to keep your account secure. You'll need to verify your email with a code first.
+            </p>
+            <button
+              onClick={handleStartPasswordChange}
+              disabled={otpSending}
+              className="btn btn-secondary py-3 px-6 flex items-center"
+            >
+              {otpSending ? (
+                <>
+                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                  Sending verification code...
+                </>
+              ) : (
+                <>
+                  <Lock className="h-5 w-5 mr-2" />
+                  Change Password
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* OTP Verification Step */}
+        {passwordStep === 'otp' && (
+          <form onSubmit={handleVerifyPasswordOtp} className="space-y-6">
+            <div className="text-center mb-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
+                <KeyRound className="h-8 w-8 text-green-600 dark:text-green-400" />
+              </div>
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Verify Your Identity</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Enter the 6-digit code sent to {user?.email}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-base font-semibold text-gray-700 dark:text-gray-300">
+                Verification Code
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <KeyRound className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  className="input pl-12 text-center text-2xl tracking-widest font-mono"
+                  placeholder="000000"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  disabled={passwordChanging}
+                  autoFocus
+                />
+              </div>
+              {otpExpiresIn > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                  Code expires in {Math.floor(otpExpiresIn / 60)}:{String(otpExpiresIn % 60).padStart(2, '0')}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="submit"
+                disabled={passwordChanging || otpCode.length !== 6}
+                className="btn btn-primary py-3 px-6 flex-1 flex items-center justify-center"
+              >
+                {passwordChanging ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-5 w-5 mr-2" />
+                    Verify Code
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelPasswordChange}
+                className="btn btn-secondary py-3 px-6"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={handleResendPasswordOtp}
+                disabled={otpSending || otpExpiresIn > 540}
+                className="text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50"
+              >
+                {otpSending ? 'Sending...' : "Didn't receive code? Resend"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* New Password Step */}
+        {passwordStep === 'password' && (
+          <form onSubmit={handleChangePassword} className="space-y-6">
+            <div className="text-center mb-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
+                <Lock className="h-8 w-8 text-green-600 dark:text-green-400" />
+              </div>
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Set New Password</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Create a strong password for your account
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-base font-semibold text-gray-700 dark:text-gray-300">
+                New Password
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  className="input pl-12 pr-12"
+                  placeholder="Enter new password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  disabled={passwordChanging}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                >
+                  {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Must be at least 6 characters
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-base font-semibold text-gray-700 dark:text-gray-300">
+                Confirm New Password
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type={showConfirmNewPassword ? 'text' : 'password'}
+                  className="input pl-12 pr-12"
+                  placeholder="Confirm new password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  disabled={passwordChanging}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                >
+                  {showConfirmNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="submit"
+                disabled={passwordChanging}
+                className="btn btn-primary py-3 px-6 flex-1 flex items-center justify-center"
+              >
+                {passwordChanging ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Changing password...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-5 w-5 mr-2" />
+                    Change Password
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelPasswordChange}
+                className="btn btn-secondary py-3 px-6"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* Account Statistics - BETTER LAYOUT */}

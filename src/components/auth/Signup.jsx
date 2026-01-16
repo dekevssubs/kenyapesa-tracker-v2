@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useToast } from '../../contexts/ToastContext'
-import { sendVerificationEmail } from '../../services/emailService'
+import { requestOTP, verifyOTP } from '../../services/emailService'
 import {
   Wallet,
   Mail,
@@ -20,7 +20,9 @@ import {
   PiggyBank,
   ArrowRight,
   MailCheck,
-  Loader2
+  Loader2,
+  KeyRound,
+  ArrowLeft
 } from 'lucide-react'
 
 export default function Signup() {
@@ -33,13 +35,31 @@ export default function Signup() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [verificationSent, setVerificationSent] = useState(false)
-  const [sendingVerification, setSendingVerification] = useState(false)
+
+  // OTP verification state
+  const [step, setStep] = useState('signup') // 'signup' | 'otp'
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSending, setOtpSending] = useState(false)
+  const [otpExpiresIn, setOtpExpiresIn] = useState(0)
 
   const { signUp } = useAuth()
   const { toggleTheme, isDark } = useTheme()
-  const { toast } = useToast()
+  const { showToast } = useToast()
   const navigate = useNavigate()
+
+  // Start OTP countdown timer
+  const startOtpTimer = (seconds = 600) => {
+    setOtpExpiresIn(seconds)
+    const timer = setInterval(() => {
+      setOtpExpiresIn(prev => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -68,35 +88,68 @@ export default function Signup() {
       setError(error.message)
       setLoading(false)
     } else {
-      setSuccess(true)
-      setLoading(false)
-
-      // Try to send verification email (non-blocking)
+      // Send OTP for email verification
+      setOtpSending(true)
       try {
-        await sendVerificationEmail()
-        setVerificationSent(true)
+        await requestOTP(email, 'verification')
+        setStep('otp')
+        startOtpTimer(600) // 10 minutes
+        showToast?.('Success', 'Verification code sent to your email', 'success')
       } catch (err) {
-        console.log('Verification email not sent:', err)
-        // Continue anyway - user can verify later
+        console.error('Failed to send OTP:', err)
+        setError('Failed to send verification code. Please try again.')
+      } finally {
+        setOtpSending(false)
+        setLoading(false)
       }
-
-      setTimeout(() => {
-        navigate('/dashboard')
-      }, 3000)
     }
   }
 
-  const handleResendVerification = async () => {
-    setSendingVerification(true)
-    try {
-      await sendVerificationEmail()
-      setVerificationSent(true)
-      toast.success('Verification email sent!')
-    } catch (err) {
-      toast.error('Failed to send verification email')
-    } finally {
-      setSendingVerification(false)
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault()
+
+    if (!otpCode || otpCode.length !== 6) {
+      setError('Please enter the 6-digit code')
+      return
     }
+
+    setError('')
+    setLoading(true)
+
+    try {
+      await verifyOTP(email, otpCode, 'verification')
+      setSuccess(true)
+      showToast?.('Success', 'Email verified successfully!', 'success')
+
+      // Redirect to dashboard after short delay
+      setTimeout(() => {
+        navigate('/dashboard')
+      }, 1500)
+    } catch (err) {
+      setError(err.message || 'Invalid or expired code. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResendOtp = async () => {
+    setOtpSending(true)
+    setError('')
+    try {
+      await requestOTP(email, 'verification')
+      startOtpTimer(600)
+      showToast?.('Success', 'New verification code sent!', 'success')
+    } catch (err) {
+      setError('Failed to resend code. Please try again.')
+    } finally {
+      setOtpSending(false)
+    }
+  }
+
+  const handleBackToSignup = () => {
+    setStep('signup')
+    setOtpCode('')
+    setError('')
   }
 
   const benefits = [
@@ -216,9 +269,14 @@ export default function Signup() {
           <div className="bg-[var(--card-bg)] rounded-2xl shadow-xl border border-[var(--border-primary)] p-8 animate-fade-in-up">
             {/* Header */}
             <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-[var(--text-primary)]">Create Account</h2>
+              <h2 className="text-2xl font-bold text-[var(--text-primary)]">
+                {step === 'otp' ? 'Verify Your Email' : 'Create Account'}
+              </h2>
               <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                It's free and takes less than a minute
+                {step === 'otp'
+                  ? `Enter the 6-digit code sent to ${email}`
+                  : "It's free and takes less than a minute"
+                }
               </p>
             </div>
 
@@ -227,17 +285,8 @@ export default function Signup() {
               <div className="mb-6 p-5 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 animate-fade-in">
                 <div className="flex items-center text-green-600 dark:text-green-400 mb-3">
                   <CheckCircle className="h-5 w-5 mr-2 flex-shrink-0" />
-                  <span className="font-semibold">Account created successfully!</span>
+                  <span className="font-semibold">Email verified successfully!</span>
                 </div>
-                {verificationSent && (
-                  <div className="flex items-start text-green-700 dark:text-green-300 text-sm mt-2">
-                    <MailCheck className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>
-                      A verification email has been sent to <strong>{email}</strong>.
-                      Please check your inbox to verify your account.
-                    </span>
-                  </div>
-                )}
                 <p className="text-sm text-green-600 dark:text-green-400 mt-3">
                   Redirecting to dashboard...
                 </p>
@@ -251,147 +300,227 @@ export default function Signup() {
               </div>
             )}
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="form-group">
-                <label htmlFor="fullName" className="label">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-[var(--text-muted)]" />
+            {/* OTP Verification Form */}
+            {step === 'otp' && !success && (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div className="form-group">
+                  <label htmlFor="otpCode" className="label">
+                    Verification Code
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <KeyRound className="h-5 w-5 text-[var(--text-muted)]" />
+                    </div>
+                    <input
+                      id="otpCode"
+                      name="otpCode"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      required
+                      className="input pl-12 text-center text-2xl tracking-widest font-mono"
+                      placeholder="000000"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      disabled={loading}
+                      autoFocus
+                    />
                   </div>
-                  <input
-                    id="fullName"
-                    name="fullName"
-                    type="text"
-                    required
-                    className="input pl-12"
-                    placeholder="John Kamau"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    disabled={loading}
-                  />
+                  {otpExpiresIn > 0 && (
+                    <p className="mt-2 text-xs text-[var(--text-muted)] text-center">
+                      Code expires in {Math.floor(otpExpiresIn / 60)}:{String(otpExpiresIn % 60).padStart(2, '0')}
+                    </p>
+                  )}
                 </div>
-              </div>
 
-              <div className="form-group">
-                <label htmlFor="email" className="label">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-[var(--text-muted)]" />
-                  </div>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    className="input pl-12"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
-              </div>
+                <button
+                  type="submit"
+                  disabled={loading || otpCode.length !== 6}
+                  className="w-full btn-primary py-3.5 text-base flex items-center justify-center mt-6 group"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      Verify Email
+                      <CheckCircle className="ml-2 h-5 w-5" />
+                    </>
+                  )}
+                </button>
 
-              <div className="form-group">
-                <label htmlFor="password" className="label">
-                  Password
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-[var(--text-muted)]" />
-                  </div>
-                  <input
-                    id="password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    required
-                    className="input pl-12 pr-12"
-                    placeholder="Create a password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={loading}
-                  />
+                {/* Resend code */}
+                <div className="text-center mt-4">
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                    onClick={handleResendOtp}
+                    disabled={otpSending || otpExpiresIn > 540}
+                    className="text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {otpSending ? 'Sending...' : "Didn't receive code? Resend"}
                   </button>
                 </div>
-                <p className="mt-1.5 text-xs text-[var(--text-muted)]">
-                  Must be at least 6 characters
-                </p>
-              </div>
 
-              <div className="form-group">
-                <label htmlFor="confirmPassword" className="label">
-                  Confirm Password
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-[var(--text-muted)]" />
+                {/* Back button */}
+                <button
+                  type="button"
+                  onClick={handleBackToSignup}
+                  className="w-full flex items-center justify-center text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] mt-2"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  Back to signup
+                </button>
+              </form>
+            )}
+
+            {/* Signup Form */}
+            {step === 'signup' && !success && (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="form-group">
+                  <label htmlFor="fullName" className="label">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <User className="h-5 w-5 text-[var(--text-muted)]" />
+                    </div>
+                    <input
+                      id="fullName"
+                      name="fullName"
+                      type="text"
+                      required
+                      className="input pl-12"
+                      placeholder="John Kamau"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      disabled={loading}
+                    />
                   </div>
-                  <input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    required
-                    className="input pl-12 pr-12"
-                    placeholder="Confirm your password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-                  >
-                    {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={loading || success}
-                className="w-full btn-primary py-3.5 text-base flex items-center justify-center mt-6 group"
-              >
-                {loading ? (
-                  <>
-                    <span className="spinner-sm mr-2" />
-                    Creating account...
-                  </>
-                ) : (
-                  <>
-                    Create Account
-                    <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                  </>
-                )}
-              </button>
-            </form>
+                <div className="form-group">
+                  <label htmlFor="email" className="label">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Mail className="h-5 w-5 text-[var(--text-muted)]" />
+                    </div>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      className="input pl-12"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="password" className="label">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-[var(--text-muted)]" />
+                    </div>
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      className="input pl-12 pr-12"
+                      placeholder="Create a password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={loading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-xs text-[var(--text-muted)]">
+                    Must be at least 6 characters
+                  </p>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="confirmPassword" className="label">
+                    Confirm Password
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-[var(--text-muted)]" />
+                    </div>
+                    <input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      className="input pl-12 pr-12"
+                      placeholder="Confirm your password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      disabled={loading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || success}
+                  className="w-full btn-primary py-3.5 text-base flex items-center justify-center mt-6 group"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      {otpSending ? 'Sending verification code...' : 'Creating account...'}
+                    </>
+                  ) : (
+                    <>
+                      Create Account
+                      <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
 
             {/* Sign in link */}
-            <div className="mt-6 text-center">
-              <p className="text-sm text-[var(--text-secondary)]">
-                Already have an account?{' '}
-                <Link
-                  to="/login"
-                  className="font-semibold text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
-                >
-                  Sign in
-                </Link>
-              </p>
-            </div>
+            {step === 'signup' && !success && (
+              <div className="mt-6 text-center">
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Already have an account?{' '}
+                  <Link
+                    to="/login"
+                    className="font-semibold text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
+                  >
+                    Sign in
+                  </Link>
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Footer */}
