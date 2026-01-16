@@ -4,9 +4,11 @@ import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency, calculateNetSalary } from '../utils/calculations'
 import { getIncomeIcon } from '../utils/iconMappings'
-import { Plus, Eye, RotateCcw, DollarSign, TrendingUp, X, Calculator, FileText, Wallet, MinusCircle, Building2, AlertTriangle, CheckCircle, Calendar, RefreshCw, PauseCircle, PlayCircle, Trash2, Search } from 'lucide-react'
+import { Plus, Eye, RotateCcw, DollarSign, TrendingUp, X, Calculator, FileText, Wallet, MinusCircle, Building2, AlertTriangle, CheckCircle, Calendar, RefreshCw, PauseCircle, PlayCircle, Trash2, Search, MessageSquare } from 'lucide-react'
 import SearchBar, { searchItems } from '../components/ui/SearchBar'
 import { IncomeService } from '../utils/incomeService'
+import TransactionMessageParser from '../components/TransactionMessageParser'
+import { ACCOUNT_CATEGORIES } from '../constants'
 
 const INCOME_SOURCES = ['salary', 'side_hustle', 'investment', 'bonus', 'gift', 'other']
 
@@ -49,6 +51,9 @@ export default function Income() {
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Message parser state
+  const [showMessageParser, setShowMessageParser] = useState(false)
 
   // Recurring income state
   const [activeView, setActiveView] = useState('all') // 'all' | 'recurring'
@@ -180,6 +185,83 @@ export default function Income() {
       }
     } catch (error) {
       console.error('Error fetching recurring income:', error)
+    }
+  }
+
+  // Check if selected account is M-Pesa
+  const isMpesaAccount = () => {
+    if (!formData.account_id) return false
+    const account = accounts.find(a => a.id === formData.account_id)
+    if (!account) return false
+    const category = account.category?.toLowerCase()
+    return ACCOUNT_CATEGORIES.MOBILE_MONEY.includes(category)
+  }
+
+  // Check if selected account is a Bank account
+  const isBankAccount = () => {
+    if (!formData.account_id) return false
+    const account = accounts.find(a => a.id === formData.account_id)
+    if (!account) return false
+    const category = account.category?.toLowerCase()
+    return ACCOUNT_CATEGORIES.BANK.includes(category)
+  }
+
+  // Check if message parser should be shown (M-Pesa or Bank account)
+  const shouldShowMessageParser = () => {
+    return isMpesaAccount() || isBankAccount()
+  }
+
+  // Handle parsed transaction message
+  const handleMessageParsed = (parsedData) => {
+    if (parsedData) {
+      // Parse date from message (format: "25/12/24 10:30 AM" or similar)
+      let parsedDate = formData.date // Default to current form date
+      if (parsedData.transactionDate) {
+        try {
+          const dateParts = parsedData.transactionDate.split(' ')[0].split('/')
+          if (dateParts.length === 3) {
+            const day = parseInt(dateParts[0])
+            const month = parseInt(dateParts[1]) - 1 // JS months are 0-indexed
+            let year = parseInt(dateParts[2])
+            // Handle 2-digit year
+            if (year < 100) {
+              year = year > 50 ? 1900 + year : 2000 + year
+            }
+            const dateObj = new Date(year, month, day)
+            if (!isNaN(dateObj.getTime())) {
+              parsedDate = dateObj.toISOString().split('T')[0]
+            }
+          }
+        } catch (e) {
+          console.log('Could not parse date:', parsedData.transactionDate)
+        }
+      }
+
+      // Extract source name from description (sender name)
+      let sourceName = parsedData.description || ''
+      // Clean up the name
+      sourceName = sourceName.replace(/\d{10,}/g, '').trim()
+      // Capitalize first letter of each word
+      sourceName = sourceName
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ')
+        .trim()
+
+      // Get reference code for description
+      const reference = parsedData.reference || parsedData.bankReference || parsedData.mpesaReference || ''
+      const descriptionWithRef = reference ? `Ref: ${reference}` : ''
+
+      setFormData(prev => ({
+        ...prev,
+        amount: parsedData.amount?.toString() || prev.amount,
+        source_name: sourceName || prev.source_name,
+        date: parsedDate,
+        description: descriptionWithRef || prev.description
+      }))
+
+      toast.success('Transaction details extracted from message')
+      setShowMessageParser(false)
     }
   }
 
@@ -1022,6 +1104,35 @@ export default function Income() {
                   ))}
                 </select>
               </div>
+
+              {/* Parse Transaction Message Button - Show for M-Pesa and Bank accounts */}
+              {shouldShowMessageParser() && (
+                <div className="form-group">
+                  <button
+                    type="button"
+                    onClick={() => setShowMessageParser(true)}
+                    className={`w-full py-2.5 px-4 border-2 border-dashed rounded-lg transition-colors flex items-center justify-center ${
+                      isBankAccount()
+                        ? 'border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                        : 'border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
+                    }`}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    {isBankAccount()
+                      ? 'Parse Bank Transaction SMS'
+                      : 'Parse M-Pesa Transaction SMS'
+                    }
+                  </button>
+                </div>
+              )}
+
+              {/* Transaction Message Parser */}
+              {showMessageParser && (
+                <TransactionMessageParser
+                  onParsed={handleMessageParsed}
+                  onClose={() => setShowMessageParser(false)}
+                />
+              )}
 
               <div className="form-group">
                 <label className="label text-base font-semibold">Income Source *</label>

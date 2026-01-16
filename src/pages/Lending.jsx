@@ -952,7 +952,7 @@ export default function Lending() {
       {/* Repayment Modal - z-[60] to appear above drawer (z-50) */}
       {showRepaymentModal && selectedLending && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 animate-slideIn">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 animate-slideIn max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                 Record Repayment

@@ -3,17 +3,15 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency } from '../utils/calculations'
 import { RefreshCw, Plus, Edit2, Trash2, X, Play, Pause, Calendar, AlertCircle, DollarSign } from 'lucide-react'
+import { getCategoriesGroupedByParent, ensureUserHasCategories } from '../utils/categoryService'
+import { getCategoryIcon } from '../utils/iconMappings'
+import CategorySelector from '../components/categories/CategorySelector'
 
 const FREQUENCIES = [
   { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
   { value: 'yearly', label: 'Yearly' }
-]
-
-const EXPENSE_CATEGORIES = [
-  'rent', 'transport', 'food', 'utilities', 'airtime',
-  'entertainment', 'health', 'education', 'clothing', 'savings', 'debt', 'other'
 ]
 
 export default function Subscriptions() {
@@ -23,11 +21,13 @@ export default function Subscriptions() {
   const [showModal, setShowModal] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
   const [totalMonthly, setTotalMonthly] = useState(0)
+  const [categoriesGrouped, setCategoriesGrouped] = useState([])
 
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
-    category: 'entertainment',
+    category: '',
+    category_id: '',
     frequency: 'monthly',
     start_date: new Date().toISOString().split('T')[0],
     auto_add: false,
@@ -38,8 +38,19 @@ export default function Subscriptions() {
   useEffect(() => {
     if (user) {
       fetchSubscriptions()
+      fetchCategories()
     }
   }, [user])
+
+  const fetchCategories = async () => {
+    try {
+      await ensureUserHasCategories(user.id)
+      const grouped = await getCategoriesGroupedByParent(user.id)
+      setCategoriesGrouped(grouped)
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    }
+  }
 
   const fetchSubscriptions = async () => {
     try {
@@ -149,7 +160,8 @@ export default function Subscriptions() {
       setFormData({
         name: '',
         amount: '',
-        category: 'entertainment',
+        category: '',
+        category_id: '',
         frequency: 'monthly',
         start_date: new Date().toISOString().split('T')[0],
         auto_add: false,
@@ -409,9 +421,9 @@ export default function Subscriptions() {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-8 animate-slideIn max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full p-8 animate-slideIn max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-8">
-              <h3 className="text-2xl font-bold text-gray-900">
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {editingItem ? 'Edit Subscription' : 'Add New Subscription'}
               </h3>
               <button
@@ -419,7 +431,7 @@ export default function Subscriptions() {
                   setShowModal(false)
                   setEditingItem(null)
                 }}
-                className="text-gray-400 hover:text-gray-600 dark:text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-700 rounded-lg"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -428,7 +440,7 @@ export default function Subscriptions() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <label className="block text-base font-semibold text-gray-700">
+                  <label className="block text-base font-semibold text-gray-700 dark:text-gray-300">
                     Subscription Name *
                   </label>
                   <input
@@ -442,7 +454,7 @@ export default function Subscriptions() {
                 </div>
 
                 <div className="space-y-3">
-                  <label className="block text-base font-semibold text-gray-700">
+                  <label className="block text-base font-semibold text-gray-700 dark:text-gray-300">
                     Amount (KES) *
                   </label>
                   <input
@@ -459,25 +471,26 @@ export default function Subscriptions() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <label className="block text-base font-semibold text-gray-700">
+                  <label className="block text-base font-semibold text-gray-700 dark:text-gray-300">
                     Category *
                   </label>
-                  <select
-                    className="select text-base py-3.5"
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    required
-                  >
-                    {EXPENSE_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                      </option>
-                    ))}
-                  </select>
+                  <CategorySelector
+                    userId={user.id}
+                    value={formData.category_id}
+                    onChange={(category) => {
+                      setFormData({
+                        ...formData,
+                        category: category?.slug || '',
+                        category_id: category?.id || ''
+                      })
+                    }}
+                    placeholder="Select a category"
+                    showDescription
+                  />
                 </div>
 
                 <div className="space-y-3">
-                  <label className="block text-base font-semibold text-gray-700">
+                  <label className="block text-base font-semibold text-gray-700 dark:text-gray-300">
                     Frequency *
                   </label>
                   <select
@@ -496,7 +509,7 @@ export default function Subscriptions() {
               </div>
 
               <div className="space-y-3">
-                <label className="block text-base font-semibold text-gray-700">
+                <label className="block text-base font-semibold text-gray-700 dark:text-gray-300">
                   Start Date *
                 </label>
                 <input
@@ -509,7 +522,7 @@ export default function Subscriptions() {
               </div>
 
               <div className="space-y-3">
-                <label className="block text-base font-semibold text-gray-700">
+                <label className="block text-base font-semibold text-gray-700 dark:text-gray-300">
                   Description (Optional)
                 </label>
                 <input
@@ -521,7 +534,7 @@ export default function Subscriptions() {
                 />
               </div>
 
-              <div className="p-4 bg-blue-50 rounded-xl">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/30 rounded-xl">
                 <label className="flex items-start space-x-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -530,7 +543,7 @@ export default function Subscriptions() {
                     className="mt-1 h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                   />
                   <div>
-                    <span className="text-base font-semibold text-gray-900">Auto-add to expenses</span>
+                    <span className="text-base font-semibold text-gray-900 dark:text-gray-100">Auto-add to expenses</span>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                       Automatically create expense entries when due (coming soon)
                     </p>

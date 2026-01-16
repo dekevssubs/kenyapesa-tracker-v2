@@ -27,7 +27,10 @@
       "Bash(npx supabase:*)",
       "Bash(done)",
       "Bash(set:*)",
-      "Bash(SUPABASE_ACCESS_TOKEN=sbp_f50355a4c15f7c817ecff690d4775adf416a7b94 npx supabase:*)"
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_f50355a4c15f7c817ecff690d4775adf416a7b94 npx supabase:*)",
+      "Bash(supabase db push:*)",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_c7d55092efe744ad5710afbbc283bbf0828c1a66 npx supabase:*)",
+      "Bash(curl:*)"
     ]
   }
 }

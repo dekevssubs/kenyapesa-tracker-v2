@@ -13,6 +13,7 @@ import TransactionMessageParser from '../components/TransactionMessageParser'
 import MpesaFeePreview from '../components/MpesaFeePreview'
 import { getCategoriesGroupedByParent, getExpenseCategoriesForSelection, ensureUserHasCategories } from '../utils/categoryService'
 import { ACCOUNT_CATEGORIES } from '../constants'
+import CategorySelector from '../components/categories/CategorySelector'
 
 const PAYMENT_METHODS = ['mpesa', 'cash', 'bank', 'card']
 
@@ -1324,34 +1325,19 @@ export default function Expenses() {
 
               <div className="form-group">
                 <label className="label">Category *</label>
-                <select
-                  className="select"
+                <CategorySelector
+                  userId={user.id}
                   value={formData.category_id}
-                  onChange={(e) => {
-                    const selectedCat = categoriesFlat.find(c => c.id === e.target.value)
+                  onChange={(category) => {
                     setFormData({
                       ...formData,
-                      category_id: e.target.value,
-                      category_slug: selectedCat?.slug || ''
+                      category_id: category?.id || '',
+                      category_slug: category?.slug || ''
                     })
                   }}
-                  required
-                >
-                  {/* Hierarchical categories from database (per canonical spec) */}
-                  {categoriesGrouped.length > 0 ? (
-                    categoriesGrouped.map((group) => (
-                      <optgroup key={group.parentSlug} label={group.parentName}>
-                        {group.categories.map((cat) => (
-                          <option key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))
-                  ) : (
-                    <option value="">Loading categories...</option>
-                  )}
-                </select>
+                  placeholder="Select a category"
+                  showDescription
+                />
 
                 {/* Budget Impact Preview */}
                 {formData.amount && (() => {

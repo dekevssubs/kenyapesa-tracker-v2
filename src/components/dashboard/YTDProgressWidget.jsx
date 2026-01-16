@@ -44,12 +44,20 @@ export default function YTDProgressWidget({ comparisons, stats }) {
         setTopCategories(sorted)
       }
 
-      // Get over-budget categories
+      // Get over-budget categories for current month
+      const currentMonthStr = new Date().toISOString().split('T')[0].slice(0, 7) + '-01'
       const { data: budgets } = await supabase
         .from('budgets')
-        .select('category, amount')
+        .select(`
+          category_id,
+          monthly_limit,
+          expense_categories!category_id (
+            slug,
+            name
+          )
+        `)
         .eq('user_id', user.id)
-        .eq('is_active', true)
+        .eq('month', currentMonthStr)
 
       if (budgets && expenses) {
         const currentMonth = new Date().getMonth()
@@ -64,13 +72,20 @@ export default function YTDProgressWidget({ comparisons, stats }) {
         })
 
         const overBudget = budgets
-          .filter(b => monthlyExpenses[b.category] > parseFloat(b.amount))
-          .map(b => ({
-            name: b.category,
-            budget: parseFloat(b.amount),
-            spent: monthlyExpenses[b.category],
-            over: monthlyExpenses[b.category] - parseFloat(b.amount)
-          }))
+          .filter(b => {
+            const categorySlug = b.expense_categories?.slug
+            return categorySlug && monthlyExpenses[categorySlug] > parseFloat(b.monthly_limit)
+          })
+          .map(b => {
+            const categorySlug = b.expense_categories?.slug
+            const categoryName = b.expense_categories?.name || categorySlug
+            return {
+              name: categoryName,
+              budget: parseFloat(b.monthly_limit),
+              spent: monthlyExpenses[categorySlug],
+              over: monthlyExpenses[categorySlug] - parseFloat(b.monthly_limit)
+            }
+          })
           .sort((a, b) => b.over - a.over)
           .slice(0, 2)
 

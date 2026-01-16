@@ -121,14 +121,10 @@ serve(async (req) => {
         )
       }
 
-      // Generate magic link / session token
-      // Since we can't directly create a session, we'll generate a sign-in link
+      // Generate a magic link but extract the token to verify on client
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
-        email: normalizedEmail,
-        options: {
-          redirectTo: `${Deno.env.get('APP_URL') || 'https://kenyapesa.space'}/dashboard`
-        }
+        email: normalizedEmail
       })
 
       if (linkError) {
@@ -139,13 +135,20 @@ serve(async (req) => {
         )
       }
 
+      // Extract the token hash from the action link
+      // The link format is: https://xxx.supabase.co/auth/v1/verify?token=TOKEN&type=magiclink...
+      const actionLink = linkData.properties?.action_link || ''
+      const tokenMatch = actionLink.match(/token=([^&]+)/)
+      const tokenHash = tokenMatch ? tokenMatch[1] : linkData.properties?.hashed_token
+
       return new Response(
         JSON.stringify({
           success: true,
           purpose: 'login',
-          // Return the hashed token for client-side verification
-          token: linkData.properties?.hashed_token,
-          redirectUrl: linkData.properties?.action_link
+          // Return token info for client-side session verification
+          tokenHash,
+          email: normalizedEmail,
+          type: 'magiclink'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
