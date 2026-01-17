@@ -45,19 +45,19 @@ export default function EditAccountModal({ isOpen, onClose, onSubmit, account })
   if (!isOpen || !account) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideIn">
+    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideIn shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Edit Account</h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Edit Account</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               Update account details
             </p>
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
           >
             <X className="h-6 w-6" />
           </button>
@@ -66,12 +66,12 @@ export default function EditAccountModal({ isOpen, onClose, onSubmit, account })
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Account Info (Read-only) */}
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-            <p className="text-sm text-gray-600 mb-2">Account Type</p>
-            <p className="font-semibold text-gray-900 capitalize">
+          <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Account Type</p>
+            <p className="font-semibold text-gray-900 dark:text-gray-100 capitalize">
               {account.account_type} - {account.category?.replace(/_/g, ' ')}
             </p>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Account type and category cannot be changed
             </p>
           </div>
@@ -111,7 +111,7 @@ export default function EditAccountModal({ isOpen, onClose, onSubmit, account })
               value={formData.account_number}
               onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Last 4 digits will be masked for security
             </p>
           </div>
@@ -141,8 +141,8 @@ export default function EditAccountModal({ isOpen, onClose, onSubmit, account })
                 onChange={(e) => setFormData({ ...formData, is_primary: e.target.checked })}
               />
               <div>
-                <span className="font-medium text-gray-900">Set as Primary Account</span>
-                <p className="text-sm text-gray-600">
+                <span className="font-medium text-gray-900 dark:text-gray-100">Set as Primary Account</span>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   This will be the default account for {account.account_type} transactions
                 </p>
               </div>
@@ -150,19 +150,19 @@ export default function EditAccountModal({ isOpen, onClose, onSubmit, account })
           </div>
 
           {/* Current Balance Info */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <p className="text-sm font-medium text-blue-900 mb-1">Current Balance</p>
-            <p className="text-2xl font-bold text-blue-700">
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+            <p className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-1">Current Balance</p>
+            <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
               KES {parseFloat(account.current_balance || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-            <p className="text-xs text-blue-600 mt-1">
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
               Balance is automatically updated from transactions
             </p>
           </div>
         </form>
 
         {/* Footer */}
-        <div className="flex items-center justify-end space-x-4 p-6 border-t border-gray-200">
+        <div className="flex items-center justify-end space-x-4 p-6 border-t border-gray-200 dark:border-gray-700">
           <button
             type="button"
             onClick={handleClose}
