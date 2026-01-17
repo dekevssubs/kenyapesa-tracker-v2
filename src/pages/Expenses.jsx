@@ -4,7 +4,7 @@ import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { formatCurrency } from '../utils/calculations'
 import { getCategoryIcon, getPaymentIcon, getCategoryColor } from '../utils/iconMappings'
-import { Plus, Eye, RotateCcw, TrendingDown, Filter, X, AlertTriangle, Wallet, DollarSign, CheckCircle, MessageSquare, RefreshCw, FileText, Calendar, CreditCard, Tag, MinusCircle, Building2, Receipt, Search, Upload } from 'lucide-react'
+import { Plus, Eye, RotateCcw, TrendingDown, Filter, X, AlertTriangle, Wallet, DollarSign, CheckCircle, MessageSquare, RefreshCw, FileText, Calendar, CreditCard, Tag, MinusCircle, Building2, Receipt, Search, Upload, Bell } from 'lucide-react'
 import SearchBar, { searchItems } from '../components/ui/SearchBar'
 import ImportWizard from '../components/import/ImportWizard'
 import { ExpenseService } from '../utils/expenseService'
@@ -14,6 +14,7 @@ import MpesaFeePreview from '../components/MpesaFeePreview'
 import { getCategoriesGroupedByParent, getExpenseCategoriesForSelection, ensureUserHasCategories } from '../utils/categoryService'
 import { ACCOUNT_CATEGORIES } from '../constants'
 import CategorySelector from '../components/categories/CategorySelector'
+import CreateRenewalReminderModal from '../components/reminders/CreateRenewalReminderModal'
 
 const PAYMENT_METHODS = ['mpesa', 'cash', 'bank', 'card']
 
@@ -45,6 +46,10 @@ export default function Expenses() {
   const [viewingExpense, setViewingExpense] = useState(null)
   const [showViewModal, setShowViewModal] = useState(false)
   const [expenseDetails, setExpenseDetails] = useState(null)
+
+  // Renewal reminder modal state
+  const [showRenewalReminderModal, setShowRenewalReminderModal] = useState(false)
+  const [renewalReminderPrefill, setRenewalReminderPrefill] = useState(null)
 
   // Reverse expense state
   const [showReverseModal, setShowReverseModal] = useState(false)
@@ -1606,29 +1611,50 @@ export default function Expenses() {
               </div>
             </div>
 
-            <div className="flex space-x-3 p-6 pt-0">
-              <button
-                onClick={() => {
-                  setShowViewModal(false)
-                  setViewingExpense(null)
-                  setExpenseDetails(null)
-                }}
-                className="flex-1 btn btn-secondary py-3"
-              >
-                Close
-              </button>
+            <div className="flex flex-col space-y-3 p-6 pt-0">
+              {/* Remind me to cancel button - for subscriptions/recurring expenses */}
               {!viewingExpense.is_reversed && (
                 <button
                   onClick={() => {
+                    setRenewalReminderPrefill({
+                      expenseId: viewingExpense.id,
+                      title: viewingExpense.description || viewingExpense.category,
+                      amount: viewingExpense.amount,
+                      date: viewingExpense.date
+                    })
                     setShowViewModal(false)
-                    handleOpenReverse(viewingExpense)
+                    setShowRenewalReminderModal(true)
                   }}
-                  className="flex-1 btn bg-orange-500 hover:bg-orange-600 text-white py-3 flex items-center justify-center"
+                  className="w-full btn bg-red-500 hover:bg-red-600 text-white py-3 flex items-center justify-center"
                 >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Reverse Expense
+                  <Bell className="h-4 w-4 mr-2" />
+                  Remind Me to Cancel
                 </button>
               )}
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowViewModal(false)
+                    setViewingExpense(null)
+                    setExpenseDetails(null)
+                  }}
+                  className="flex-1 btn btn-secondary py-3"
+                >
+                  Close
+                </button>
+                {!viewingExpense.is_reversed && (
+                  <button
+                    onClick={() => {
+                      setShowViewModal(false)
+                      handleOpenReverse(viewingExpense)
+                    }}
+                    className="flex-1 btn bg-orange-500 hover:bg-orange-600 text-white py-3 flex items-center justify-center"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reverse
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1835,6 +1861,20 @@ export default function Expenses() {
         onClose={() => setShowImportWizard(false)}
         type="expense"
         onImport={handleCSVImport}
+      />
+
+      {/* Renewal Reminder Modal - "Remind me to cancel" */}
+      <CreateRenewalReminderModal
+        isOpen={showRenewalReminderModal}
+        onClose={() => {
+          setShowRenewalReminderModal(false)
+          setRenewalReminderPrefill(null)
+        }}
+        onSuccess={() => {
+          setShowRenewalReminderModal(false)
+          setRenewalReminderPrefill(null)
+        }}
+        prefillData={renewalReminderPrefill}
       />
     </div>
   )

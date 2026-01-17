@@ -65,7 +65,7 @@ const navigationGroups = [
     items: [
       { name: 'Budget', href: '/budget', icon: CreditCard, color: 'text-cyan-500' },
       { name: 'Goals', href: '/goals', icon: Target, color: 'text-orange-500' },
-      { name: 'Bill Reminders', href: '/bills', icon: Bell, color: 'text-violet-500' },
+      { name: 'Reminders', href: '/reminders', icon: Bell, color: 'text-violet-500' },
       { name: 'Subscriptions', href: '/subscriptions', icon: RefreshCw, color: 'text-pink-500' },
     ]
   },

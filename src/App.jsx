@@ -26,6 +26,7 @@ const Settings = lazy(() => import('./pages/Settings'))
 const Subscriptions = lazy(() => import('./pages/Subscriptions'))
 const Lending = lazy(() => import('./pages/Lending'))
 const BillReminders = lazy(() => import('./pages/BillReminders'))
+const UnifiedReminders = lazy(() => import('./pages/UnifiedReminders'))
 const Accounts = lazy(() => import('./pages/Accounts'))
 const AccountHistory = lazy(() => import('./pages/AccountHistory'))
 const MpesaCalculator = lazy(() => import('./pages/MpesaCalculator'))
@@ -68,6 +69,7 @@ function App() {
               <Route path="/subscriptions" element={<LazyPrivateRoute><Subscriptions /></LazyPrivateRoute>} />
               <Route path="/lending" element={<LazyPrivateRoute><Lending /></LazyPrivateRoute>} />
               <Route path="/bills" element={<LazyPrivateRoute><BillReminders /></LazyPrivateRoute>} />
+              <Route path="/reminders" element={<LazyPrivateRoute><UnifiedReminders /></LazyPrivateRoute>} />
               <Route path="/accounts" element={<LazyPrivateRoute><Accounts /></LazyPrivateRoute>} />
               <Route path="/account-history" element={<LazyPrivateRoute><AccountHistory /></LazyPrivateRoute>} />
               <Route path="/mpesa-calculator" element={<LazyPrivateRoute skeleton="compact"><MpesaCalculator /></LazyPrivateRoute>} />
