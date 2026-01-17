@@ -9,31 +9,19 @@ import EditAccountModal from '../components/accounts/EditAccountModal'
 import TransferMoneyModal from '../components/accounts/TransferMoneyModal'
 import RecordInvestmentReturnModal from '../components/accounts/RecordInvestmentReturnModal'
 import ConfirmationModal from '../components/ConfirmationModal'
+import BankCard from '../components/accounts/BankCard'
+import AccountDetailsModal from '../components/accounts/AccountDetailsModal'
 import {
   Wallet,
   TrendingUp,
   Plus,
   ArrowRightLeft,
   PiggyBank,
-  Building2,
   Smartphone,
-  Users,
-  Landmark,
-  BarChart3,
   Eye,
   EyeOff,
-  Filter,
-  Edit2,
-  Trash2,
-  History,
-  MoreVertical,
-  CheckCircle,
-  XCircle,
-  PauseCircle,
-  CreditCard,
-  Target
+  Filter
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
 
 export default function Accounts() {
   const { user } = useAuth()
@@ -63,6 +51,8 @@ export default function Accounts() {
     onConfirm: () => {}
   })
   const [accountGoals, setAccountGoals] = useState({}) // Goals per account with allocations
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [detailsAccount, setDetailsAccount] = useState(null)
 
   useEffect(() => {
     if (user) {
@@ -147,13 +137,14 @@ export default function Accounts() {
     }
   }
 
-  const handleTransfer = async (fromAccountId, toAccountId, amount, description) => {
+  const handleTransfer = async (fromAccountId, toAccountId, amount, description, transactionFee = 0) => {
     try {
       const service = new AccountService(supabase, user.id)
-      const result = await service.transferBetweenAccounts(fromAccountId, toAccountId, amount, description)
+      const result = await service.transferBetweenAccounts(fromAccountId, toAccountId, amount, description, transactionFee)
 
       if (result.success) {
-        showToast('Success', `Transferred ${formatCurrency(amount)} successfully!`, 'success')
+        const feeText = transactionFee > 0 ? ` (+ ${formatCurrency(transactionFee)} fee)` : ''
+        showToast('Success', `Transferred ${formatCurrency(amount)}${feeText} successfully!`, 'success')
         await fetchAccounts()
 
         // Check if this was a transfer before deletion
@@ -332,40 +323,9 @@ export default function Accounts() {
     }
   }
 
-  const getAccountIcon = (category) => {
-    const iconMap = {
-      mpesa: Smartphone,
-      bank: Building2,
-      cash: Wallet,
-      airtel_money: Smartphone,
-      tkash: Smartphone,
-      money_market_fund: TrendingUp,
-      sacco: Users,
-      treasury_bill: Landmark,
-      treasury_bond: Landmark,
-      m_akiba: Landmark,
-      stocks: BarChart3,
-      reit: Building2,
-      fixed_deposit: PiggyBank,
-      chama: Users
-    }
-    return iconMap[category] || Wallet
-  }
-
-  const getAccountColor = (accountType) => {
-    const colorMap = {
-      cash: 'from-green-500 to-green-600',
-      investment: 'from-blue-500 to-blue-600',
-      virtual: 'from-purple-500 to-purple-600'
-    }
-    return colorMap[accountType] || 'from-gray-500 to-gray-600'
-  }
-
-  const getStatusConfig = (isActive) => {
-    if (isActive === false) {
-      return { color: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30', icon: XCircle, label: 'Inactive' }
-    }
-    return { color: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30', icon: CheckCircle, label: 'Active' }
+  const handleViewDetails = (account) => {
+    setDetailsAccount(account)
+    setShowDetailsModal(true)
   }
 
   const handleStatusChange = async (account, newIsActive) => {
@@ -593,162 +553,18 @@ export default function Accounts() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredAccounts.map((account) => {
-              const Icon = getAccountIcon(account.category)
-              const gradient = getAccountColor(account.account_type)
-              const statusConfig = getStatusConfig(account.is_active)
-              const StatusIcon = statusConfig.icon
-              const isInactive = account.is_active === false
-
-              // Calculate goal allocations for this account
-              const linkedGoals = accountGoals[account.id] || []
-              const totalGoalAllocations = linkedGoals.reduce((sum, g) => sum + g.current_amount, 0)
-              const availableBalance = parseFloat(account.current_balance || 0) - totalGoalAllocations
-
-              return (
-                <div
-                  key={account.id}
-                  className={`relative overflow-hidden rounded-2xl bg-white dark:bg-gray-800 shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 ${isInactive ? 'opacity-75' : ''}`}
-                >
-                  {/* Gradient Header */}
-                  <div className={`h-24 bg-gradient-to-br ${gradient} relative`}>
-                    <div className="absolute inset-0 bg-black/10" />
-                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white/20 to-transparent" />
-
-                    {/* Icon Badge */}
-                    <div className="absolute -bottom-6 left-6">
-                      <div className={`p-4 rounded-2xl bg-gradient-to-br ${gradient} shadow-lg border-4 border-white dark:border-gray-800`}>
-                        <Icon className="h-7 w-7 text-white" />
-                      </div>
-                    </div>
-
-                    {/* Status & Actions */}
-                    <div className="absolute top-3 right-3 flex items-center space-x-2">
-                      {account.is_primary && (
-                        <span className="px-2 py-1 rounded-full bg-white/20 backdrop-blur-sm text-white text-xs font-medium">
-                          Primary
-                        </span>
-                      )}
-                      <div className="relative group">
-                        <button className="p-1.5 rounded-lg bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-colors">
-                          <MoreVertical className="h-4 w-4" />
-                        </button>
-                        {/* Dropdown Menu */}
-                        <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-                          <button
-                            onClick={() => handleEditAccount(account)}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center"
-                          >
-                            <Edit2 className="h-4 w-4 mr-2" /> Edit
-                          </button>
-                          <Link
-                            to={`/account-history?account=${account.id}`}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center"
-                          >
-                            <History className="h-4 w-4 mr-2" /> View History
-                          </Link>
-                          <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
-                          {account.is_active === false ? (
-                            <button
-                              onClick={() => handleStatusChange(account, true)}
-                              className="w-full px-3 py-2 text-left text-sm text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 flex items-center"
-                            >
-                              <CheckCircle className="h-4 w-4 mr-2" /> Activate
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleStatusChange(account, false)}
-                              className="w-full px-3 py-2 text-left text-sm text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 flex items-center"
-                            >
-                              <PauseCircle className="h-4 w-4 mr-2" /> Deactivate
-                            </button>
-                          )}
-                          <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
-                          <button
-                            onClick={() => handleDeleteAccount(account)}
-                            className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" /> Delete
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card Content */}
-                  <div className="pt-10 px-6 pb-6">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                          {account.name}
-                        </h4>
-                        {account.institution_name && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {account.institution_name}
-                          </p>
-                        )}
-                      </div>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color}`}>
-                        <StatusIcon className="h-3 w-3 mr-1" />
-                        {statusConfig.label}
-                      </span>
-                    </div>
-
-                    {/* Balance */}
-                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 mb-4">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium uppercase tracking-wider">Total Balance</p>
-                      <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                        {showBalances ? formatCurrency(account.current_balance) : '••••••'}
-                      </p>
-
-                      {/* Show Available vs Goal Allocations if account has linked goals */}
-                      {linkedGoals.length > 0 && showBalances && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-gray-600 dark:text-gray-400">Available</span>
-                            <span className="font-semibold text-green-600 dark:text-green-400">
-                              {formatCurrency(availableBalance)}
-                            </span>
-                          </div>
-                          <div className="space-y-1.5">
-                            {linkedGoals.map((goal) => (
-                              <div key={goal.id} className="flex justify-between items-center text-sm">
-                                <span className="flex items-center text-gray-600 dark:text-gray-400">
-                                  <Target className="h-3 w-3 mr-1.5 text-purple-500" />
-                                  <span className="truncate max-w-[120px]" title={goal.name}>{goal.name}</span>
-                                </span>
-                                <span className="font-medium text-purple-600 dark:text-purple-400">
-                                  {formatCurrency(goal.current_amount)}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Meta Info */}
-                    <div className="flex items-center justify-between text-sm">
-                      {account.interest_rate ? (
-                        <div className="flex items-center text-green-600 dark:text-green-400 font-medium">
-                          <TrendingUp className="h-4 w-4 mr-1" />
-                          {account.interest_rate}% p.a.
-                        </div>
-                      ) : (
-                        <div></div>
-                      )}
-                      {account.account_number && (
-                        <div className="flex items-center text-gray-500 dark:text-gray-400">
-                          <CreditCard className="h-4 w-4 mr-1" />
-                          •••• {account.account_number.slice(-4)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredAccounts.map((account) => (
+              <BankCard
+                key={account.id}
+                account={account}
+                showBalance={showBalances}
+                onEdit={handleEditAccount}
+                onDelete={handleDeleteAccount}
+                onStatusChange={handleStatusChange}
+                onViewDetails={handleViewDetails}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -801,6 +617,17 @@ export default function Accounts() {
         message={confirmModal.message}
         variant={confirmModal.variant}
         confirmText={confirmModal.variant === 'danger' ? 'Delete' : 'Confirm'}
+      />
+
+      {/* Account Details Modal */}
+      <AccountDetailsModal
+        isOpen={showDetailsModal}
+        onClose={() => {
+          setShowDetailsModal(false)
+          setDetailsAccount(null)
+        }}
+        account={detailsAccount}
+        linkedGoals={detailsAccount ? accountGoals[detailsAccount.id] || [] : []}
       />
     </div>
   )

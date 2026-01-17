@@ -8,6 +8,8 @@
 - [x] Implement Password Reset with OTP requirement - Created ForgotPassword page
 - [x] Implement Password Change with OTP requirement - Added to Settings page
 - [x] Remove Email Code login option - Now only password + OTP login
+- [x] Redesign Accounts as Bank-Themed Cards - Credit card style with official Kenyan bank colors
+- [x] Add Message Parser to Transfer Money form with transaction fee tracking
 
 ## Remaining Issues
 
@@ -41,25 +43,6 @@
 - Create `src/pages/FAQ.jsx` or `src/components/settings/FAQ.jsx`
 - Add route in `src/App.jsx`
 - Add navigation link in sidebar
-
-### 3. Redesign Accounts as Bank-Themed Cards (Wild Idea)
-**Description:** Redesign accounts to look like credit/debit cards with bank theme colors.
-
-**Location:** `src/pages/Accounts.jsx`
-
-**Suggested Implementation:**
-- Create card-like design for each account
-- Use bank-specific colors (e.g., Equity green, KCB blue, M-Pesa green)
-- Show card number (masked), balance, account type
-- Add visual indicators for account status
-
-**Design Elements:**
-- Card shape with rounded corners
-- Bank logo/icon
-- Gradient backgrounds matching bank brands
-- Card chip graphic
-- Account holder name
-- Last 4 digits display
 
 ## Notes
 - Code was committed and pushed: `bfa09a7`

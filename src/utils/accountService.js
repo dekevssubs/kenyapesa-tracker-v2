@@ -246,17 +246,48 @@ export class AccountService {
 
   /**
    * Transfer money between accounts
+   * @param {string} fromAccountId - Source account ID
+   * @param {string} toAccountId - Destination account ID
+   * @param {number} amount - Transfer amount
+   * @param {string} description - Optional description
+   * @param {number} transactionFee - Optional transaction fee (will be recorded separately)
    */
-  async transferBetweenAccounts(fromAccountId, toAccountId, amount, description = '') {
+  async transferBetweenAccounts(fromAccountId, toAccountId, amount, description = '', transactionFee = 0) {
     try {
+      const today = new Date().toISOString().split('T')[0]
+
+      // Create the main transfer transaction
       const result = await this.createTransaction({
         from_account_id: fromAccountId,
         to_account_id: toAccountId,
         transaction_type: 'transfer',
         amount: parseFloat(amount),
         description,
-        date: new Date().toISOString().split('T')[0]
+        date: today
       })
+
+      if (!result.success) {
+        return result
+      }
+
+      // If there's a transaction fee, record it as a separate transaction
+      if (transactionFee && parseFloat(transactionFee) > 0) {
+        const feeResult = await this.createTransaction({
+          from_account_id: fromAccountId,
+          to_account_id: null, // Fee goes nowhere (deducted from source)
+          transaction_type: 'transaction_fee',
+          amount: parseFloat(transactionFee),
+          description: `Transfer fee${description ? ': ' + description : ''}`,
+          date: today,
+          notes: `Fee for transfer of ${amount} to account`
+        })
+
+        if (!feeResult.success) {
+          console.error('Failed to record transaction fee:', feeResult.error)
+          // Transfer succeeded but fee recording failed - still return success
+          // but log the error
+        }
+      }
 
       return result
     } catch (error) {
