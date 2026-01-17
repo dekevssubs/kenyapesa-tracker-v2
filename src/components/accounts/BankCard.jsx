@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Wallet,
@@ -114,6 +114,21 @@ export default function BankCard({
   onViewDetails
 }) {
   const [showDropdown, setShowDropdown] = useState(false)
+  const dropdownRef = useRef(null)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false)
+      }
+    }
+
+    if (showDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showDropdown])
 
   const bankColors = getBankColor(account.institution_name, account.category, account.account_type)
   const Icon = getAccountIcon(account.category)
@@ -163,10 +178,9 @@ export default function BankCard({
               )}
 
               {/* Dropdown Menu */}
-              <div className="relative">
+              <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setShowDropdown(!showDropdown)}
-                  onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
                   className="p-1.5 rounded-lg bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-colors"
                 >
                   <MoreVertical className="h-4 w-4" />
