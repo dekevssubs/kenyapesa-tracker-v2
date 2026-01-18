@@ -35,6 +35,7 @@ export default function Income() {
   // Custom deductions state
   const [customDeductions, setCustomDeductions] = useState([])
   const [showDeductionsSection, setShowDeductionsSection] = useState(false)
+  const [saccoAccounts, setSaccoAccounts] = useState([])
 
   const [formData, setFormData] = useState({
     amount: '',
@@ -82,6 +83,7 @@ export default function Income() {
       fetchIncomes()
       fetchAccounts()
       fetchRecurringIncome()
+      fetchSaccoAccounts()
     }
   }, [user])
 
@@ -173,6 +175,18 @@ export default function Income() {
       }
     } catch (error) {
       console.error('Error fetching accounts:', error)
+    }
+  }
+
+  const fetchSaccoAccounts = async () => {
+    try {
+      const incomeService = new IncomeService(supabase, user.id)
+      const result = await incomeService.getSaccoAccounts()
+      if (result.success) {
+        setSaccoAccounts(result.accounts)
+      }
+    } catch (error) {
+      console.error('Error fetching SACCO accounts:', error)
     }
   }
 
@@ -399,7 +413,10 @@ export default function Income() {
         amount: '',
         is_recurring: false,
         frequency: 'monthly',
-        notes: ''
+        notes: '',
+        create_expense: false,
+        create_reminder: false,
+        sacco_account_id: '' // For linking SACCO deductions to SACCO accounts
       }
     ])
   }
@@ -1336,15 +1353,85 @@ export default function Income() {
                                 />
                               </div>
 
-                              <label className="flex items-center text-xs cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={deduction.is_recurring}
-                                  onChange={(e) => updateCustomDeduction(index, 'is_recurring', e.target.checked)}
-                                  className="mr-2"
-                                />
-                                Recurring deduction (auto-fill next time)
-                              </label>
+                              {/* Integration Options */}
+                              <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                {/* Recurring checkbox */}
+                                <label className="flex items-center text-xs cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={deduction.is_recurring}
+                                    onChange={(e) => updateCustomDeduction(index, 'is_recurring', e.target.checked)}
+                                    className="mr-2"
+                                  />
+                                  Recurring deduction (auto-fill next time)
+                                </label>
+
+                                {/* Record as expense checkbox - only for mappable types */}
+                                {IncomeService.canMapToExpense(deduction.deduction_type) && (
+                                  <div>
+                                    <label className="flex items-center text-xs cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={deduction.create_expense || false}
+                                        onChange={(e) => updateCustomDeduction(index, 'create_expense', e.target.checked)}
+                                        className="mr-2 accent-green-600"
+                                      />
+                                      <span className="text-green-700 dark:text-green-400">Record as expense</span>
+                                    </label>
+                                    {deduction.create_expense && (
+                                      <p className="text-xs text-gray-500 dark:text-gray-400 ml-5 mt-1">
+                                        → {IncomeService.getDeductionCategoryInfo(deduction.deduction_type).categoryDisplay}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Add to reminders checkbox - only when recurring */}
+                                {deduction.is_recurring && IncomeService.canMapToExpense(deduction.deduction_type) && (
+                                  <label className="flex items-center text-xs cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={deduction.create_reminder || false}
+                                      onChange={(e) => updateCustomDeduction(index, 'create_reminder', e.target.checked)}
+                                      className="mr-2 accent-blue-600"
+                                    />
+                                    <span className="text-blue-700 dark:text-blue-400">Add to bill reminders</span>
+                                  </label>
+                                )}
+
+                                {/* SACCO Account selector - only for SACCO deductions */}
+                                {deduction.deduction_type === 'sacco' && saccoAccounts.length > 0 && (
+                                  <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                    <label className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1 block">
+                                      Link to SACCO Account (increases balance)
+                                    </label>
+                                    <select
+                                      className="select text-sm py-1.5 w-full"
+                                      value={deduction.sacco_account_id || ''}
+                                      onChange={(e) => updateCustomDeduction(index, 'sacco_account_id', e.target.value)}
+                                    >
+                                      <option value="">Don't link to account</option>
+                                      {saccoAccounts.map((account) => (
+                                        <option key={account.id} value={account.id}>
+                                          {account.name} ({formatCurrency(account.current_balance)})
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {deduction.sacco_account_id && (
+                                      <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                        +{formatCurrency(parseFloat(deduction.amount || 0))} will be added to this account
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Prompt to create SACCO account if none exist */}
+                                {deduction.deduction_type === 'sacco' && saccoAccounts.length === 0 && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
+                                    Tip: Create a SACCO account in Accounts page to track your contributions
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           ))}
 

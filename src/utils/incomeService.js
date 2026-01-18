@@ -24,6 +24,7 @@ export class IncomeService {
     HELB_LOAN: 'helb_loan',
     CAR_LOAN: 'car_loan',
     MORTGAGE: 'mortgage',
+    RENT: 'rent',
     INSURANCE: 'insurance',
     RETIREMENT: 'retirement',
     INVESTMENT: 'investment',
@@ -31,6 +32,22 @@ export class IncomeService {
     WELFARE: 'welfare',
     UNION_DUES: 'union_dues',
     OTHER: 'other'
+  }
+
+  /**
+   * Mapping of deduction types to expense category slugs
+   * Used to automatically categorize deductions as expenses
+   */
+  static DEDUCTION_TO_CATEGORY_MAP = {
+    sacco: 'investments',           // SACCO contributions -> Financial > Investments
+    helb_loan: 'loan-repayments',   // HELB loan -> Financial > Loan Repayments
+    car_loan: 'loan-repayments',    // Car loan -> Financial > Loan Repayments
+    personal_loan: 'loan-repayments', // Personal loan -> Financial > Loan Repayments
+    mortgage: 'rent-mortgage',      // Mortgage -> Housing > Rent or Mortgage
+    rent: 'rent-mortgage',          // Rent deduction -> Housing > Rent or Mortgage
+    insurance: 'home-insurance',    // Insurance -> Housing > Home Insurance
+    retirement: 'retirement'        // Retirement -> Financial > Retirement Contributions
+    // savings, investment, welfare, union_dues, other -> no auto-mapping (null)
   }
 
   /**
@@ -58,6 +75,11 @@ export class IncomeService {
         value: IncomeService.DEDUCTION_TYPES.MORTGAGE,
         label: 'Mortgage',
         description: 'Home/property mortgage payment'
+      },
+      {
+        value: IncomeService.DEDUCTION_TYPES.RENT,
+        label: 'Rent Deduction',
+        description: 'Employer-deducted rent/housing payment'
       },
       {
         value: IncomeService.DEDUCTION_TYPES.PERSONAL_LOAN,
@@ -200,6 +222,25 @@ export class IncomeService {
         if (deductionsError) throw deductionsError
 
         deductionIds.push(...insertedDeductions.map(d => d.id))
+
+        // Step 2b: Process deduction integrations (expenses and reminders)
+        const deductionsWithFlags = customDeductions.filter(
+          d => d.create_expense || d.create_reminder
+        )
+
+        if (deductionsWithFlags.length > 0) {
+          const integrationResult = await this.processDeductionIntegrations(
+            deductionsWithFlags,
+            income.id,
+            date,
+            null // Don't pass account_id for deduction expenses (they're already deducted)
+          )
+
+          console.log('IncomeService - Deduction integrations processed:', {
+            expenseCount: integrationResult.expenseResults.length,
+            reminderCount: integrationResult.reminderResults.length
+          })
+        }
       }
 
       // Step 3: Create account_transaction (income flows TO account)
@@ -850,6 +891,378 @@ export class IncomeService {
       }
     } catch (error) {
       console.error('Error creating income from recurring:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * DEDUCTION INTEGRATION METHODS
+   * These methods create expenses and reminders from payroll deductions
+   */
+
+  /**
+   * Get expense category slug for a deduction type
+   * @param {string} deductionType - The deduction type
+   * @returns {string|null} - Category slug or null if no mapping
+   */
+  static getCategorySlugForDeduction(deductionType) {
+    return IncomeService.DEDUCTION_TO_CATEGORY_MAP[deductionType] || null
+  }
+
+  /**
+   * Check if a deduction type can be mapped to an expense category
+   * @param {string} deductionType - The deduction type
+   * @returns {boolean} - True if mappable
+   */
+  static canMapToExpense(deductionType) {
+    return !!IncomeService.DEDUCTION_TO_CATEGORY_MAP[deductionType]
+  }
+
+  /**
+   * Get category info for a deduction type (for UI display)
+   * @param {string} deductionType - The deduction type
+   * @returns {object} - {canMap, categorySlug, categoryDisplay}
+   */
+  static getDeductionCategoryInfo(deductionType) {
+    const slug = IncomeService.DEDUCTION_TO_CATEGORY_MAP[deductionType]
+    if (!slug) {
+      return { canMap: false, categorySlug: null, categoryDisplay: null }
+    }
+
+    // Display name mappings
+    const displayNames = {
+      'investments': 'Financial > Investments (SACCO)',
+      'loan-repayments': 'Financial > Loan Repayments',
+      'rent-mortgage': 'Housing > Rent or Mortgage',
+      'home-insurance': 'Housing > Home Insurance',
+      'retirement': 'Financial > Retirement Contributions'
+    }
+
+    return {
+      canMap: true,
+      categorySlug: slug,
+      categoryDisplay: displayNames[slug] || slug
+    }
+  }
+
+  /**
+   * Create an expense record from a deduction
+   * @param {object} deduction - Deduction data {deduction_type, deduction_name, amount}
+   * @param {string} incomeDate - Date of the income (YYYY-MM-DD)
+   * @param {string|null} accountId - Optional account ID for the expense
+   * @returns {Promise<object>} - {success, expenseId, categoryId, error}
+   */
+  async createDeductionExpense(deduction, incomeDate, accountId = null) {
+    try {
+      const categorySlug = IncomeService.getCategorySlugForDeduction(deduction.deduction_type)
+
+      if (!categorySlug) {
+        return {
+          success: false,
+          error: `No expense category mapping for deduction type: ${deduction.deduction_type}`
+        }
+      }
+
+      // Get category ID from slug
+      const { data: category, error: categoryError } = await this.supabase
+        .from('expense_categories')
+        .select('id, name, parent_category_id')
+        .eq('user_id', this.userId)
+        .eq('slug', categorySlug)
+        .eq('is_active', true)
+        .single()
+
+      if (categoryError || !category) {
+        console.error('Category lookup error:', categoryError)
+        return {
+          success: false,
+          error: `Could not find expense category: ${categorySlug}`
+        }
+      }
+
+      // Build expense description
+      const description = deduction.deduction_name
+        ? `${deduction.deduction_name} (payroll deduction)`
+        : `Payroll deduction - ${deduction.deduction_type}`
+
+      // Create expense record
+      const expenseData = {
+        user_id: this.userId,
+        amount: parseFloat(deduction.amount),
+        category_id: category.id,
+        category: categorySlug,
+        description,
+        payment_method: 'salary_deduction',
+        date: incomeDate,
+        transaction_fee: 0
+      }
+
+      // Add account_id if provided
+      if (accountId) {
+        expenseData.account_id = accountId
+      }
+
+      const { data: expense, error: expenseError } = await this.supabase
+        .from('expenses')
+        .insert(expenseData)
+        .select('id')
+        .single()
+
+      if (expenseError) throw expenseError
+
+      return {
+        success: true,
+        expenseId: expense.id,
+        categoryId: category.id,
+        categoryName: category.name
+      }
+    } catch (error) {
+      console.error('Error creating deduction expense:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Create a recurring bill reminder from a deduction
+   * @param {object} deduction - Deduction data {deduction_type, deduction_name, amount, frequency}
+   * @param {string} startDate - Start date (YYYY-MM-DD)
+   * @returns {Promise<object>} - {success, recurringId, error}
+   */
+  async createDeductionReminder(deduction, startDate) {
+    try {
+      const categorySlug = IncomeService.getCategorySlugForDeduction(deduction.deduction_type)
+      let categoryId = null
+
+      // Get category ID if mappable
+      if (categorySlug) {
+        const { data: category } = await this.supabase
+          .from('expense_categories')
+          .select('id')
+          .eq('user_id', this.userId)
+          .eq('slug', categorySlug)
+          .eq('is_active', true)
+          .single()
+
+        if (category) {
+          categoryId = category.id
+        }
+      }
+
+      // Build reminder name
+      const reminderName = deduction.deduction_name
+        ? deduction.deduction_name
+        : IncomeService.getDeductionTypes().find(t => t.value === deduction.deduction_type)?.label || 'Payroll Deduction'
+
+      // Calculate next date (next month from start date)
+      const nextDate = this.calculateNextDate(startDate, deduction.frequency || 'monthly')
+
+      // Create recurring transaction with kind='bill'
+      const { data: recurring, error: recurringError } = await this.supabase
+        .from('recurring_transactions')
+        .insert({
+          user_id: this.userId,
+          type: 'expense',
+          kind: 'bill', // Show as bill in reminders
+          name: reminderName,
+          amount: parseFloat(deduction.amount),
+          frequency: deduction.frequency || 'monthly',
+          category: categorySlug,
+          category_id: categoryId,
+          payment_method: 'salary_deduction',
+          next_date: nextDate,
+          is_active: true,
+          auto_add: false, // Don't auto-add since it's deducted from salary
+          notes: `Payroll deduction - ${deduction.deduction_type}`
+        })
+        .select('id')
+        .single()
+
+      if (recurringError) throw recurringError
+
+      return {
+        success: true,
+        recurringId: recurring.id,
+        nextDate
+      }
+    } catch (error) {
+      console.error('Error creating deduction reminder:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Process deductions with optional expense and reminder creation
+   * Called by createIncome when deductions have integration flags
+   * @param {Array} deductions - Array of deductions with create_expense and create_reminder flags
+   * @param {string} incomeId - The income ID
+   * @param {string} incomeDate - The income date
+   * @param {string|null} accountId - Optional account ID
+   * @returns {Promise<object>} - {success, expenseResults, reminderResults, error}
+   */
+  async processDeductionIntegrations(deductions, incomeId, incomeDate, accountId = null) {
+    const expenseResults = []
+    const reminderResults = []
+
+    for (const deduction of deductions) {
+      // Create expense if requested
+      if (deduction.create_expense) {
+        const expenseResult = await this.createDeductionExpense(deduction, incomeDate, accountId)
+        expenseResults.push({
+          deductionType: deduction.deduction_type,
+          deductionName: deduction.deduction_name,
+          ...expenseResult
+        })
+      }
+
+      // Create reminder if requested and marked as recurring
+      if (deduction.create_reminder && deduction.is_recurring) {
+        const reminderResult = await this.createDeductionReminder(deduction, incomeDate)
+        reminderResults.push({
+          deductionType: deduction.deduction_type,
+          deductionName: deduction.deduction_name,
+          ...reminderResult
+        })
+      }
+
+      // Transfer to SACCO account if specified
+      if (deduction.deduction_type === 'sacco' && deduction.sacco_account_id) {
+        const saccoResult = await this.transferToSaccoAccount(
+          deduction,
+          incomeDate,
+          incomeId
+        )
+        if (saccoResult.success) {
+          // Add to expense results for tracking
+          expenseResults.push({
+            deductionType: deduction.deduction_type,
+            deductionName: deduction.deduction_name,
+            saccoTransfer: true,
+            ...saccoResult
+          })
+        }
+      }
+    }
+
+    return {
+      success: true,
+      expenseResults,
+      reminderResults
+    }
+  }
+
+  /**
+   * SACCO ACCOUNT INTEGRATION
+   * Methods for linking SACCO deductions to SACCO accounts
+   */
+
+  /**
+   * Get user's SACCO accounts for selection
+   * @returns {Promise<object>} - {success, accounts, error}
+   */
+  async getSaccoAccounts() {
+    try {
+      const { data: accounts, error } = await this.supabase
+        .from('accounts')
+        .select('id, name, institution_name, current_balance, category')
+        .eq('user_id', this.userId)
+        .eq('category', 'sacco')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+
+      if (error) throw error
+
+      return {
+        success: true,
+        accounts: accounts || []
+      }
+    } catch (error) {
+      console.error('Error fetching SACCO accounts:', error)
+      return {
+        success: false,
+        accounts: [],
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Transfer deduction amount to SACCO account
+   * Creates an account_transaction that increases SACCO balance
+   * @param {object} deduction - Deduction data with sacco_account_id
+   * @param {string} incomeDate - Date of the income
+   * @param {string} incomeId - Related income ID
+   * @returns {Promise<object>} - {success, transactionId, error}
+   */
+  async transferToSaccoAccount(deduction, incomeDate, incomeId) {
+    try {
+      if (!deduction.sacco_account_id) {
+        return {
+          success: false,
+          error: 'No SACCO account specified'
+        }
+      }
+
+      // Get SACCO account details for description
+      const { data: saccoAccount, error: accountError } = await this.supabase
+        .from('accounts')
+        .select('id, name, institution_name')
+        .eq('id', deduction.sacco_account_id)
+        .single()
+
+      if (accountError || !saccoAccount) {
+        return {
+          success: false,
+          error: 'SACCO account not found'
+        }
+      }
+
+      // Build description
+      const description = deduction.deduction_name
+        ? `${deduction.deduction_name} - Payroll contribution`
+        : `SACCO contribution from salary`
+
+      // Create account_transaction (money flows TO SACCO account)
+      const { data: transaction, error: txError } = await this.supabase
+        .from('account_transactions')
+        .insert({
+          user_id: this.userId,
+          to_account_id: deduction.sacco_account_id, // Money flows INTO SACCO
+          transaction_type: 'sacco_contribution',
+          amount: parseFloat(deduction.amount),
+          date: incomeDate,
+          category: 'sacco',
+          description,
+          reference_id: incomeId,
+          reference_type: 'income_deduction'
+        })
+        .select('id')
+        .single()
+
+      if (txError) throw txError
+
+      console.log('IncomeService - SACCO transfer created:', {
+        transactionId: transaction.id,
+        saccoAccount: saccoAccount.name,
+        amount: deduction.amount
+      })
+
+      return {
+        success: true,
+        transactionId: transaction.id,
+        saccoAccountId: saccoAccount.id,
+        saccoAccountName: saccoAccount.name
+      }
+    } catch (error) {
+      console.error('Error transferring to SACCO account:', error)
       return {
         success: false,
         error: error.message
