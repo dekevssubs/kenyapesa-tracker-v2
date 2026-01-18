@@ -23,10 +23,8 @@ const Goals = lazy(() => import('./pages/Goals'))
 const ComprehensiveReports = lazy(() => import('./pages/ComprehensiveReports'))
 const Budget = lazy(() => import('./pages/Budget'))
 const Settings = lazy(() => import('./pages/Settings'))
-const Subscriptions = lazy(() => import('./pages/Subscriptions'))
+const SubscriptionsAndBills = lazy(() => import('./pages/SubscriptionsAndBills'))
 const Lending = lazy(() => import('./pages/Lending'))
-const BillReminders = lazy(() => import('./pages/BillReminders'))
-const UnifiedReminders = lazy(() => import('./pages/UnifiedReminders'))
 const Accounts = lazy(() => import('./pages/Accounts'))
 const AccountHistory = lazy(() => import('./pages/AccountHistory'))
 const MpesaCalculator = lazy(() => import('./pages/MpesaCalculator'))
@@ -66,10 +64,11 @@ function App() {
               <Route path="/reports" element={<LazyPrivateRoute><ComprehensiveReports /></LazyPrivateRoute>} />
               <Route path="/budget" element={<LazyPrivateRoute><Budget /></LazyPrivateRoute>} />
               <Route path="/settings" element={<LazyPrivateRoute skeleton="compact"><Settings /></LazyPrivateRoute>} />
-              <Route path="/subscriptions" element={<LazyPrivateRoute><Subscriptions /></LazyPrivateRoute>} />
+              <Route path="/subscriptions" element={<LazyPrivateRoute><SubscriptionsAndBills /></LazyPrivateRoute>} />
               <Route path="/lending" element={<LazyPrivateRoute><Lending /></LazyPrivateRoute>} />
-              <Route path="/bills" element={<LazyPrivateRoute><BillReminders /></LazyPrivateRoute>} />
-              <Route path="/reminders" element={<LazyPrivateRoute><UnifiedReminders /></LazyPrivateRoute>} />
+              {/* Redirect old bill/reminder routes to unified page */}
+              <Route path="/bills" element={<Navigate to="/subscriptions?tab=bills" replace />} />
+              <Route path="/reminders" element={<Navigate to="/subscriptions" replace />} />
               <Route path="/accounts" element={<LazyPrivateRoute><Accounts /></LazyPrivateRoute>} />
               <Route path="/account-history" element={<LazyPrivateRoute><AccountHistory /></LazyPrivateRoute>} />
               <Route path="/mpesa-calculator" element={<LazyPrivateRoute skeleton="compact"><MpesaCalculator /></LazyPrivateRoute>} />

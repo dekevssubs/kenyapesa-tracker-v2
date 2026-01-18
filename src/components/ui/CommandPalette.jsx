@@ -12,7 +12,6 @@ import {
   Wallet,
   CreditCard,
   RefreshCw,
-  Bell,
   HandCoins,
   History,
   Smartphone,
@@ -34,9 +33,8 @@ const pages = [
   { name: 'Reports', href: '/reports', icon: BarChart3, keywords: ['analytics', 'charts', 'insights'] },
   { name: 'Calculator', href: '/calculator', icon: Calculator, keywords: ['tax', 'paye', 'nhif', 'nssf'] },
   { name: 'M-Pesa Calculator', href: '/mpesa-calculator', icon: Smartphone, keywords: ['fees', 'charges', 'send money'] },
-  { name: 'Subscriptions', href: '/subscriptions', icon: RefreshCw, keywords: ['recurring', 'bills', 'monthly'] },
+  { name: 'Subscriptions & Bills', href: '/subscriptions', icon: RefreshCw, keywords: ['recurring', 'bills', 'monthly', 'reminders', 'due', 'payments'] },
   { name: 'Lending', href: '/lending', icon: HandCoins, keywords: ['loans', 'borrowed', 'lent', 'debt'] },
-  { name: 'Bill Reminders', href: '/bills', icon: Bell, keywords: ['due', 'payments', 'alerts'] },
   { name: 'Settings', href: '/settings', icon: Settings, keywords: ['profile', 'preferences', 'account'] },
 ]
 

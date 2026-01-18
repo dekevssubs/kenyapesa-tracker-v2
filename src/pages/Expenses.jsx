@@ -15,6 +15,9 @@ import { getCategoriesGroupedByParent, getExpenseCategoriesForSelection, ensureU
 import { ACCOUNT_CATEGORIES } from '../constants'
 import CategorySelector from '../components/categories/CategorySelector'
 import CreateRenewalReminderModal from '../components/reminders/CreateRenewalReminderModal'
+import { SubscriptionService } from '../utils/subscriptionService'
+import { BillReminderService } from '../utils/newBillReminderService'
+import ConvertToRecurringModal from '../components/subscriptions/ConvertToRecurringModal'
 
 const PAYMENT_METHODS = ['mpesa', 'cash', 'bank', 'card']
 
@@ -51,6 +54,10 @@ export default function Expenses() {
   const [showRenewalReminderModal, setShowRenewalReminderModal] = useState(false)
   const [renewalReminderPrefill, setRenewalReminderPrefill] = useState(null)
 
+  // Convert to recurring modal state
+  const [showConvertModal, setShowConvertModal] = useState(false)
+  const [convertExpense, setConvertExpense] = useState(null)
+
   // Reverse expense state
   const [showReverseModal, setShowReverseModal] = useState(false)
   const [reversingExpense, setReversingExpense] = useState(null)
@@ -74,6 +81,7 @@ export default function Expenses() {
   // Recurring expense state
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurringFrequency, setRecurringFrequency] = useState('monthly')
+  const [recurrenceType, setRecurrenceType] = useState('subscription') // 'subscription' or 'bill'
 
   const [formData, setFormData] = useState({
     amount: '',
@@ -409,28 +417,51 @@ export default function Expenses() {
       const breakdown = formatFeeBreakdown(formData.amount, actualFee, formData.fee_method)
       toast.success(`Expense added! Amount: ${breakdown.formattedAmount}, Fee: ${breakdown.formattedFee}, Total: ${breakdown.formattedTotal}`)
 
-      // If marked as recurring, create a bill reminder
+      // If marked as recurring, create a subscription or bill reminder
       if (isRecurring) {
         const nextDueDate = calculateNextDueDate(formData.date, recurringFrequency)
-        const { error: billError } = await supabase
-          .from('bill_reminders')
-          .insert([{
-            user_id: user.id,
-            name: formData.description || `${formData.category_slug.charAt(0).toUpperCase() + formData.category_slug.slice(1)} expense`,
-            amount: parseFloat(formData.amount),
-            category: formData.category_slug, // Bill reminders still use slug for now
-            payment_method: formData.payment_method,
-            due_date: nextDueDate,
-            frequency: recurringFrequency,
-            notes: `Auto-created from expense on ${formData.date}`,
-            is_active: true
-          }])
+        const itemName = formData.description || `${formData.category_slug.charAt(0).toUpperCase() + formData.category_slug.slice(1)} expense`
 
-        if (billError) {
-          console.error('Error creating bill reminder:', billError)
-          toast.warning('Expense saved, but failed to create recurring reminder')
+        if (recurrenceType === 'subscription') {
+          // Create subscription
+          const subscriptionService = new SubscriptionService(supabase, user.id)
+          const subscriptionResult = await subscriptionService.createSubscription({
+            name: itemName,
+            description: `Auto-created from expense on ${formData.date}`,
+            categoryId: formData.category_id,
+            categorySlug: formData.category_slug,
+            amount: parseFloat(formData.amount),
+            frequency: recurringFrequency,
+            nextDueDate: nextDueDate,
+            sourceExpenseId: result.expense?.id || null
+          })
+
+          if (!subscriptionResult.success) {
+            console.error('Error creating subscription:', subscriptionResult.error)
+            toast.warning('Expense saved, but failed to create subscription')
+          } else {
+            toast.success(`Subscription created! Next payment due: ${nextDueDate}`, 4000)
+          }
         } else {
-          toast.success(`Recurring reminder set for ${recurringFrequency} payments`, 4000)
+          // Create bill reminder
+          const billReminderService = new BillReminderService(supabase, user.id)
+          const billResult = await billReminderService.createBillReminder({
+            name: itemName,
+            description: `Auto-created from expense on ${formData.date}`,
+            categoryId: formData.category_id,
+            categorySlug: formData.category_slug,
+            amount: parseFloat(formData.amount),
+            frequency: recurringFrequency,
+            nextDueDate: nextDueDate,
+            sourceExpenseId: result.expense?.id || null
+          })
+
+          if (!billResult.success) {
+            console.error('Error creating bill reminder:', billResult.error)
+            toast.warning('Expense saved, but failed to create bill reminder')
+          } else {
+            toast.success(`Bill reminder created! Next payment due: ${nextDueDate}`, 4000)
+          }
         }
       }
 
@@ -452,6 +483,7 @@ export default function Expenses() {
       setBalanceCheck(null)
       setIsRecurring(false)
       setRecurringFrequency('monthly')
+      setRecurrenceType('subscription')
       setShowModal(false)
       fetchExpenses()
       fetchAccounts() // Refresh accounts to update balances
@@ -1288,7 +1320,7 @@ export default function Expenses() {
                       <RefreshCw className={`h-5 w-5 ${isRecurring ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`} />
                       <div>
                         <p className="font-medium text-gray-900 dark:text-gray-100">Make this recurring</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Create a bill reminder for future payments</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Track as a subscription or bill reminder</p>
                       </div>
                     </div>
                     <button
@@ -1307,23 +1339,126 @@ export default function Expenses() {
                   </div>
 
                   {isRecurring && (
-                    <div className="pt-2 border-t border-purple-200 dark:border-purple-700">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Repeat every
-                      </label>
-                      <select
-                        value={recurringFrequency}
-                        onChange={(e) => setRecurringFrequency(e.target.value)}
-                        className="input w-full"
-                      >
-                        <option value="weekly">Week</option>
-                        <option value="monthly">Month</option>
-                        <option value="quarterly">Quarter (3 months)</option>
-                        <option value="yearly">Year</option>
-                      </select>
-                      <p className="text-xs text-purple-600 dark:text-purple-400 mt-2">
-                        Next reminder: {calculateNextDueDate(formData.date, recurringFrequency)}
-                      </p>
+                    <div className="pt-3 border-t border-purple-200 dark:border-purple-700 space-y-4">
+                      {/* Frequency Selection */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Frequency
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setRecurringFrequency('monthly')}
+                            className={`py-2 px-4 rounded-lg border-2 text-sm font-medium transition-all ${
+                              recurringFrequency === 'monthly'
+                                ? 'border-purple-500 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
+                                : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-purple-300'
+                            }`}
+                          >
+                            Monthly
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRecurringFrequency('yearly')}
+                            className={`py-2 px-4 rounded-lg border-2 text-sm font-medium transition-all ${
+                              recurringFrequency === 'yearly'
+                                ? 'border-purple-500 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
+                                : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-purple-300'
+                            }`}
+                          >
+                            Yearly
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Type Selection */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Type
+                        </label>
+                        <div className="space-y-2">
+                          <label
+                            className={`flex items-center p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                              recurrenceType === 'subscription'
+                                ? 'border-purple-500 bg-purple-100 dark:bg-purple-900/40'
+                                : 'border-gray-200 dark:border-gray-600 hover:border-purple-300'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="recurrenceType"
+                              value="subscription"
+                              checked={recurrenceType === 'subscription'}
+                              onChange={() => setRecurrenceType('subscription')}
+                              className="sr-only"
+                            />
+                            <div className="flex-1">
+                              <p className={`font-medium ${recurrenceType === 'subscription' ? 'text-purple-700 dark:text-purple-300' : 'text-gray-700 dark:text-gray-300'}`}>
+                                Subscription
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Netflix, Spotify, software, streaming services
+                              </p>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                              recurrenceType === 'subscription'
+                                ? 'border-purple-500 bg-purple-500'
+                                : 'border-gray-300 dark:border-gray-500'
+                            }`}>
+                              {recurrenceType === 'subscription' && (
+                                <div className="w-2 h-2 rounded-full bg-white" />
+                              )}
+                            </div>
+                          </label>
+
+                          <label
+                            className={`flex items-center p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                              recurrenceType === 'bill'
+                                ? 'border-purple-500 bg-purple-100 dark:bg-purple-900/40'
+                                : 'border-gray-200 dark:border-gray-600 hover:border-purple-300'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="recurrenceType"
+                              value="bill"
+                              checked={recurrenceType === 'bill'}
+                              onChange={() => setRecurrenceType('bill')}
+                              className="sr-only"
+                            />
+                            <div className="flex-1">
+                              <p className={`font-medium ${recurrenceType === 'bill' ? 'text-purple-700 dark:text-purple-300' : 'text-gray-700 dark:text-gray-300'}`}>
+                                Bill Reminder
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Rent, utilities, loan payments, insurance
+                              </p>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                              recurrenceType === 'bill'
+                                ? 'border-purple-500 bg-purple-500'
+                                : 'border-gray-300 dark:border-gray-500'
+                            }`}>
+                              {recurrenceType === 'bill' && (
+                                <div className="w-2 h-2 rounded-full bg-white" />
+                              )}
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Next Due Date Preview */}
+                      <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                        <p className="text-sm text-purple-700 dark:text-purple-300">
+                          <span className="font-medium">Next {recurrenceType === 'subscription' ? 'payment' : 'bill'} due:</span>{' '}
+                          {new Date(calculateNextDueDate(formData.date, recurringFrequency)).toLocaleDateString('en-GB', {
+                            weekday: 'long',
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric'
+                          })}
+                        </p>
+                      </div>
                     </div>
                   )}
               </div>
@@ -1612,6 +1747,33 @@ export default function Expenses() {
             </div>
 
             <div className="flex flex-col space-y-3 p-6 pt-0">
+              {/* Make Recurring button - for one-time expenses */}
+              {!viewingExpense.is_reversed && !viewingExpense.is_recurrent && (
+                <button
+                  onClick={() => {
+                    setConvertExpense(viewingExpense)
+                    setShowViewModal(false)
+                    setShowConvertModal(true)
+                  }}
+                  className="w-full btn bg-purple-500 hover:bg-purple-600 text-white py-3 flex items-center justify-center"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Make Recurring
+                </button>
+              )}
+
+              {/* Show recurrent badge if already recurring */}
+              {viewingExpense.is_recurrent && (
+                <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                  <div className="flex items-center text-purple-600 dark:text-purple-400">
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    <span className="text-sm font-medium">
+                      This is a recurring {viewingExpense.recurrence_type === 'subscription' ? 'subscription' : 'bill'} ({viewingExpense.recurrence_frequency})
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Remind me to cancel button - for subscriptions/recurring expenses */}
               {!viewingExpense.is_reversed && (
                 <button
@@ -1875,6 +2037,19 @@ export default function Expenses() {
           setRenewalReminderPrefill(null)
         }}
         prefillData={renewalReminderPrefill}
+      />
+
+      {/* Convert to Recurring Modal */}
+      <ConvertToRecurringModal
+        isOpen={showConvertModal}
+        onClose={() => {
+          setShowConvertModal(false)
+          setConvertExpense(null)
+        }}
+        onSuccess={() => {
+          fetchExpenses()
+        }}
+        expense={convertExpense}
       />
     </div>
   )
