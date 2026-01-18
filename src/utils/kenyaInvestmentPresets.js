@@ -34,6 +34,18 @@ export const KENYA_INVESTMENT_PRESETS = {
   // ============================================================================
   mmf: [
     {
+      name: 'Cytonn Money Market Fund',
+      institution: 'Cytonn Asset Managers',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 14.0,
+      min_investment: 1000,
+      liquidity: 'T+1',
+      description: 'High-yield MMF with competitive returns.',
+      icon: 'TrendingUp',
+      color: '#10B981'
+    },
+    {
       name: 'CIC Money Market Fund',
       institution: 'CIC Asset Management',
       category: ACCOUNT_CATEGORIES.MMF,
@@ -43,7 +55,7 @@ export const KENYA_INVESTMENT_PRESETS = {
       liquidity: 'T+1',
       description: 'Low-risk investment with competitive returns. Withdraw in 1 business day.',
       icon: 'TrendingUp',
-      color: '#10B981'
+      color: '#059669'
     },
     {
       name: 'Britam Money Market Fund',
@@ -55,7 +67,115 @@ export const KENYA_INVESTMENT_PRESETS = {
       liquidity: 'T+2',
       description: 'Stable returns with easy access to funds.',
       icon: 'TrendingUp',
-      color: '#059669'
+      color: '#047857'
+    },
+    {
+      name: 'Sanlam Money Market Fund',
+      institution: 'Sanlam Investments',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 12.2,
+      min_investment: 1000,
+      liquidity: 'T+1',
+      description: 'Trusted MMF from leading insurance provider.',
+      icon: 'TrendingUp',
+      color: '#065F46'
+    },
+    {
+      name: 'Etica Money Market Fund',
+      institution: 'Etica Capital',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 12.0,
+      min_investment: 500,
+      liquidity: 'T+1',
+      description: 'Accessible MMF with low minimum investment.',
+      icon: 'TrendingUp',
+      color: '#0D9488'
+    },
+    {
+      name: 'Kuza Money Market Fund',
+      institution: 'Kuza Asset Management',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 11.5,
+      min_investment: 1000,
+      liquidity: 'T+1',
+      description: 'Growing your wealth with steady returns.',
+      icon: 'TrendingUp',
+      color: '#0F766E'
+    },
+    {
+      name: 'GulfCap Money Market Fund',
+      institution: 'GulfCap Investments',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 11.8,
+      min_investment: 1000,
+      liquidity: 'T+2',
+      description: 'Reliable MMF with consistent performance.',
+      icon: 'TrendingUp',
+      color: '#14B8A6'
+    },
+    {
+      name: 'Ndovu Money Market Fund',
+      institution: 'Ndovu Investments',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 12.0,
+      min_investment: 500,
+      liquidity: 'T+1',
+      description: 'Digital-first MMF with mobile app access.',
+      icon: 'TrendingUp',
+      color: '#2DD4BF'
+    },
+    {
+      name: 'Lofty-Corban Money Market Fund',
+      institution: 'Lofty-Corban Investment Management',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 11.5,
+      min_investment: 1000,
+      liquidity: 'T+2',
+      description: 'Professional fund management with stable returns.',
+      icon: 'TrendingUp',
+      color: '#5EEAD4'
+    },
+    {
+      name: 'Nabo Africa Money Market Fund',
+      institution: 'Nabo Capital',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 12.3,
+      min_investment: 1000,
+      liquidity: 'T+1',
+      description: 'Innovative MMF with digital investment platform.',
+      icon: 'TrendingUp',
+      color: '#99F6E4'
+    },
+    {
+      name: 'GenAfrica Money Market Fund',
+      institution: 'GenAfrica Asset Managers',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 13.0,
+      min_investment: 1000,
+      liquidity: 'T+1',
+      description: 'High-performing MMF with mobile accessibility.',
+      icon: 'TrendingUp',
+      color: '#115E59'
+    },
+    {
+      name: 'Madison Money Market Fund',
+      institution: 'Madison Asset Managers',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 11.0,
+      min_investment: 1000,
+      liquidity: 'T+2',
+      description: 'Insurance-backed MMF with stable returns.',
+      icon: 'TrendingUp',
+      color: '#134E4A'
     },
     {
       name: 'Old Mutual Money Market Fund',
@@ -67,31 +187,91 @@ export const KENYA_INVESTMENT_PRESETS = {
       liquidity: 'T+1',
       description: 'Reliable MMF with consistent performance.',
       icon: 'TrendingUp',
-      color: '#047857'
+      color: '#0F172A'
     },
     {
-      name: 'NCBA Money Market Fund',
-      institution: 'NCBA Investment Bank',
+      name: 'ICEA Lion Money Market Fund',
+      institution: 'ICEA Lion Asset Management',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 11.8,
+      min_investment: 1000,
+      liquidity: 'T+1',
+      description: 'Strong institutional backing with competitive rates.',
+      icon: 'TrendingUp',
+      color: '#1E293B'
+    },
+    {
+      name: 'Orient Kasha Money Market Fund',
+      institution: 'Orient Asset Managers',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 12.5,
+      min_investment: 500,
+      liquidity: 'T+1',
+      description: 'Mobile-accessible MMF via Kasha platform.',
+      icon: 'TrendingUp',
+      color: '#334155'
+    },
+    {
+      name: 'Jubilee Money Market Fund',
+      institution: 'Jubilee Insurance',
       category: ACCOUNT_CATEGORIES.MMF,
       account_type: 'investment',
       typical_rate: 11.5,
+      min_investment: 1000,
+      liquidity: 'T+1',
+      description: 'Insurance-backed MMF with reliable returns.',
+      icon: 'TrendingUp',
+      color: '#475569'
+    },
+    {
+      name: 'ArvoCap Money Market Fund',
+      institution: 'ArvoCap Investment Management',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 12.0,
+      min_investment: 1000,
+      liquidity: 'T+1',
+      description: 'Professional fund management with steady growth.',
+      icon: 'TrendingUp',
+      color: '#64748B'
+    },
+    {
+      name: 'Enwealth Money Market Fund',
+      institution: 'Enwealth Financial Services',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 11.5,
+      min_investment: 1000,
+      liquidity: 'T+2',
+      description: 'Pension-focused MMF with stable returns.',
+      icon: 'TrendingUp',
+      color: '#94A3B8'
+    },
+    {
+      name: 'Co-op Trust Investment MMF',
+      institution: 'Co-operative Bank of Kenya',
+      category: ACCOUNT_CATEGORIES.MMF,
+      account_type: 'investment',
+      typical_rate: 11.8,
       min_investment: 5000,
       liquidity: 'T+1',
       description: 'Bank-backed MMF with institutional reliability.',
       icon: 'TrendingUp',
-      color: '#065F46'
+      color: '#CBD5E1'
     },
     {
-      name: 'GenCap Hela Imara',
-      institution: 'GenAfrica Asset Managers',
+      name: 'African Alliance Money Market Fund',
+      institution: 'African Alliance Kenya',
       category: ACCOUNT_CATEGORIES.MMF,
       account_type: 'investment',
-      typical_rate: 13.0,
+      typical_rate: 12.0,
       min_investment: 1000,
       liquidity: 'T+1',
-      description: 'High-performing MMF with mobile accessibility.',
+      description: 'Pan-African investment expertise with local focus.',
       icon: 'TrendingUp',
-      color: '#10B981'
+      color: '#E2E8F0'
     }
   ],
 
@@ -99,28 +279,6 @@ export const KENYA_INVESTMENT_PRESETS = {
   // SACCOS
   // ============================================================================
   saccos: [
-    {
-      name: 'Stima Sacco',
-      institution: 'Stima DT Sacco Society Ltd',
-      category: ACCOUNT_CATEGORIES.SACCO,
-      account_type: 'investment',
-      typical_dividend: 12,
-      min_contribution: 500,
-      description: 'Kenya Power employees Sacco. Open to public with high dividends.',
-      icon: 'Users',
-      color: '#3B82F6'
-    },
-    {
-      name: 'Kenya Police Sacco',
-      institution: 'Kenya Police Sacco Society Ltd',
-      category: ACCOUNT_CATEGORIES.SACCO,
-      account_type: 'investment',
-      typical_dividend: 13,
-      min_contribution: 1000,
-      description: 'Police Sacco with competitive dividends and loan facilities.',
-      icon: 'Users',
-      color: '#2563EB'
-    },
     {
       name: 'Mwalimu National Sacco',
       institution: 'Mwalimu National Sacco',
@@ -130,18 +288,7 @@ export const KENYA_INVESTMENT_PRESETS = {
       min_contribution: 500,
       description: 'Teachers Sacco with nationwide presence.',
       icon: 'Users',
-      color: '#1D4ED8'
-    },
-    {
-      name: 'Afya Sacco',
-      institution: 'Afya Sacco Society Ltd',
-      category: ACCOUNT_CATEGORIES.SACCO,
-      account_type: 'investment',
-      typical_dividend: 10,
-      min_contribution: 1000,
-      description: 'Health workers Sacco with good returns.',
-      icon: 'Users',
-      color: '#1E40AF'
+      color: '#3B82F6'
     },
     {
       name: 'Harambee Sacco',
@@ -152,7 +299,205 @@ export const KENYA_INVESTMENT_PRESETS = {
       min_contribution: 2000,
       description: 'Civil servants Sacco with comprehensive services.',
       icon: 'Users',
+      color: '#2563EB'
+    },
+    {
+      name: 'Tower Sacco',
+      institution: 'Tower Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 11,
+      min_contribution: 1000,
+      description: 'Open-membership Sacco with flexible savings options.',
+      icon: 'Users',
+      color: '#1D4ED8'
+    },
+    {
+      name: 'Unaitas Sacco',
+      institution: 'Unaitas Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 13,
+      min_contribution: 500,
+      description: 'Large open-membership Sacco with extensive branch network.',
+      icon: 'Users',
+      color: '#1E40AF'
+    },
+    {
+      name: 'Kenya Police Sacco',
+      institution: 'Kenya Police Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 13,
+      min_contribution: 1000,
+      description: 'Police Sacco with competitive dividends and loan facilities.',
+      icon: 'Users',
       color: '#1E3A8A'
+    },
+    {
+      name: 'Safaricom Sacco',
+      institution: 'Safaricom Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 14,
+      min_contribution: 1000,
+      description: 'Safaricom staff Sacco with excellent returns.',
+      icon: 'Users',
+      color: '#312E81'
+    },
+    {
+      name: 'Stima Sacco',
+      institution: 'Stima DT Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 12,
+      min_contribution: 500,
+      description: 'Kenya Power employees Sacco. Open to public with high dividends.',
+      icon: 'Users',
+      color: '#4338CA'
+    },
+    {
+      name: 'Ukulima Sacco',
+      institution: 'Ukulima Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 11,
+      min_contribution: 500,
+      description: 'Agricultural sector Sacco with farmer-friendly products.',
+      icon: 'Users',
+      color: '#4F46E5'
+    },
+    {
+      name: 'Ports Sacco',
+      institution: 'Ports Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 12,
+      min_contribution: 1000,
+      description: 'Kenya Ports Authority staff Sacco with good dividends.',
+      icon: 'Users',
+      color: '#5B21B6'
+    },
+    {
+      name: 'Cosmopolitan Sacco',
+      institution: 'Cosmopolitan Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 11,
+      min_contribution: 500,
+      description: 'Open-membership Sacco serving diverse professionals.',
+      icon: 'Users',
+      color: '#6D28D9'
+    },
+    {
+      name: 'Afya Sacco',
+      institution: 'Afya Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 10,
+      min_contribution: 1000,
+      description: 'Health workers Sacco with good returns.',
+      icon: 'Users',
+      color: '#7C3AED'
+    },
+    {
+      name: 'Mhasibu Sacco',
+      institution: 'Mhasibu National Sacco',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 11,
+      min_contribution: 1000,
+      description: 'Accountants and finance professionals Sacco.',
+      icon: 'Users',
+      color: '#8B5CF6'
+    },
+    {
+      name: 'Yetu Sacco',
+      institution: 'Yetu Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 12,
+      min_contribution: 500,
+      description: 'Community-focused Sacco with accessible services.',
+      icon: 'Users',
+      color: '#A855F7'
+    },
+    {
+      name: 'Winas Sacco',
+      institution: 'Winas Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 13,
+      min_contribution: 500,
+      description: 'Open-membership Sacco with competitive rates.',
+      icon: 'Users',
+      color: '#C026D3'
+    },
+    {
+      name: 'Ollin Sacco',
+      institution: 'Ollin Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 11,
+      min_contribution: 1000,
+      description: 'Growth-oriented Sacco with diverse financial products.',
+      icon: 'Users',
+      color: '#D946EF'
+    },
+    {
+      name: 'Trans Nation Sacco',
+      institution: 'Trans Nation Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 10,
+      min_contribution: 500,
+      description: 'Transport sector Sacco with nationwide reach.',
+      icon: 'Users',
+      color: '#E879F9'
+    },
+    {
+      name: 'Imarisha Sacco',
+      institution: 'Imarisha Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 12,
+      min_contribution: 500,
+      description: 'Empowering members with savings and credit solutions.',
+      icon: 'Users',
+      color: '#F0ABFC'
+    },
+    {
+      name: 'Gusii Mwalimu Sacco',
+      institution: 'Gusii Mwalimu Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 11,
+      min_contribution: 500,
+      description: 'Teachers Sacco serving the Gusii region.',
+      icon: 'Users',
+      color: '#EC4899'
+    },
+    {
+      name: 'Hazina Sacco',
+      institution: 'Hazina Sacco Society Ltd',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 12,
+      min_contribution: 1000,
+      description: 'Treasury and government employees Sacco.',
+      icon: 'Users',
+      color: '#F472B6'
+    },
+    {
+      name: 'Kenya Women Sacco (KWFT)',
+      institution: 'Kenya Women Finance Trust DT Sacco',
+      category: ACCOUNT_CATEGORIES.SACCO,
+      account_type: 'investment',
+      typical_dividend: 10,
+      min_contribution: 500,
+      description: 'Women-focused Sacco with empowerment programs.',
+      icon: 'Users',
+      color: '#F9A8D4'
     }
   ],
 
