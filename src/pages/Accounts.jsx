@@ -20,7 +20,8 @@ import {
   Smartphone,
   Eye,
   EyeOff,
-  Filter
+  Filter,
+  CreditCard
 } from 'lucide-react'
 
 export default function Accounts() {
@@ -32,6 +33,7 @@ export default function Accounts() {
     cash: 0,
     investment: 0,
     virtual: 0,
+    loan: 0,
     total: 0
   })
   const [showBalances, setShowBalances] = useState(true)
@@ -365,6 +367,13 @@ export default function Accounts() {
   const cashAccounts = accounts.filter(a => a.account_type === 'cash')
   const investmentAccounts = accounts.filter(a => a.account_type === 'investment')
   const virtualAccounts = accounts.filter(a => a.account_type === 'virtual')
+  const loanAccounts = accounts.filter(a => a.account_type === 'loan')
+
+  // Calculate total assets and liabilities for net worth
+  const totalAssets = (balances.cash || 0) + (balances.investment || 0) + (balances.virtual || 0)
+  // Loan balances are stored as negative, so abs() gives us the liability amount
+  const totalLiabilities = Math.abs(balances.loan || 0)
+  const netWorth = totalAssets - totalLiabilities
 
   if (loading) {
     return (
@@ -392,60 +401,74 @@ export default function Accounts() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {/* Total Net Worth */}
-        <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-xl p-6 text-white">
+        <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-xl p-5 text-white">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-indigo-100 text-sm font-medium">Total Net Worth</p>
-            <Wallet className="h-6 w-6 text-indigo-200" />
+            <p className="text-indigo-100 text-sm font-medium">Net Worth</p>
+            <Wallet className="h-5 w-5 text-indigo-200" />
           </div>
-          <p className="text-4xl font-bold">
-            {showBalances ? formatCurrency(balances.total) : '••••••'}
+          <p className="text-2xl font-bold">
+            {showBalances ? formatCurrency(netWorth) : '••••••'}
           </p>
-          <p className="text-indigo-100 text-sm mt-2">
-            {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}
+          <p className="text-indigo-100 text-xs mt-1">
+            Assets - Liabilities
           </p>
         </div>
 
         {/* Liquid Cash */}
-        <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white">
+        <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-5 text-white">
           <div className="flex items-center justify-between mb-2">
             <p className="text-green-100 text-sm font-medium">Liquid Cash</p>
-            <Smartphone className="h-6 w-6 text-green-200" />
+            <Smartphone className="h-5 w-5 text-green-200" />
           </div>
-          <p className="text-4xl font-bold">
+          <p className="text-2xl font-bold">
             {showBalances ? formatCurrency(balances.cash) : '••••••'}
           </p>
-          <p className="text-green-100 text-sm mt-2">
-            {cashAccounts.length} cash {cashAccounts.length === 1 ? 'account' : 'accounts'}
+          <p className="text-green-100 text-xs mt-1">
+            {cashAccounts.length} {cashAccounts.length === 1 ? 'account' : 'accounts'}
           </p>
         </div>
 
         {/* Investments */}
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white">
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-5 text-white">
           <div className="flex items-center justify-between mb-2">
             <p className="text-blue-100 text-sm font-medium">Investments</p>
-            <TrendingUp className="h-6 w-6 text-blue-200" />
+            <TrendingUp className="h-5 w-5 text-blue-200" />
           </div>
-          <p className="text-4xl font-bold">
+          <p className="text-2xl font-bold">
             {showBalances ? formatCurrency(balances.investment) : '••••••'}
           </p>
-          <p className="text-blue-100 text-sm mt-2">
-            {investmentAccounts.length} investment {investmentAccounts.length === 1 ? 'account' : 'accounts'}
+          <p className="text-blue-100 text-xs mt-1">
+            {investmentAccounts.length} {investmentAccounts.length === 1 ? 'account' : 'accounts'}
           </p>
         </div>
 
         {/* Virtual/Savings */}
-        <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white">
+        <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-5 text-white">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-purple-100 text-sm font-medium">Virtual Accounts</p>
-            <PiggyBank className="h-6 w-6 text-purple-200" />
+            <p className="text-purple-100 text-sm font-medium">Virtual</p>
+            <PiggyBank className="h-5 w-5 text-purple-200" />
           </div>
-          <p className="text-4xl font-bold">
+          <p className="text-2xl font-bold">
             {showBalances ? formatCurrency(balances.virtual) : '••••••'}
           </p>
-          <p className="text-purple-100 text-sm mt-2">
-            {virtualAccounts.length} virtual {virtualAccounts.length === 1 ? 'account' : 'accounts'}
+          <p className="text-purple-100 text-xs mt-1">
+            {virtualAccounts.length} {virtualAccounts.length === 1 ? 'account' : 'accounts'}
+          </p>
+        </div>
+
+        {/* Liabilities (Loans) */}
+        <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-xl p-5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-red-100 text-sm font-medium">Liabilities</p>
+            <CreditCard className="h-5 w-5 text-red-200" />
+          </div>
+          <p className="text-2xl font-bold">
+            {showBalances ? formatCurrency(totalLiabilities) : '••••••'}
+          </p>
+          <p className="text-red-100 text-xs mt-1">
+            {loanAccounts.length} {loanAccounts.length === 1 ? 'loan' : 'loans'}
           </p>
         </div>
       </div>
@@ -525,6 +548,16 @@ export default function Accounts() {
             }`}
           >
             Virtual ({virtualAccounts.length})
+          </button>
+          <button
+            onClick={() => setFilterType('loan')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              filterType === 'loan'
+                ? 'bg-red-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            Loans ({loanAccounts.length})
           </button>
         </div>
       </div>

@@ -651,6 +651,12 @@ export const FALLBACK_COLORS = {
     gradient: 'from-[#7C3AED] to-[#5B21B6]',
     name: 'Virtual'
   },
+  loan: {
+    primary: '#DC2626',
+    secondary: '#991B1B',
+    gradient: 'from-[#DC2626] to-[#991B1B]',
+    name: 'Loan'
+  },
   default: {
     primary: '#6B7280',
     secondary: '#4B5563',
@@ -752,7 +758,57 @@ export const CATEGORY_COLORS = {
 
   // Virtual accounts
   emergency_fund: FALLBACK_COLORS.virtual,
-  sinking_fund: FALLBACK_COLORS.virtual
+  sinking_fund: FALLBACK_COLORS.virtual,
+
+  // Loan accounts (red themed)
+  helb_loan: {
+    primary: '#B91C1C',
+    secondary: '#7F1D1D',
+    gradient: 'from-[#B91C1C] to-[#7F1D1D]',
+    name: 'HELB Loan'
+  },
+  bank_loan: {
+    primary: '#DC2626',
+    secondary: '#991B1B',
+    gradient: 'from-[#DC2626] to-[#991B1B]',
+    name: 'Bank Loan'
+  },
+  sacco_loan: {
+    primary: '#C2410C',
+    secondary: '#9A3412',
+    gradient: 'from-[#C2410C] to-[#9A3412]',
+    name: 'SACCO Loan'
+  },
+  car_loan: {
+    primary: '#EA580C',
+    secondary: '#C2410C',
+    gradient: 'from-[#EA580C] to-[#C2410C]',
+    name: 'Car Loan'
+  },
+  mortgage_loan: {
+    primary: '#D97706',
+    secondary: '#B45309',
+    gradient: 'from-[#D97706] to-[#B45309]',
+    name: 'Mortgage'
+  },
+  personal_loan: {
+    primary: '#EF4444',
+    secondary: '#DC2626',
+    gradient: 'from-[#EF4444] to-[#DC2626]',
+    name: 'Personal Loan'
+  },
+  chama_loan: {
+    primary: '#F59E0B',
+    secondary: '#D97706',
+    gradient: 'from-[#F59E0B] to-[#D97706]',
+    name: 'Chama Loan'
+  },
+  credit_card: {
+    primary: '#E11D48',
+    secondary: '#BE123C',
+    gradient: 'from-[#E11D48] to-[#BE123C]',
+    name: 'Credit Card'
+  }
 }
 
 /**
@@ -844,7 +900,16 @@ export function getDisplayInstitution(institutionName, category, accountName) {
       fixed_deposit: 'FIXED DEPOSIT',
       chama: 'CHAMA',
       emergency_fund: 'EMERGENCY FUND',
-      sinking_fund: 'SINKING FUND'
+      sinking_fund: 'SINKING FUND',
+      // Loan categories
+      helb_loan: 'HELB LOAN',
+      bank_loan: 'BANK LOAN',
+      sacco_loan: 'SACCO LOAN',
+      car_loan: 'CAR LOAN',
+      mortgage_loan: 'MORTGAGE',
+      personal_loan: 'PERSONAL LOAN',
+      chama_loan: 'CHAMA LOAN',
+      credit_card: 'CREDIT CARD'
     }
     return categoryNames[category] || category.toUpperCase().replace(/_/g, ' ')
   }

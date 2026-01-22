@@ -36,6 +36,7 @@ export default function Income() {
   const [customDeductions, setCustomDeductions] = useState([])
   const [showDeductionsSection, setShowDeductionsSection] = useState(false)
   const [saccoAccounts, setSaccoAccounts] = useState([])
+  const [loanAccounts, setLoanAccounts] = useState([])
 
   const [formData, setFormData] = useState({
     amount: '',
@@ -84,6 +85,7 @@ export default function Income() {
       fetchAccounts()
       fetchRecurringIncome()
       fetchSaccoAccounts()
+      fetchLoanAccounts()
     }
   }, [user])
 
@@ -187,6 +189,18 @@ export default function Income() {
       }
     } catch (error) {
       console.error('Error fetching SACCO accounts:', error)
+    }
+  }
+
+  const fetchLoanAccounts = async () => {
+    try {
+      const incomeService = new IncomeService(supabase, user.id)
+      const result = await incomeService.getLoanAccounts()
+      if (result.success) {
+        setLoanAccounts(result.accounts)
+      }
+    } catch (error) {
+      console.error('Error fetching loan accounts:', error)
     }
   }
 
@@ -354,7 +368,7 @@ export default function Income() {
       }
 
       const account = accounts.find(a => a.id === formData.account_id)
-      toast.success(`Income of ${formatCurrency(result.netAmount)} added to ${account?.name || 'account'}`, { duration: 4000 })
+      toast.success(`Income of ${formatCurrency(result.netAmount)} added to ${account?.name || 'account'}`)
 
       // If salary with statutory deductions, save to deductions table
       if (formData.is_gross && calculatedSalary) {
@@ -416,7 +430,8 @@ export default function Income() {
         notes: '',
         create_expense: false,
         create_reminder: false,
-        sacco_account_id: '' // For linking SACCO deductions to SACCO accounts
+        sacco_account_id: '', // For linking SACCO deductions to SACCO accounts
+        loan_account_id: '' // For linking loan deductions to loan accounts
       }
     ])
   }
@@ -1429,6 +1444,45 @@ export default function Income() {
                                 {deduction.deduction_type === 'sacco' && saccoAccounts.length === 0 && (
                                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
                                     Tip: Create a SACCO account in Accounts page to track your contributions
+                                  </p>
+                                )}
+
+                                {/* Loan Account selector - for loan deductions */}
+                                {IncomeService.canLinkToLoanAccount(deduction.deduction_type) && loanAccounts.length > 0 && (
+                                  <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                                    <label className="text-xs font-medium text-red-700 dark:text-red-300 mb-1 block">
+                                      Link to Loan Account (reduces debt)
+                                    </label>
+                                    <select
+                                      className="select text-sm py-1.5 w-full"
+                                      value={deduction.loan_account_id || ''}
+                                      onChange={(e) => updateCustomDeduction(index, 'loan_account_id', e.target.value)}
+                                    >
+                                      <option value="">Don't link to account</option>
+                                      {loanAccounts
+                                        .filter(account => {
+                                          // Filter by relevant loan categories for this deduction type
+                                          const relevantCategories = IncomeService.getLoanCategoriesForDeduction(deduction.deduction_type)
+                                          return relevantCategories.length === 0 || relevantCategories.includes(account.category)
+                                        })
+                                        .map((account) => (
+                                          <option key={account.id} value={account.id}>
+                                            {account.name} (Owed: {formatCurrency(Math.abs(account.current_balance))})
+                                          </option>
+                                        ))}
+                                    </select>
+                                    {deduction.loan_account_id && (
+                                      <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                        {formatCurrency(parseFloat(deduction.amount || 0))} payment will reduce this loan balance
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Prompt to create loan account if none exist */}
+                                {IncomeService.canLinkToLoanAccount(deduction.deduction_type) && loanAccounts.length === 0 && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
+                                    Tip: Create a Loan account in Accounts page to track your loan balance
                                   </p>
                                 )}
                               </div>

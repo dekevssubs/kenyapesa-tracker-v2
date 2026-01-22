@@ -25,7 +25,17 @@ export const ACCOUNT_CATEGORIES = {
 
   // Virtual Accounts
   EMERGENCY_FUND: 'emergency_fund',
-  SINKING_FUND: 'sinking_fund'
+  SINKING_FUND: 'sinking_fund',
+
+  // Loan/Liability Accounts
+  HELB_LOAN: 'helb_loan',
+  BANK_LOAN: 'bank_loan',
+  SACCO_LOAN: 'sacco_loan',
+  CAR_LOAN: 'car_loan',
+  MORTGAGE_LOAN: 'mortgage_loan',
+  PERSONAL_LOAN: 'personal_loan',
+  CHAMA_LOAN: 'chama_loan',
+  CREDIT_CARD: 'credit_card'
 }
 
 export const KENYA_INVESTMENT_PRESETS = {
@@ -651,6 +661,86 @@ export const KENYA_INVESTMENT_PRESETS = {
       icon: 'Wallet',
       color: '#8B5CF6'
     }
+  ],
+
+  // ============================================================================
+  // LOANS & LIABILITIES
+  // Track loan balances with negative values (e.g., -450,000 for amount owed)
+  // Payments increase the balance toward 0
+  // ============================================================================
+  loans: [
+    {
+      name: 'HELB Loan',
+      institution: 'Higher Education Loans Board',
+      category: ACCOUNT_CATEGORIES.HELB_LOAN,
+      account_type: 'loan',
+      description: 'Government student loan. Enter balance as negative (e.g., -450,000).',
+      icon: 'GraduationCap',
+      color: '#EF4444'
+    },
+    {
+      name: 'Bank Personal Loan',
+      institution: 'Local Bank',
+      category: ACCOUNT_CATEGORIES.BANK_LOAN,
+      account_type: 'loan',
+      description: 'Personal loan from bank. Track balance and payroll deductions.',
+      icon: 'Building2',
+      color: '#DC2626'
+    },
+    {
+      name: 'SACCO Loan',
+      institution: 'Local SACCO',
+      category: ACCOUNT_CATEGORIES.SACCO_LOAN,
+      account_type: 'loan',
+      description: 'Loan from your SACCO. Link to payroll deductions to track payments.',
+      icon: 'Users',
+      color: '#B91C1C'
+    },
+    {
+      name: 'Car Loan / Logbook Loan',
+      institution: 'Bank / MFI',
+      category: ACCOUNT_CATEGORIES.CAR_LOAN,
+      account_type: 'loan',
+      description: 'Vehicle financing loan. Track monthly payments.',
+      icon: 'Car',
+      color: '#991B1B'
+    },
+    {
+      name: 'Mortgage / Home Loan',
+      institution: 'Bank',
+      category: ACCOUNT_CATEGORIES.MORTGAGE_LOAN,
+      account_type: 'loan',
+      description: 'Home mortgage loan. Track long-term payments.',
+      icon: 'Home',
+      color: '#7F1D1D'
+    },
+    {
+      name: 'Chama / Merry-go-round Loan',
+      institution: 'Chama Group',
+      category: ACCOUNT_CATEGORIES.CHAMA_LOAN,
+      account_type: 'loan',
+      description: 'Loan from your chama or merry-go-round group.',
+      icon: 'Users',
+      color: '#F97316'
+    },
+    {
+      name: 'Personal Loan (Other)',
+      institution: 'Other Lender',
+      category: ACCOUNT_CATEGORIES.PERSONAL_LOAN,
+      account_type: 'loan',
+      description: 'Other personal loan from MFI, employer, or individual.',
+      icon: 'HandCoins',
+      color: '#EA580C'
+    },
+    {
+      name: 'Credit Card',
+      institution: 'Credit Card Provider',
+      category: ACCOUNT_CATEGORIES.CREDIT_CARD,
+      account_type: 'loan',
+      description: 'Credit card balance. Track outstanding amount.',
+      icon: 'CreditCard',
+      color: '#C2410C'
+    }
   ]
 }
 
@@ -662,7 +752,8 @@ export function getAllPresets() {
     ...KENYA_INVESTMENT_PRESETS.government,
     ...KENYA_INVESTMENT_PRESETS.stocks,
     ...KENYA_INVESTMENT_PRESETS.reits,
-    ...KENYA_INVESTMENT_PRESETS.cash
+    ...KENYA_INVESTMENT_PRESETS.cash,
+    ...KENYA_INVESTMENT_PRESETS.loans
   ]
 }
 
@@ -681,7 +772,8 @@ export function getPresetByName(name) {
 export const ACCOUNT_TYPE_LABELS = {
   cash: 'Cash Account',
   investment: 'Investment Account',
-  virtual: 'Virtual Account'
+  virtual: 'Virtual Account',
+  loan: 'Loan / Liability'
 }
 
 // Category labels
@@ -702,5 +794,15 @@ export const CATEGORY_LABELS = {
   [ACCOUNT_CATEGORIES.FIXED_DEPOSIT]: 'Fixed Deposit',
   [ACCOUNT_CATEGORIES.CHAMA]: 'Chama',
   [ACCOUNT_CATEGORIES.EMERGENCY_FUND]: 'Emergency Fund',
-  [ACCOUNT_CATEGORIES.SINKING_FUND]: 'Sinking Fund'
+  [ACCOUNT_CATEGORIES.SINKING_FUND]: 'Sinking Fund',
+
+  // Loan/Liability Categories
+  [ACCOUNT_CATEGORIES.HELB_LOAN]: 'HELB Loan',
+  [ACCOUNT_CATEGORIES.BANK_LOAN]: 'Bank Loan',
+  [ACCOUNT_CATEGORIES.SACCO_LOAN]: 'SACCO Loan',
+  [ACCOUNT_CATEGORIES.CAR_LOAN]: 'Car Loan',
+  [ACCOUNT_CATEGORIES.MORTGAGE_LOAN]: 'Mortgage',
+  [ACCOUNT_CATEGORIES.PERSONAL_LOAN]: 'Personal Loan',
+  [ACCOUNT_CATEGORIES.CHAMA_LOAN]: 'Chama Loan',
+  [ACCOUNT_CATEGORIES.CREDIT_CARD]: 'Credit Card'
 }

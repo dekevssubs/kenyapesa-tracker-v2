@@ -1,6 +1,18 @@
 import { useState } from 'react'
-import { X, Search, Smartphone, Building2, TrendingUp, Users, Landmark, BarChart3, Wallet, PiggyBank } from 'lucide-react'
-import { KENYA_INVESTMENT_PRESETS, ACCOUNT_TYPE_LABELS, CATEGORY_LABELS } from '../../utils/kenyaInvestmentPresets'
+import { X, Search, Smartphone, Building2, TrendingUp, Users, Landmark, BarChart3, Wallet, PiggyBank, CreditCard } from 'lucide-react'
+import { KENYA_INVESTMENT_PRESETS, ACCOUNT_TYPE_LABELS, CATEGORY_LABELS, ACCOUNT_CATEGORIES } from '../../utils/kenyaInvestmentPresets'
+
+// Loan categories for filtering
+const LOAN_CATEGORIES = [
+  ACCOUNT_CATEGORIES.HELB_LOAN,
+  ACCOUNT_CATEGORIES.BANK_LOAN,
+  ACCOUNT_CATEGORIES.SACCO_LOAN,
+  ACCOUNT_CATEGORIES.CAR_LOAN,
+  ACCOUNT_CATEGORIES.MORTGAGE_LOAN,
+  ACCOUNT_CATEGORIES.PERSONAL_LOAN,
+  ACCOUNT_CATEGORIES.CHAMA_LOAN,
+  ACCOUNT_CATEGORIES.CREDIT_CARD
+]
 
 const PRESET_CATEGORIES = [
   { id: 'cash', label: 'Cash Accounts', icon: Smartphone, color: 'text-green-500', data: KENYA_INVESTMENT_PRESETS.cash },
@@ -8,6 +20,7 @@ const PRESET_CATEGORIES = [
   { id: 'saccos', label: 'Saccos', icon: Users, color: 'text-purple-500', data: KENYA_INVESTMENT_PRESETS.saccos },
   { id: 'government', label: 'Government Securities', icon: Landmark, color: 'text-indigo-500', data: KENYA_INVESTMENT_PRESETS.government },
   { id: 'stocks', label: 'Stocks & REITs', icon: BarChart3, color: 'text-pink-500', data: [...KENYA_INVESTMENT_PRESETS.stocks, ...KENYA_INVESTMENT_PRESETS.reits] },
+  { id: 'loans', label: 'Loans & Liabilities', icon: CreditCard, color: 'text-red-500', data: KENYA_INVESTMENT_PRESETS.loans },
 ]
 
 export default function AddAccountModal({ isOpen, onClose, onSubmit }) {
@@ -24,7 +37,11 @@ export default function AddAccountModal({ isOpen, onClose, onSubmit }) {
     current_balance: '',
     interest_rate: '',
     is_primary: false,
-    notes: ''
+    notes: '',
+    // Loan-specific fields
+    original_loan_amount: '',
+    loan_start_date: '',
+    loan_end_date: ''
   })
 
   const handlePresetSelect = (preset) => {
@@ -53,10 +70,27 @@ export default function AddAccountModal({ isOpen, onClose, onSubmit }) {
       return
     }
 
+    let balance = parseFloat(formData.current_balance) || 0
+
+    // For loan accounts, store balance as negative (amount owed)
+    if (formData.account_type === 'loan' && balance > 0) {
+      balance = -balance
+    }
+
     const accountData = {
       ...formData,
-      current_balance: parseFloat(formData.current_balance) || 0,
-      interest_rate: formData.interest_rate ? parseFloat(formData.interest_rate) : null
+      current_balance: balance,
+      interest_rate: formData.interest_rate ? parseFloat(formData.interest_rate) : null,
+      // Loan-specific fields
+      original_loan_amount: formData.account_type === 'loan' && formData.original_loan_amount
+        ? parseFloat(formData.original_loan_amount)
+        : null,
+      loan_start_date: formData.account_type === 'loan' && formData.loan_start_date
+        ? formData.loan_start_date
+        : null,
+      loan_end_date: formData.account_type === 'loan' && formData.loan_end_date
+        ? formData.loan_end_date
+        : null
     }
 
     await onSubmit(accountData)
@@ -77,7 +111,10 @@ export default function AddAccountModal({ isOpen, onClose, onSubmit }) {
       current_balance: '',
       interest_rate: '',
       is_primary: false,
-      notes: ''
+      notes: '',
+      original_loan_amount: '',
+      loan_start_date: '',
+      loan_end_date: ''
     })
     onClose()
   }
@@ -224,12 +261,13 @@ export default function AddAccountModal({ isOpen, onClose, onSubmit }) {
                   <select
                     className="select dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     value={formData.account_type}
-                    onChange={(e) => setFormData({ ...formData, account_type: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, account_type: e.target.value, category: '' })}
                     required
                   >
                     <option value="cash">Cash Account</option>
                     <option value="investment">Investment Account</option>
                     <option value="virtual">Virtual Account</option>
+                    <option value="loan">Loan / Liability</option>
                   </select>
                 </div>
 
@@ -243,9 +281,16 @@ export default function AddAccountModal({ isOpen, onClose, onSubmit }) {
                     required
                   >
                     <option value="">Select Category</option>
-                    {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
+                    {Object.entries(CATEGORY_LABELS)
+                      .filter(([value]) => {
+                        // Filter categories based on account type
+                        const isLoanCategory = LOAN_CATEGORIES.includes(value)
+                        if (formData.account_type === 'loan') return isLoanCategory
+                        return !isLoanCategory
+                      })
+                      .map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
                   </select>
                 </div>
               </div>
@@ -275,22 +320,90 @@ export default function AddAccountModal({ isOpen, onClose, onSubmit }) {
                   />
                 </div>
 
-                {/* Current Balance */}
+                {/* Current Balance / Amount Owed */}
                 <div className="form-group">
-                  <label className="label text-gray-700 dark:text-gray-300">Current Balance (KES)</label>
+                  <label className="label text-gray-700 dark:text-gray-300">
+                    {formData.account_type === 'loan' ? 'Amount Owed (KES)' : 'Current Balance (KES)'}
+                  </label>
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     className="input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     placeholder="0.00"
                     value={formData.current_balance}
                     onChange={(e) => setFormData({ ...formData, current_balance: e.target.value })}
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Leave blank if starting fresh
+                    {formData.account_type === 'loan'
+                      ? 'Enter the current outstanding loan amount'
+                      : 'Leave blank if starting fresh'}
                   </p>
                 </div>
               </div>
+
+              {/* Loan-specific fields */}
+              {formData.account_type === 'loan' && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Original Loan Amount */}
+                    <div className="form-group">
+                      <label className="label text-gray-700 dark:text-gray-300">Original Loan Amount (KES)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                        placeholder="e.g., 500000"
+                        value={formData.original_loan_amount}
+                        onChange={(e) => setFormData({ ...formData, original_loan_amount: e.target.value })}
+                      />
+                    </div>
+
+                    {/* Loan Start Date */}
+                    <div className="form-group">
+                      <label className="label text-gray-700 dark:text-gray-300">Loan Start Date</label>
+                      <input
+                        type="date"
+                        className="input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                        value={formData.loan_start_date}
+                        onChange={(e) => setFormData({ ...formData, loan_start_date: e.target.value })}
+                      />
+                    </div>
+
+                    {/* Loan End Date */}
+                    <div className="form-group">
+                      <label className="label text-gray-700 dark:text-gray-300">Expected End Date</label>
+                      <input
+                        type="date"
+                        className="input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                        value={formData.loan_end_date}
+                        onChange={(e) => setFormData({ ...formData, loan_end_date: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Loan Interest Rate */}
+                  <div className="form-group">
+                    <label className="label text-gray-700 dark:text-gray-300">Interest Rate (% per annum)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                      placeholder="e.g., 13.5"
+                      value={formData.interest_rate}
+                      onChange={(e) => setFormData({ ...formData, interest_rate: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Info banner for loans */}
+                  <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      <strong>How loan tracking works:</strong> Enter the amount you owe. When you make payments via payroll deductions or manually, the balance will decrease automatically.
+                    </p>
+                  </div>
+                </>
+              )}
 
               {/* Interest Rate (for investments) */}
               {formData.account_type === 'investment' && (
@@ -319,20 +432,22 @@ export default function AddAccountModal({ isOpen, onClose, onSubmit }) {
                 />
               </div>
 
-              {/* Primary Account Checkbox */}
-              <div className="form-group">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 dark:bg-gray-700"
-                    checked={formData.is_primary}
-                    onChange={(e) => setFormData({ ...formData, is_primary: e.target.checked })}
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
-                    Set as primary account (for income and default expenses)
-                  </span>
-                </label>
-              </div>
+              {/* Primary Account Checkbox (not for loans) */}
+              {formData.account_type !== 'loan' && (
+                <div className="form-group">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 dark:bg-gray-700"
+                      checked={formData.is_primary}
+                      onChange={(e) => setFormData({ ...formData, is_primary: e.target.checked })}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Set as primary account (for income and default expenses)
+                    </span>
+                  </label>
+                </div>
+              )}
 
               {/* Preset Info Banner */}
               {selectedPreset && (

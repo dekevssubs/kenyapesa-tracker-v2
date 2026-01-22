@@ -72,16 +72,23 @@ export default function Lending() {
   const { isOpen: confirmOpen, config: confirmConfig, confirm, close: closeConfirm } = useConfirmation()
 
   // State
+  const [activeTab, setActiveTab] = useState('lending') // 'lending' or 'borrowing'
   const [counterparties, setCounterparties] = useState([])
   const [summary, setSummary] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
+
+  // Borrowing state
+  const [lenders, setLenders] = useState([])
+  const [borrowingSummary, setBorrowingSummary] = useState(null)
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false)
   const [showRepaymentModal, setShowRepaymentModal] = useState(false)
   const [showForgivenessModal, setShowForgivenessModal] = useState(false)
   const [forgivingLoading, setForgivingLoading] = useState(false)
+  const [showBorrowingModal, setShowBorrowingModal] = useState(false)
+  const [showBorrowingRepaymentModal, setShowBorrowingRepaymentModal] = useState(false)
 
   // Selected items
   const [selectedCounterparty, setSelectedCounterparty] = useState(null)
@@ -99,6 +106,7 @@ export default function Lending() {
   const [manualFeeEntry, setManualFeeEntry] = useState('') // Manual fee entry for bank transfers
   const [feeOverride, setFeeOverride] = useState(false) // When true, use parsed fee instead of calculated
   const [showRepaymentMessageParser, setShowRepaymentMessageParser] = useState(false) // SMS parser for repayments
+  const [showBorrowingMessageParser, setShowBorrowingMessageParser] = useState(false) // SMS parser for borrowing
 
   // Form data
   const [formData, setFormData] = useState({
@@ -117,9 +125,31 @@ export default function Lending() {
     date: new Date().toISOString().split('T')[0]
   })
 
+  // Borrowing form data
+  const [borrowingFormData, setBorrowingFormData] = useState({
+    lender_name: '',
+    lender_type: 'individual',
+    amount: '',
+    receive_to_account_id: '',
+    date: new Date().toISOString().split('T')[0],
+    due_date: '',
+    notes: '',
+    interest_rate: ''
+  })
+
+  const [borrowingRepaymentData, setBorrowingRepaymentData] = useState({
+    amount: '',
+    pay_from_account_id: '',
+    date: new Date().toISOString().split('T')[0]
+  })
+
+  const [selectedLender, setSelectedLender] = useState(null)
+  const [selectedBorrowing, setSelectedBorrowing] = useState(null)
+
   useEffect(() => {
     if (user) {
       fetchCounterparties()
+      fetchBorrowings()
       fetchAccounts()
     }
   }, [user])
@@ -141,6 +171,22 @@ export default function Lending() {
       showToast('Error', 'Failed to fetch lending records', 'error')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchBorrowings = async () => {
+    try {
+      const lendingService = new LendingService(supabase, user.id)
+      const result = await lendingService.getBorrowingsByLender()
+
+      if (result.success) {
+        setLenders(result.lenders)
+        setBorrowingSummary(result.summary)
+      } else {
+        throw new Error(result.error)
+      }
+    } catch (error) {
+      console.error('Error fetching borrowings:', error)
     }
   }
 
@@ -189,6 +235,35 @@ export default function Lending() {
   // Check if message parser should be shown (M-Pesa or Bank account)
   const shouldShowMessageParser = () => {
     return isMpesaAccount() || isBankAccount()
+  }
+
+  // Check if selected borrowing account is M-Pesa
+  const isBorrowingMpesaAccount = () => {
+    if (!borrowingFormData.receive_to_account_id) return false
+    const account = accounts.find(a => a.id === borrowingFormData.receive_to_account_id)
+    if (!account) return false
+    const mpesaKeywords = ['mpesa', 'm-pesa', 'safaricom', 'mobile money']
+    const accountName = (account.name || '').toLowerCase()
+    const accountType = (account.account_type || '').toLowerCase()
+    return mpesaKeywords.some(kw => accountName.includes(kw) || accountType.includes(kw)) ||
+           accountType === 'mobile_money'
+  }
+
+  // Check if selected borrowing account is a Bank account
+  const isBorrowingBankAccount = () => {
+    if (!borrowingFormData.receive_to_account_id) return false
+    const account = accounts.find(a => a.id === borrowingFormData.receive_to_account_id)
+    if (!account) return false
+    const bankKeywords = ['bank', 'ncba', 'kcb', 'equity', 'co-op', 'coop', 'stanbic', 'absa', 'dtb', 'i&m', 'checking', 'savings']
+    const accountName = (account.name || '').toLowerCase()
+    const accountType = (account.account_type || '').toLowerCase()
+    return bankKeywords.some(kw => accountName.includes(kw) || accountType.includes(kw)) ||
+           accountType === 'bank' || accountType === 'checking' || accountType === 'savings'
+  }
+
+  // Check if message parser should be shown for borrowing (M-Pesa or Bank account)
+  const shouldShowBorrowingMessageParser = () => {
+    return isBorrowingMpesaAccount() || isBorrowingBankAccount()
   }
 
   // Handle parsed M-Pesa or Bank message
@@ -377,6 +452,60 @@ export default function Lending() {
     showToast('Success', 'Transaction details extracted from message', 'success')
   }
 
+  // Handle parsed borrowing message (loan received)
+  const handleBorrowingParsed = (parsedData) => {
+    if (parsedData) {
+      // Extract sender name (lender) from parsed description
+      let lenderName = parsedData.description || ''
+      // Clean up the name (remove phone numbers, extra spaces)
+      lenderName = lenderName.replace(/\d{10,}/g, '').trim()
+      // Capitalize first letter of each word
+      lenderName = lenderName
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ')
+        .trim()
+
+      // Parse date from message (format: "25/12/24 10:30 AM" or similar)
+      let parsedDate = borrowingFormData.date // Default to current form date
+      if (parsedData.transactionDate) {
+        try {
+          const dateParts = parsedData.transactionDate.split(' ')[0].split('/')
+          if (dateParts.length === 3) {
+            const day = parseInt(dateParts[0])
+            const month = parseInt(dateParts[1]) - 1 // JS months are 0-indexed
+            let year = parseInt(dateParts[2])
+            // Handle 2-digit year
+            if (year < 100) {
+              year = year > 50 ? 1900 + year : 2000 + year
+            }
+            const dateObj = new Date(year, month, day)
+            if (!isNaN(dateObj.getTime())) {
+              parsedDate = dateObj.toISOString().split('T')[0]
+            }
+          }
+        } catch (e) {
+          console.log('Could not parse date:', parsedData.transactionDate)
+        }
+      }
+
+      // Get reference code for notes
+      const reference = parsedData.reference || parsedData.bankReference || parsedData.mpesaReference || ''
+      const notesWithRef = reference ? `Ref: ${reference}` : ''
+
+      setBorrowingFormData(prev => ({
+        ...prev,
+        amount: parsedData.amount?.toString() || prev.amount,
+        lender_name: lenderName || prev.lender_name,
+        date: parsedDate,
+        notes: notesWithRef || prev.notes
+      }))
+
+      setShowBorrowingMessageParser(false)
+      showToast('Success', 'Loan details extracted from message', 'success')
+    }
+  }
+
   const handleRepayment = async (e) => {
     e.preventDefault()
 
@@ -500,6 +629,125 @@ export default function Lending() {
     })
   }
 
+  // Borrowing functions
+  const resetBorrowingForm = () => {
+    const primaryAccount = accounts.find(a => a.is_primary)
+    setBorrowingFormData({
+      lender_name: '',
+      lender_type: 'individual',
+      amount: '',
+      receive_to_account_id: primaryAccount?.id || '',
+      date: new Date().toISOString().split('T')[0],
+      due_date: '',
+      notes: '',
+      interest_rate: ''
+    })
+    setShowBorrowingMessageParser(false)
+  }
+
+  const resetBorrowingRepaymentData = () => {
+    const primaryAccount = accounts.find(a => a.is_primary)
+    setBorrowingRepaymentData({
+      amount: '',
+      pay_from_account_id: primaryAccount?.id || '',
+      date: new Date().toISOString().split('T')[0]
+    })
+  }
+
+  const handleAddBorrowing = async (e) => {
+    e.preventDefault()
+
+    if (!borrowingFormData.lender_name.trim()) {
+      showToast('Validation Error', 'Please enter a lender name', 'warning')
+      return
+    }
+
+    if (!borrowingFormData.amount || parseFloat(borrowingFormData.amount) <= 0) {
+      showToast('Validation Error', 'Please enter a valid amount', 'warning')
+      return
+    }
+
+    if (!borrowingFormData.receive_to_account_id) {
+      showToast('Validation Error', 'Please select an account', 'warning')
+      return
+    }
+
+    try {
+      const lendingService = new LendingService(supabase, user.id)
+      const result = await lendingService.createBorrowedLoan({
+        receive_to_account_id: borrowingFormData.receive_to_account_id,
+        lender_name: borrowingFormData.lender_name.trim(),
+        lender_type: borrowingFormData.lender_type,
+        amount: parseFloat(borrowingFormData.amount),
+        date: borrowingFormData.date,
+        due_date: borrowingFormData.due_date || null,
+        notes: borrowingFormData.notes,
+        interest_rate: borrowingFormData.interest_rate ? parseFloat(borrowingFormData.interest_rate) : null
+      })
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      showToast('Success', `Borrowed ${formatCurrency(borrowingFormData.amount)} from ${borrowingFormData.lender_name}`, 'success')
+      resetBorrowingForm()
+      setShowBorrowingModal(false)
+      fetchBorrowings()
+      fetchAccounts()
+    } catch (error) {
+      console.error('Error adding borrowing:', error)
+      showToast('Error', error.message || 'Failed to save borrowing record', 'error')
+    }
+  }
+
+  const handleBorrowingRepayment = async (e) => {
+    e.preventDefault()
+
+    if (!borrowingRepaymentData.amount || parseFloat(borrowingRepaymentData.amount) <= 0) {
+      showToast('Validation Error', 'Please enter a valid amount', 'warning')
+      return
+    }
+
+    if (!borrowingRepaymentData.pay_from_account_id) {
+      showToast('Validation Error', 'Please select an account', 'warning')
+      return
+    }
+
+    if (!selectedBorrowing) {
+      showToast('Error', 'No loan selected', 'error')
+      return
+    }
+
+    try {
+      const lendingService = new LendingService(supabase, user.id)
+      const result = await lendingService.recordBorrowedLoanRepayment(
+        selectedBorrowing.id,
+        parseFloat(borrowingRepaymentData.amount),
+        borrowingRepaymentData.pay_from_account_id,
+        borrowingRepaymentData.date
+      )
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      showToast('Success', `Paid ${formatCurrency(borrowingRepaymentData.amount)} to ${selectedLender?.lenderName}`, 'success')
+      resetBorrowingRepaymentData()
+      setShowBorrowingRepaymentModal(false)
+      setSelectedBorrowing(null)
+      fetchBorrowings()
+      fetchAccounts()
+    } catch (error) {
+      console.error('Error recording borrowing repayment:', error)
+      showToast('Error', error.message || 'Failed to record payment', 'error')
+    }
+  }
+
+  const openLenderDrawer = (lender) => {
+    setSelectedLender(lender)
+    setDrawerOpen(true)
+  }
+
   // Filter counterparties
   const filteredCounterparties = counterparties.filter(cp => {
     if (filterStatus === 'active') {
@@ -507,6 +755,17 @@ export default function Lending() {
     }
     if (filterStatus === 'complete') {
       return cp.activeLoans === 0 && cp.totalOutstanding <= 0
+    }
+    return true // 'all'
+  })
+
+  // Filter lenders (for borrowing tab)
+  const filteredLenders = lenders.filter(lender => {
+    if (filterStatus === 'active') {
+      return lender.activeLoans > 0
+    }
+    if (filterStatus === 'complete') {
+      return lender.activeLoans === 0 && lender.totalOutstanding <= 0
     }
     return true // 'all'
   })
@@ -521,7 +780,36 @@ export default function Lending() {
 
   return (
     <div className="space-y-6">
-      {/* Header Stats */}
+      {/* Tabs: Lending vs Borrowing */}
+      <div className="card bg-white dark:bg-gray-800 p-2">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setActiveTab('lending')}
+            className={`py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center ${
+              activeTab === 'lending'
+                ? 'bg-amber-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            <HandCoins className="h-5 w-5 mr-2" />
+            Money I Lent
+          </button>
+          <button
+            onClick={() => setActiveTab('borrowing')}
+            className={`py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center ${
+              activeTab === 'borrowing'
+                ? 'bg-purple-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            <Wallet className="h-5 w-5 mr-2" />
+            Money I Borrowed
+          </button>
+        </div>
+      </div>
+
+      {/* Header Stats - Lending Tab */}
+      {activeTab === 'lending' && (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 dark:from-amber-600 dark:to-amber-700 rounded-xl p-5 text-white">
           <div className="flex items-center justify-between mb-2">
@@ -559,8 +847,51 @@ export default function Lending() {
           <p className="text-xs text-blue-100 mt-1">of {summary?.totalCounterparties || 0} total</p>
         </div>
       </div>
+      )}
 
-      {/* Add New Button */}
+      {/* Header Stats - Borrowing Tab */}
+      {activeTab === 'borrowing' && (
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 dark:from-purple-600 dark:to-purple-700 rounded-xl p-5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-purple-100 text-sm">Total Borrowed</p>
+            <Wallet className="h-5 w-5 text-purple-200" />
+          </div>
+          <p className="text-3xl font-bold">{formatCurrency(borrowingSummary?.totalBorrowed || 0)}</p>
+          <p className="text-xs text-purple-100 mt-1">Lifetime borrowing</p>
+        </div>
+
+        <div className="bg-gradient-to-br from-red-500 to-red-600 dark:from-red-600 dark:to-red-700 rounded-xl p-5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-red-100 text-sm">Outstanding</p>
+            <AlertTriangle className="h-5 w-5 text-red-200" />
+          </div>
+          <p className="text-3xl font-bold">{formatCurrency(borrowingSummary?.totalOutstanding || 0)}</p>
+          <p className="text-xs text-red-100 mt-1">Amount you owe</p>
+        </div>
+
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 dark:from-orange-600 dark:to-orange-700 rounded-xl p-5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-orange-100 text-sm">Overdue</p>
+            <Clock className="h-5 w-5 text-orange-200" />
+          </div>
+          <p className="text-3xl font-bold">{formatCurrency(borrowingSummary?.totalOverdueAmount || 0)}</p>
+          <p className="text-xs text-orange-100 mt-1">{borrowingSummary?.overdueLenders || 0} lender(s)</p>
+        </div>
+
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-xl p-5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-blue-100 text-sm">Active Lenders</p>
+            <Users className="h-5 w-5 text-blue-200" />
+          </div>
+          <p className="text-3xl font-bold">{borrowingSummary?.activeLenders || 0}</p>
+          <p className="text-xs text-blue-100 mt-1">of {borrowingSummary?.totalLenders || 0} total</p>
+        </div>
+      </div>
+      )}
+
+      {/* Add New Button - Lending */}
+      {activeTab === 'lending' && (
       <div className="card bg-white dark:bg-gray-800">
         <button
           onClick={() => {
@@ -573,8 +904,26 @@ export default function Lending() {
           Lend Money to Someone
         </button>
       </div>
+      )}
 
-      {/* Filters */}
+      {/* Add New Button - Borrowing */}
+      {activeTab === 'borrowing' && (
+      <div className="card bg-white dark:bg-gray-800">
+        <button
+          onClick={() => {
+            resetBorrowingForm()
+            setShowBorrowingModal(true)
+          }}
+          className="btn btn-primary w-full flex items-center justify-center py-4 bg-purple-600 hover:bg-purple-700"
+        >
+          <Plus className="h-5 w-5 mr-2" />
+          Record Borrowed Loan
+        </button>
+      </div>
+      )}
+
+      {/* Filters - Lending */}
+      {activeTab === 'lending' && (
       <div className="card bg-white dark:bg-gray-800">
         <label className="label">Filter Borrowers</label>
         <div className="grid grid-cols-3 gap-3">
@@ -610,8 +959,49 @@ export default function Lending() {
           </button>
         </div>
       </div>
+      )}
 
-      {/* Borrowers List (Counterparty-Centric) */}
+      {/* Filters - Borrowing */}
+      {activeTab === 'borrowing' && (
+      <div className="card bg-white dark:bg-gray-800">
+        <label className="label">Filter Lenders</label>
+        <div className="grid grid-cols-3 gap-3">
+          <button
+            onClick={() => setFilterStatus('active')}
+            className={`py-3 px-4 rounded-lg font-medium transition-colors ${
+              filterStatus === 'active'
+                ? 'bg-purple-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            Active ({lenders.filter(l => l.activeLoans > 0).length})
+          </button>
+          <button
+            onClick={() => setFilterStatus('complete')}
+            className={`py-3 px-4 rounded-lg font-medium transition-colors ${
+              filterStatus === 'complete'
+                ? 'bg-green-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            Paid Off ({lenders.filter(l => l.activeLoans === 0 && l.totalOutstanding <= 0).length})
+          </button>
+          <button
+            onClick={() => setFilterStatus('all')}
+            className={`py-3 px-4 rounded-lg font-medium transition-colors ${
+              filterStatus === 'all'
+                ? 'bg-gray-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            All ({lenders.length})
+          </button>
+        </div>
+      </div>
+      )}
+
+      {/* Borrowers List (Counterparty-Centric) - Lending Tab */}
+      {activeTab === 'lending' && (
       <div className="card bg-white dark:bg-gray-800">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
           <Users className="h-5 w-5 mr-2 text-gray-600 dark:text-gray-400" />
@@ -719,6 +1109,135 @@ export default function Lending() {
           </div>
         )}
       </div>
+      )}
+
+      {/* Lenders List - Borrowing Tab */}
+      {activeTab === 'borrowing' && (
+      <div className="card bg-white dark:bg-gray-800">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+          <Users className="h-5 w-5 mr-2 text-gray-600 dark:text-gray-400" />
+          Lenders (People/Institutions I Owe)
+        </h3>
+
+        {filteredLenders.length === 0 ? (
+          <div className="text-center py-12">
+            <Wallet className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400 mb-4">
+              {lenders.length === 0
+                ? 'No borrowed loans recorded yet'
+                : 'No lenders match your filter'}
+            </p>
+            {lenders.length === 0 && (
+              <button
+                onClick={() => setShowBorrowingModal(true)}
+                className="btn btn-primary bg-purple-600 hover:bg-purple-700"
+              >
+                Record Borrowed Loan
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredLenders.map((lender) => {
+              const StatusIcon = STATUS_CONFIG[lender.isOverdue ? 'overdue' : lender.totalOutstanding <= 0 ? 'complete' : 'partial']?.icon || Clock
+              const statusLabel = lender.isOverdue ? 'Overdue' : lender.totalOutstanding <= 0 ? 'Paid Off' : lender.totalRepaid > 0 ? 'Partial' : 'Pending'
+              const statusColor = lender.isOverdue
+                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                : lender.totalOutstanding <= 0
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+
+              return (
+                <div
+                  key={lender.lenderName}
+                  className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center flex-shrink-0">
+                        <User className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2 mb-1">
+                          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                            {lender.lenderName}
+                          </p>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
+                            <StatusIcon className="h-3 w-3 mr-1" />
+                            {statusLabel}
+                          </span>
+                          {lender.lenderType && lender.lenderType !== 'other' && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 capitalize">
+                              {lender.lenderType}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                          <span>{lender.activeLoans} active loan{lender.activeLoans !== 1 ? 's' : ''}</span>
+                          {lender.isOverdue && (
+                            <span className="text-red-600 dark:text-red-400">
+                              {lender.maxDaysOverdue} days overdue
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                          {formatCurrency(lender.totalOutstanding)}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          you owe
+                        </p>
+                      </div>
+                      {lender.totalOutstanding > 0 && lender.loans[0] && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedLender(lender)
+                            setSelectedBorrowing(lender.loans[0])
+                            resetBorrowingRepaymentData()
+                            setBorrowingRepaymentData(prev => ({
+                              ...prev,
+                              amount: lender.loans[0].outstanding.toString()
+                            }))
+                            setShowBorrowingRepaymentModal(true)
+                          }}
+                          className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700"
+                        >
+                          Pay
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  {lender.totalRepaid > 0 && (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                        <span>Paid: {formatCurrency(lender.totalRepaid)}</span>
+                        <span>{((lender.totalRepaid / lender.totalBorrowed) * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-300 ${
+                            lender.totalOutstanding <= 0 ? 'bg-green-500' :
+                            lender.isOverdue ? 'bg-red-500' : 'bg-purple-500'
+                          }`}
+                          style={{ width: `${Math.min((lender.totalRepaid / lender.totalBorrowed) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+      )}
 
       {/* Add Lending Modal */}
       {showAddModal && (
@@ -1068,6 +1587,285 @@ export default function Lending() {
                 </button>
                 <button type="submit" className="flex-1 btn btn-primary py-3">
                   Record Repayment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Borrowing Modal */}
+      {showBorrowingModal && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 animate-slideIn max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                Record Borrowed Loan
+              </h3>
+              <button
+                onClick={() => setShowBorrowingModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddBorrowing} className="space-y-4">
+              <div className="form-group">
+                <label className="label flex items-center">
+                  <Wallet className="h-4 w-4 mr-1" />
+                  Receive To Account *
+                </label>
+                <select
+                  className="select"
+                  value={borrowingFormData.receive_to_account_id}
+                  onChange={(e) => setBorrowingFormData({ ...borrowingFormData, receive_to_account_id: e.target.value })}
+                  required
+                >
+                  <option value="">Select an account</option>
+                  {accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name} - {formatCurrency(account.current_balance)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Parse Transaction Message Button - Show for M-Pesa and Bank accounts */}
+              {shouldShowBorrowingMessageParser() && (
+                <div className="form-group">
+                  <button
+                    type="button"
+                    onClick={() => setShowBorrowingMessageParser(!showBorrowingMessageParser)}
+                    className={`w-full py-2.5 px-4 border-2 border-dashed rounded-lg transition-colors flex items-center justify-center ${
+                      isBorrowingBankAccount()
+                        ? 'border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                        : 'border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+                    }`}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    {showBorrowingMessageParser
+                      ? 'Hide Message Parser'
+                      : isBorrowingBankAccount()
+                        ? 'Parse Bank Transaction SMS'
+                        : 'Parse M-Pesa Transaction SMS'
+                    }
+                  </button>
+                </div>
+              )}
+
+              {/* Transaction Message Parser */}
+              {showBorrowingMessageParser && (
+                <TransactionMessageParser
+                  onParsed={handleBorrowingParsed}
+                  onClose={() => setShowBorrowingMessageParser(false)}
+                />
+              )}
+
+              <div className="form-group">
+                <label className="label flex items-center">
+                  <User className="h-4 w-4 mr-1" />
+                  Lender Name *
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Who did you borrow from?"
+                  value={borrowingFormData.lender_name}
+                  onChange={(e) => setBorrowingFormData({ ...borrowingFormData, lender_name: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="label">Lender Type</label>
+                <select
+                  className="select"
+                  value={borrowingFormData.lender_type}
+                  onChange={(e) => setBorrowingFormData({ ...borrowingFormData, lender_type: e.target.value })}
+                >
+                  <option value="individual">Individual / Friend</option>
+                  <option value="chama">Chama / Merry-go-round</option>
+                  <option value="sacco">SACCO</option>
+                  <option value="bank">Bank</option>
+                  <option value="mfi">Microfinance (MFI)</option>
+                  <option value="employer">Employer</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="label flex items-center">
+                  <DollarSign className="h-4 w-4 mr-1" />
+                  Amount Borrowed (KES) *
+                </label>
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="Enter amount"
+                  value={borrowingFormData.amount}
+                  onChange={(e) => setBorrowingFormData({ ...borrowingFormData, amount: e.target.value })}
+                  min="1"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="label">Date Borrowed *</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={borrowingFormData.date}
+                    onChange={(e) => setBorrowingFormData({ ...borrowingFormData, date: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="label">Due Date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={borrowingFormData.due_date}
+                    onChange={(e) => setBorrowingFormData({ ...borrowingFormData, due_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="label">Interest Rate (%)</label>
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="e.g., 12"
+                  value={borrowingFormData.interest_rate}
+                  onChange={(e) => setBorrowingFormData({ ...borrowingFormData, interest_rate: e.target.value })}
+                  step="0.1"
+                  min="0"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="label flex items-center">
+                  <MessageSquare className="h-4 w-4 mr-1" />
+                  Notes
+                </label>
+                <textarea
+                  className="input min-h-[80px]"
+                  placeholder="Any additional details..."
+                  value={borrowingFormData.notes}
+                  onChange={(e) => setBorrowingFormData({ ...borrowingFormData, notes: e.target.value })}
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowBorrowingModal(false)}
+                  className="flex-1 btn btn-secondary py-3"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 btn btn-primary py-3 bg-purple-600 hover:bg-purple-700">
+                  Record Loan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Borrowing Repayment Modal */}
+      {showBorrowingRepaymentModal && selectedBorrowing && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 animate-slideIn">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                Make Payment
+              </h3>
+              <button
+                onClick={() => {
+                  setShowBorrowingRepaymentModal(false)
+                  setSelectedBorrowing(null)
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+              <p className="text-sm text-purple-700 dark:text-purple-300">
+                Paying to: <strong>{selectedLender?.lenderName}</strong>
+              </p>
+              <p className="text-sm text-purple-700 dark:text-purple-300">
+                Outstanding: <strong>{formatCurrency(selectedBorrowing?.outstanding || 0)}</strong>
+              </p>
+            </div>
+
+            <form onSubmit={handleBorrowingRepayment} className="space-y-4">
+              <div className="form-group">
+                <label className="label flex items-center">
+                  <DollarSign className="h-4 w-4 mr-1" />
+                  Payment Amount (KES) *
+                </label>
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="Enter amount"
+                  value={borrowingRepaymentData.amount}
+                  onChange={(e) => setBorrowingRepaymentData({ ...borrowingRepaymentData, amount: e.target.value })}
+                  max={selectedBorrowing?.outstanding}
+                  min="1"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="label flex items-center">
+                  <Wallet className="h-4 w-4 mr-1" />
+                  Pay From Account *
+                </label>
+                <select
+                  className="select"
+                  value={borrowingRepaymentData.pay_from_account_id}
+                  onChange={(e) => setBorrowingRepaymentData({ ...borrowingRepaymentData, pay_from_account_id: e.target.value })}
+                  required
+                >
+                  <option value="">Select an account</option>
+                  {accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name} - {formatCurrency(account.current_balance)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="label">Payment Date *</label>
+                <input
+                  type="date"
+                  className="input"
+                  value={borrowingRepaymentData.date}
+                  onChange={(e) => setBorrowingRepaymentData({ ...borrowingRepaymentData, date: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBorrowingRepaymentModal(false)
+                    setSelectedBorrowing(null)
+                  }}
+                  className="flex-1 btn btn-secondary py-3"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 btn btn-primary py-3 bg-purple-600 hover:bg-purple-700">
+                  Make Payment
                 </button>
               </div>
             </form>

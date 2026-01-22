@@ -16,7 +16,11 @@ import {
   CheckCircle,
   XCircle,
   PauseCircle,
-  Eye
+  Eye,
+  CreditCard,
+  GraduationCap,
+  Car,
+  Home
 } from 'lucide-react'
 import { formatCurrency } from '../../utils/calculations'
 import { getBankColor, formatCardNumber, getDisplayInstitution } from '../../utils/bankBrandColors'
@@ -90,7 +94,16 @@ function getAccountIcon(category) {
     fixed_deposit: PiggyBank,
     chama: Users,
     emergency_fund: PiggyBank,
-    sinking_fund: PiggyBank
+    sinking_fund: PiggyBank,
+    // Loan categories
+    helb_loan: GraduationCap,
+    bank_loan: Building2,
+    sacco_loan: Users,
+    car_loan: Car,
+    mortgage_loan: Home,
+    personal_loan: CreditCard,
+    chama_loan: Users,
+    credit_card: CreditCard
   }
   return iconMap[category] || Wallet
 }
@@ -100,7 +113,8 @@ function getAccountTypeLabel(accountType) {
   const labels = {
     cash: 'CASH',
     investment: 'INVESTMENT',
-    virtual: 'VIRTUAL'
+    virtual: 'VIRTUAL',
+    loan: 'LOAN'
   }
   return labels[accountType] || 'ACCOUNT'
 }
@@ -258,10 +272,19 @@ export default function BankCard({
             </div>
 
             <div className="text-right">
-              <p className="text-3xl font-bold tracking-tight">
-                {showBalance ? formatCurrency(account.current_balance) : '••••••'}
-              </p>
-              {/* Interest Rate for investments */}
+              {account.account_type === 'loan' ? (
+                <>
+                  <p className="text-xs opacity-70 mb-0.5">Amount Owed</p>
+                  <p className="text-3xl font-bold tracking-tight">
+                    {showBalance ? formatCurrency(Math.abs(account.current_balance)) : '••••••'}
+                  </p>
+                </>
+              ) : (
+                <p className="text-3xl font-bold tracking-tight">
+                  {showBalance ? formatCurrency(account.current_balance) : '••••••'}
+                </p>
+              )}
+              {/* Interest Rate for investments and loans */}
               {account.interest_rate && (
                 <p className="text-xs opacity-80 flex items-center justify-end mt-0.5">
                   <TrendingUp className="h-3 w-3 mr-1" />

@@ -1150,6 +1150,24 @@ export class IncomeService {
           })
         }
       }
+
+      // Make loan payment if loan account specified
+      if (IncomeService.canLinkToLoanAccount(deduction.deduction_type) && deduction.loan_account_id) {
+        const loanResult = await this.makeLoanPayment(
+          deduction,
+          incomeDate,
+          incomeId
+        )
+        if (loanResult.success) {
+          // Add to expense results for tracking
+          expenseResults.push({
+            deductionType: deduction.deduction_type,
+            deductionName: deduction.deduction_name,
+            loanPayment: true,
+            ...loanResult
+          })
+        }
+      }
     }
 
     return {
@@ -1263,6 +1281,168 @@ export class IncomeService {
       }
     } catch (error) {
       console.error('Error transferring to SACCO account:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * LOAN ACCOUNT INTEGRATION
+   * Methods for linking loan deductions to loan accounts
+   */
+
+  // Loan deduction types that can be linked to loan accounts
+  static LOAN_DEDUCTION_TYPES = ['helb_loan', 'car_loan', 'personal_loan', 'mortgage']
+
+  // Map deduction types to loan account categories
+  static DEDUCTION_TO_LOAN_CATEGORY = {
+    helb_loan: ['helb_loan'],
+    car_loan: ['car_loan'],
+    personal_loan: ['bank_loan', 'personal_loan', 'sacco_loan', 'chama_loan'],
+    mortgage: ['mortgage_loan']
+  }
+
+  /**
+   * Check if deduction type can be linked to a loan account
+   * @param {string} type - Deduction type
+   * @returns {boolean}
+   */
+  static canLinkToLoanAccount(type) {
+    return IncomeService.LOAN_DEDUCTION_TYPES.includes(type)
+  }
+
+  /**
+   * Get loan account categories for a deduction type
+   * @param {string} deductionType - Deduction type
+   * @returns {string[]} - Array of loan account categories
+   */
+  static getLoanCategoriesForDeduction(deductionType) {
+    return IncomeService.DEDUCTION_TO_LOAN_CATEGORY[deductionType] || []
+  }
+
+  /**
+   * Get user's loan accounts for selection
+   * @param {string} deductionType - Optional filter by deduction type
+   * @returns {Promise<object>} - {success, accounts, error}
+   */
+  async getLoanAccounts(deductionType = null) {
+    try {
+      let query = this.supabase
+        .from('accounts')
+        .select('id, name, institution_name, current_balance, category, original_loan_amount, loan_start_date, loan_end_date')
+        .eq('user_id', this.userId)
+        .eq('account_type', 'loan')
+        .eq('is_active', true)
+
+      // Filter by category if deduction type specified
+      if (deductionType) {
+        const loanCategories = IncomeService.getLoanCategoriesForDeduction(deductionType)
+        if (loanCategories.length > 0) {
+          query = query.in('category', loanCategories)
+        }
+      }
+
+      const { data: accounts, error } = await query.order('name', { ascending: true })
+
+      if (error) throw error
+
+      return {
+        success: true,
+        accounts: accounts || []
+      }
+    } catch (error) {
+      console.error('Error fetching loan accounts:', error)
+      return {
+        success: false,
+        accounts: [],
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Make loan payment from deduction
+   * Creates an account_transaction that increases loan balance (reduces debt)
+   * @param {object} deduction - Deduction data with loan_account_id
+   * @param {string} incomeDate - Date of the income
+   * @param {string} incomeId - Related income ID
+   * @returns {Promise<object>} - {success, transactionId, newBalance, error}
+   */
+  async makeLoanPayment(deduction, incomeDate, incomeId) {
+    try {
+      if (!deduction.loan_account_id) {
+        return {
+          success: false,
+          error: 'No loan account specified'
+        }
+      }
+
+      // Get loan account details
+      const { data: loanAccount, error: accountError } = await this.supabase
+        .from('accounts')
+        .select('id, name, institution_name, current_balance, original_loan_amount')
+        .eq('id', deduction.loan_account_id)
+        .single()
+
+      if (accountError || !loanAccount) {
+        return {
+          success: false,
+          error: 'Loan account not found'
+        }
+      }
+
+      // Build description
+      const description = deduction.deduction_name
+        ? `${deduction.deduction_name} - Payroll deduction payment`
+        : `Loan payment from salary`
+
+      // Create account_transaction (money flows TO loan account, increasing balance toward 0)
+      // Loan accounts have negative balances, so adding money increases the balance
+      const { data: transaction, error: txError } = await this.supabase
+        .from('account_transactions')
+        .insert({
+          user_id: this.userId,
+          to_account_id: deduction.loan_account_id, // Money flows INTO loan account
+          transaction_type: 'loan_payment',
+          amount: parseFloat(deduction.amount),
+          date: incomeDate,
+          category: 'loan_payment',
+          description,
+          reference_id: incomeId,
+          reference_type: 'income_deduction'
+        })
+        .select('id')
+        .single()
+
+      if (txError) throw txError
+
+      // Get updated balance
+      const { data: updatedAccount } = await this.supabase
+        .from('accounts')
+        .select('current_balance')
+        .eq('id', deduction.loan_account_id)
+        .single()
+
+      console.log('IncomeService - Loan payment created:', {
+        transactionId: transaction.id,
+        loanAccount: loanAccount.name,
+        amount: deduction.amount,
+        previousBalance: loanAccount.current_balance,
+        newBalance: updatedAccount?.current_balance
+      })
+
+      return {
+        success: true,
+        transactionId: transaction.id,
+        loanAccountId: loanAccount.id,
+        loanAccountName: loanAccount.name,
+        previousBalance: loanAccount.current_balance,
+        newBalance: updatedAccount?.current_balance || loanAccount.current_balance + parseFloat(deduction.amount)
+      }
+    } catch (error) {
+      console.error('Error making loan payment:', error)
       return {
         success: false,
         error: error.message

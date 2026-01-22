@@ -357,19 +357,21 @@ export class AccountService {
         cash: 0,
         investment: 0,
         virtual: 0,
+        loan: 0,
         total: 0
       }
 
       accounts.forEach(account => {
         const balance = parseFloat(account.current_balance)
-        balances[account.account_type] += balance
+        balances[account.account_type] = (balances[account.account_type] || 0) + balance
+        // For total, add positive balances and subtract loan balances (which are negative)
         balances.total += balance
       })
 
       return balances
     } catch (error) {
       console.error('Error calculating balances:', error)
-      return { cash: 0, investment: 0, virtual: 0, total: 0 }
+      return { cash: 0, investment: 0, virtual: 0, loan: 0, total: 0 }
     }
   }
 
