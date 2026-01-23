@@ -24,6 +24,10 @@ export class IncomeService {
     HELB_LOAN: 'helb_loan',
     CAR_LOAN: 'car_loan',
     MORTGAGE: 'mortgage',
+    BANK_LOAN: 'bank_loan',
+    SACCO_LOAN: 'sacco_loan',
+    CHAMA_LOAN: 'chama_loan',
+    CREDIT_CARD: 'credit_card',
     RENT: 'rent',
     INSURANCE: 'insurance',
     RETIREMENT: 'retirement',
@@ -43,6 +47,10 @@ export class IncomeService {
     helb_loan: 'loan-repayments',   // HELB loan -> Financial > Loan Repayments
     car_loan: 'loan-repayments',    // Car loan -> Financial > Loan Repayments
     personal_loan: 'loan-repayments', // Personal loan -> Financial > Loan Repayments
+    bank_loan: 'loan-repayments',   // Bank loan -> Financial > Loan Repayments
+    sacco_loan: 'loan-repayments',  // SACCO loan -> Financial > Loan Repayments
+    chama_loan: 'loan-repayments',  // Chama loan -> Financial > Loan Repayments
+    credit_card: 'loan-repayments', // Credit card -> Financial > Loan Repayments
     mortgage: 'rent-mortgage',      // Mortgage -> Housing > Rent or Mortgage
     rent: 'rent-mortgage',          // Rent deduction -> Housing > Rent or Mortgage
     insurance: 'home-insurance',    // Insurance -> Housing > Home Insurance
@@ -85,6 +93,26 @@ export class IncomeService {
         value: IncomeService.DEDUCTION_TYPES.PERSONAL_LOAN,
         label: 'Personal Loan',
         description: 'Personal/bank loan repayment'
+      },
+      {
+        value: IncomeService.DEDUCTION_TYPES.BANK_LOAN,
+        label: 'Bank Loan',
+        description: 'Bank personal loan repayment'
+      },
+      {
+        value: IncomeService.DEDUCTION_TYPES.SACCO_LOAN,
+        label: 'SACCO Loan',
+        description: 'SACCO loan repayment (different from SACCO contribution)'
+      },
+      {
+        value: IncomeService.DEDUCTION_TYPES.CHAMA_LOAN,
+        label: 'Chama Loan',
+        description: 'Chama/Merry-go-round loan repayment'
+      },
+      {
+        value: IncomeService.DEDUCTION_TYPES.CREDIT_CARD,
+        label: 'Credit Card',
+        description: 'Credit card balance repayment'
       },
       {
         value: IncomeService.DEDUCTION_TYPES.INSURANCE,
@@ -1295,14 +1323,27 @@ export class IncomeService {
    */
 
   // Loan deduction types that can be linked to loan accounts
-  static LOAN_DEDUCTION_TYPES = ['helb_loan', 'car_loan', 'personal_loan', 'mortgage']
+  static LOAN_DEDUCTION_TYPES = [
+    'helb_loan',
+    'car_loan',
+    'personal_loan',
+    'mortgage',
+    'bank_loan',
+    'sacco_loan',
+    'chama_loan',
+    'credit_card'
+  ]
 
   // Map deduction types to loan account categories
   static DEDUCTION_TO_LOAN_CATEGORY = {
     helb_loan: ['helb_loan'],
     car_loan: ['car_loan'],
-    personal_loan: ['bank_loan', 'personal_loan', 'sacco_loan', 'chama_loan'],
-    mortgage: ['mortgage_loan']
+    personal_loan: ['personal_loan', 'bank_loan'],
+    mortgage: ['mortgage_loan'],
+    bank_loan: ['bank_loan'],
+    sacco_loan: ['sacco_loan'],
+    chama_loan: ['chama_loan'],
+    credit_card: ['credit_card']
   }
 
   /**
