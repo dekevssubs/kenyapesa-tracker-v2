@@ -20,15 +20,21 @@ import {
 
 const TRANSACTION_TYPES = [
   { value: 'all', label: 'All Transactions', icon: null },
-  { value: 'income', label: 'Income', icon: ArrowDownRight, color: 'text-green-600', bg: 'bg-green-50' },
-  { value: 'expense', label: 'Expense', icon: ArrowUpRight, color: 'text-red-600', bg: 'bg-red-50' },
-  { value: 'transfer', label: 'Transfer', icon: ArrowRightLeft, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { value: 'lending', label: 'Lending', icon: TrendingDown, color: 'text-orange-600', bg: 'bg-orange-50' },
-  { value: 'repayment', label: 'Repayment', icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50' },
-  { value: 'investment_deposit', label: 'Investment Deposit', icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { value: 'investment_withdrawal', label: 'Investment Withdrawal', icon: TrendingDown, color: 'text-orange-600', bg: 'bg-orange-50' },
-  { value: 'investment_return', label: 'Investment Return', icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
-  { value: 'transaction_fee', label: 'Transaction Fee', icon: DollarSign, color: 'text-gray-600', bg: 'bg-gray-50' }
+  { value: 'income', label: 'Income', icon: ArrowDownRight, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/30' },
+  { value: 'expense', label: 'Expense', icon: ArrowUpRight, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/30' },
+  { value: 'transfer', label: 'Transfer', icon: ArrowRightLeft, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/30' },
+  { value: 'lending', label: 'Lending', icon: TrendingDown, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-900/30' },
+  { value: 'repayment', label: 'Repayment', icon: TrendingUp, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-900/30' },
+  { value: 'investment_deposit', label: 'Investment Deposit', icon: TrendingUp, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/30' },
+  { value: 'investment_withdrawal', label: 'Investment Withdrawal', icon: TrendingDown, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-900/30' },
+  { value: 'investment_return', label: 'Investment Return', icon: TrendingUp, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/30' },
+  { value: 'transaction_fee', label: 'Transaction Fee', icon: DollarSign, color: 'text-gray-600 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-700' },
+  { value: 'reversal', label: 'Reversal', icon: ArrowRightLeft, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/30' },
+  { value: 'sacco_contribution', label: 'SACCO Contribution', icon: TrendingUp, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-900/30' },
+  { value: 'loan_payment', label: 'Loan Payment', icon: TrendingUp, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-900/30' },
+  { value: 'loan_received', label: 'Loan Received', icon: ArrowDownRight, color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-50 dark:bg-violet-900/30' },
+  { value: 'loan_repayment', label: 'Loan Repayment', icon: ArrowUpRight, color: 'text-fuchsia-600 dark:text-fuchsia-400', bg: 'bg-fuchsia-50 dark:bg-fuchsia-900/30' },
+  { value: 'bad_debt', label: 'Bad Debt', icon: TrendingDown, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-900/30' }
 ]
 
 export default function AccountHistory() {
@@ -447,7 +453,7 @@ export default function AccountHistory() {
                         })}
                       </td>
                       <td className="px-4 py-4">
-                        <div className={`inline-flex items-center px-3 py-1 rounded-full ${colors.bg} dark:bg-opacity-20`}>
+                        <div className={`inline-flex items-center px-3 py-1 rounded-full ${colors.bg}`}>
                           <Icon className={`h-4 w-4 mr-1 ${colors.text}`} />
                           <span className={`text-xs font-medium ${colors.text} capitalize`}>
                             {tx.transaction_type.replace(/_/g, ' ')}
