@@ -1075,6 +1075,7 @@ export class IncomeService {
           category: categorySlug,
           category_id: categoryId,
           payment_method: 'salary_deduction',
+          start_date: startDate, // Required field
           next_date: nextDate,
           is_active: true,
           auto_add: false, // Don't auto-add since it's deducted from salary
