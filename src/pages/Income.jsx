@@ -499,8 +499,52 @@ export default function Income() {
 
       // Use the deposited amount already calculated in handleOpenReverse
       const depositedAmount = reversingIncome.depositedAmount
+      const today = new Date().toISOString().split('T')[0]
 
-      // Create a reversal transaction (debit from account)
+      // Step 1: Find all deduction-related transactions for this income
+      // (SACCO contributions, loan payments, etc.)
+      const { data: deductionTransactions, error: fetchError } = await supabase
+        .from('account_transactions')
+        .select('id, to_account_id, from_account_id, transaction_type, amount, category, description')
+        .eq('reference_id', reversingIncome.id)
+        .eq('reference_type', 'income_deduction')
+        .eq('user_id', user.id)
+
+      if (fetchError) throw fetchError
+
+      // Step 2: Create reversal transactions for each deduction transaction
+      // These transactions moved money INTO accounts (SACCO, loan), so we need to reverse that
+      let reversedDeductionsCount = 0
+      let reversedDeductionsTotal = 0
+
+      if (deductionTransactions && deductionTransactions.length > 0) {
+        for (const deductionTx of deductionTransactions) {
+          // Create reversal: money flows OUT of the account it flowed INTO
+          const { error: reversalError } = await supabase
+            .from('account_transactions')
+            .insert({
+              user_id: user.id,
+              from_account_id: deductionTx.to_account_id, // Money flows OUT (reversal)
+              transaction_type: 'reversal',
+              amount: parseFloat(deductionTx.amount),
+              date: today,
+              category: deductionTx.category,
+              description: `Reversal: ${deductionTx.description} - ${reverseReason}`,
+              reference_id: reversingIncome.id,
+              reference_type: 'deduction_reversal'
+            })
+
+          if (reversalError) {
+            console.error('Error reversing deduction transaction:', reversalError)
+            // Continue with other reversals even if one fails
+          } else {
+            reversedDeductionsCount++
+            reversedDeductionsTotal += parseFloat(deductionTx.amount)
+          }
+        }
+      }
+
+      // Step 3: Create a reversal transaction for the main income deposit (debit from account)
       // Use transaction_type: 'reversal' with reference_type: 'income_reversal' per immutability pattern
       const { error: txError } = await supabase
         .from('account_transactions')
@@ -509,7 +553,7 @@ export default function Income() {
           from_account_id: reversingIncome.account_id, // Money flows OUT (reversal)
           transaction_type: 'reversal',
           amount: depositedAmount, // ✅ Use NET amount that was deposited, not GROSS
-          date: new Date().toISOString().split('T')[0],
+          date: today,
           category: reversingIncome.source,
           description: `Reversal: ${reversingIncome.source_name || reversingIncome.source} - ${reverseReason}`,
           reference_id: reversingIncome.id,
@@ -518,7 +562,7 @@ export default function Income() {
 
       if (txError) throw txError
 
-      // Mark original income as reversed
+      // Step 4: Mark original income as reversed
       const { error: updateError } = await supabase
         .from('income')
         .update({
@@ -531,7 +575,13 @@ export default function Income() {
 
       if (updateError) throw updateError
 
-      toast.success(`Income reversed successfully. ${formatCurrency(depositedAmount)} debited from ${account?.name || 'account'}`)
+      // Build success message
+      let successMessage = `Income reversed. ${formatCurrency(depositedAmount)} debited from ${account?.name || 'account'}`
+      if (reversedDeductionsCount > 0) {
+        successMessage += `. Also reversed ${reversedDeductionsCount} deduction(s) totaling ${formatCurrency(reversedDeductionsTotal)}`
+      }
+
+      toast.success(successMessage)
       setShowReverseModal(false)
       setReversingIncome(null)
       setReverseReason('')
