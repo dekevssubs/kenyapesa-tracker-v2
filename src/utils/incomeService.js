@@ -251,14 +251,19 @@ export class IncomeService {
 
         deductionIds.push(...insertedDeductions.map(d => d.id))
 
-        // Step 2b: Process deduction integrations (expenses and reminders)
-        const deductionsWithFlags = customDeductions.filter(
-          d => d.create_expense || d.create_reminder
+        // Step 2b: Process deduction integrations (expenses, reminders, SACCO transfers, loan payments)
+        // Include deductions that have:
+        // - create_expense flag OR
+        // - create_reminder flag OR
+        // - sacco_account_id (for SACCO transfers) OR
+        // - loan_account_id (for loan payments)
+        const deductionsWithIntegrations = customDeductions.filter(
+          d => d.create_expense || d.create_reminder || d.sacco_account_id || d.loan_account_id
         )
 
-        if (deductionsWithFlags.length > 0) {
+        if (deductionsWithIntegrations.length > 0) {
           const integrationResult = await this.processDeductionIntegrations(
-            deductionsWithFlags,
+            deductionsWithIntegrations,
             income.id,
             date,
             null // Don't pass account_id for deduction expenses (they're already deducted)
@@ -266,7 +271,8 @@ export class IncomeService {
 
           console.log('IncomeService - Deduction integrations processed:', {
             expenseCount: integrationResult.expenseResults.length,
-            reminderCount: integrationResult.reminderResults.length
+            reminderCount: integrationResult.reminderResults.length,
+            deductionsProcessed: deductionsWithIntegrations.length
           })
         }
       }
