@@ -201,10 +201,10 @@ export async function getCategoryForecastedSpending(userId, categorySlug, foreca
       .from('bill_reminders')
       .select('amount')
       .eq('user_id', userId)
-      .eq('category', categorySlug) // Note: still using legacy category string here
-      .eq('is_active', true)
-      .gte('due_date', monthStart.toISOString().split('T')[0])
-      .lte('due_date', monthEnd.toISOString().split('T')[0])
+      .eq('category_slug', categorySlug)
+      .eq('status', 'active')
+      .gte('next_due_date', monthStart.toISOString().split('T')[0])
+      .lte('next_due_date', monthEnd.toISOString().split('T')[0])
 
     const pending = reminders && !remindersError
       ? reminders.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0)
