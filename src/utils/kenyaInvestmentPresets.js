@@ -27,6 +27,11 @@ export const ACCOUNT_CATEGORIES = {
   EMERGENCY_FUND: 'emergency_fund',
   SINKING_FUND: 'sinking_fund',
 
+  // Safaricom/M-Pesa Savings & Investments
+  MSHWARI_LOCK: 'mshwari_lock',
+  ZIIDI_MMF: 'ziidi_mmf',
+  MSHWARI_SAVINGS: 'mshwari_savings',
+
   // Loan/Liability Accounts
   HELB_LOAN: 'helb_loan',
   BANK_LOAN: 'bank_loan',
@@ -664,6 +669,49 @@ export const KENYA_INVESTMENT_PRESETS = {
   ],
 
   // ============================================================================
+  // SAFARICOM / M-PESA SAVINGS & INVESTMENTS
+  // M-Pesa integrated savings and investment products
+  // ============================================================================
+  safaricom: [
+    {
+      name: 'Ziidi MMF',
+      institution: 'Safaricom / Standard Investment Bank',
+      category: ACCOUNT_CATEGORIES.ZIIDI_MMF,
+      account_type: 'investment',
+      typical_rate: 12.0,
+      min_investment: 100,
+      liquidity: 'Instant',
+      description: 'M-Pesa money market fund. Invest from KES 100, earn daily interest, zero fees.',
+      icon: 'TrendingUp',
+      color: '#00A859'
+    },
+    {
+      name: 'M-Shwari Lock Savings',
+      institution: 'Safaricom / NCBA Bank',
+      category: ACCOUNT_CATEGORIES.MSHWARI_LOCK,
+      account_type: 'investment',
+      typical_rate: 7.35,
+      min_investment: 500,
+      liquidity: '1-6 months',
+      description: 'Lock savings for 1-6 months. Min KES 1,000 to earn interest. Early withdrawal in 48hrs.',
+      icon: 'Lock',
+      color: '#4CAF50'
+    },
+    {
+      name: 'M-Shwari Savings',
+      institution: 'Safaricom / NCBA Bank',
+      category: ACCOUNT_CATEGORIES.MSHWARI_SAVINGS,
+      account_type: 'investment',
+      typical_rate: 5.0,
+      min_investment: 1,
+      liquidity: 'Instant',
+      description: 'Flexible M-Pesa savings account. No minimum balance, instant withdrawals.',
+      icon: 'PiggyBank',
+      color: '#66BB6A'
+    }
+  ],
+
+  // ============================================================================
   // LOANS & LIABILITIES
   // Track loan balances with negative values (e.g., -450,000 for amount owed)
   // Payments increase the balance toward 0
@@ -752,6 +800,7 @@ export function getAllPresets() {
     ...KENYA_INVESTMENT_PRESETS.government,
     ...KENYA_INVESTMENT_PRESETS.stocks,
     ...KENYA_INVESTMENT_PRESETS.reits,
+    ...KENYA_INVESTMENT_PRESETS.safaricom,
     ...KENYA_INVESTMENT_PRESETS.cash,
     ...KENYA_INVESTMENT_PRESETS.loans
   ]
@@ -795,6 +844,11 @@ export const CATEGORY_LABELS = {
   [ACCOUNT_CATEGORIES.CHAMA]: 'Chama',
   [ACCOUNT_CATEGORIES.EMERGENCY_FUND]: 'Emergency Fund',
   [ACCOUNT_CATEGORIES.SINKING_FUND]: 'Sinking Fund',
+
+  // Safaricom/M-Pesa Categories
+  [ACCOUNT_CATEGORIES.ZIIDI_MMF]: 'Ziidi MMF',
+  [ACCOUNT_CATEGORIES.MSHWARI_LOCK]: 'M-Shwari Lock Savings',
+  [ACCOUNT_CATEGORIES.MSHWARI_SAVINGS]: 'M-Shwari Savings',
 
   // Loan/Liability Categories
   [ACCOUNT_CATEGORIES.HELB_LOAN]: 'HELB Loan',

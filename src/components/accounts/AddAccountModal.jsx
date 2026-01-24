@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Search, Smartphone, Building2, TrendingUp, Users, Landmark, BarChart3, Wallet, PiggyBank, CreditCard } from 'lucide-react'
+import { X, Search, Smartphone, Building2, TrendingUp, Users, Landmark, BarChart3, Wallet, PiggyBank, CreditCard, Lock } from 'lucide-react'
 import { KENYA_INVESTMENT_PRESETS, ACCOUNT_TYPE_LABELS, CATEGORY_LABELS, ACCOUNT_CATEGORIES } from '../../utils/kenyaInvestmentPresets'
 
 // Loan categories for filtering
@@ -16,6 +16,7 @@ const LOAN_CATEGORIES = [
 
 const PRESET_CATEGORIES = [
   { id: 'cash', label: 'Cash Accounts', icon: Smartphone, color: 'text-green-500', data: KENYA_INVESTMENT_PRESETS.cash },
+  { id: 'safaricom', label: 'Safaricom (M-Pesa)', icon: Lock, color: 'text-emerald-500', data: KENYA_INVESTMENT_PRESETS.safaricom },
   { id: 'mmf', label: 'Money Market Funds', icon: TrendingUp, color: 'text-blue-500', data: KENYA_INVESTMENT_PRESETS.mmf },
   { id: 'saccos', label: 'Saccos', icon: Users, color: 'text-purple-500', data: KENYA_INVESTMENT_PRESETS.saccos },
   { id: 'government', label: 'Government Securities', icon: Landmark, color: 'text-indigo-500', data: KENYA_INVESTMENT_PRESETS.government },
