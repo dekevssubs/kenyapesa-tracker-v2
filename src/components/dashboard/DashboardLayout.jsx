@@ -33,8 +33,10 @@ import {
   Command,
   PieChart,
   Wrench,
-  MoreHorizontal
+  MoreHorizontal,
+  HelpCircle
 } from 'lucide-react'
+import OnboardingTour from '../onboarding/OnboardingTour'
 
 // Navigation groups configuration
 const navigationGroups = [
@@ -52,10 +54,10 @@ const navigationGroups = [
     label: 'Money Flow',
     icon: DollarSign,
     items: [
-      { name: 'Accounts', href: '/accounts', icon: Wallet, color: 'text-teal-500' },
+      { name: 'Accounts', href: '/accounts', icon: Wallet, color: 'text-teal-500', dataTour: 'accounts-link' },
       { name: 'Account History', href: '/account-history', icon: History, color: 'text-slate-500' },
-      { name: 'Income', href: '/income', icon: DollarSign, color: 'text-green-500' },
-      { name: 'Expenses', href: '/expenses', icon: TrendingDown, color: 'text-red-500' },
+      { name: 'Income', href: '/income', icon: DollarSign, color: 'text-green-500', dataTour: 'income-link' },
+      { name: 'Expenses', href: '/expenses', icon: TrendingDown, color: 'text-red-500', dataTour: 'expenses-link' },
     ]
   },
   {
@@ -63,8 +65,8 @@ const navigationGroups = [
     label: 'Planning',
     icon: Target,
     items: [
-      { name: 'Budget', href: '/budget', icon: CreditCard, color: 'text-cyan-500' },
-      { name: 'Goals', href: '/goals', icon: Target, color: 'text-orange-500' },
+      { name: 'Budget', href: '/budget', icon: CreditCard, color: 'text-cyan-500', dataTour: 'budget-link' },
+      { name: 'Goals', href: '/goals', icon: Target, color: 'text-orange-500', dataTour: 'goals-link' },
       { name: 'Subscriptions & Bills', href: '/subscriptions', icon: RefreshCw, color: 'text-pink-500' },
     ]
   },
@@ -76,7 +78,8 @@ const navigationGroups = [
       { name: 'Reports', href: '/reports', icon: BarChart3, color: 'text-indigo-500' },
       { name: 'Calculator', href: '/calculator', icon: Calculator, color: 'text-purple-500' },
       { name: 'M-Pesa Calculator', href: '/mpesa-calculator', icon: Smartphone, color: 'text-green-600' },
-      { name: 'Lending', href: '/lending', icon: HandCoins, color: 'text-amber-500' },
+      { name: 'Lending', href: '/lending', icon: HandCoins, color: 'text-amber-500', dataTour: 'lending-link' },
+      { name: 'Help Center', href: '/help', icon: HelpCircle, color: 'text-blue-500', dataTour: 'help-link' },
     ]
   },
 ]
@@ -285,6 +288,7 @@ export default function DashboardLayout({ children }) {
           <div className="px-3 pt-4 pb-2">
             <button
               onClick={() => setCommandPaletteOpen(true)}
+              data-tour="command-palette"
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors text-sm"
             >
               <Search className="h-4 w-4" />
@@ -296,7 +300,7 @@ export default function DashboardLayout({ children }) {
           </div>
 
           {/* Navigation - Scrollable */}
-          <nav className="flex-1 px-3 py-2 space-y-2 overflow-y-auto scrollbar-hide">
+          <nav data-tour="sidebar-nav" className="flex-1 px-3 py-2 space-y-2 overflow-y-auto scrollbar-hide">
             {navigationGroups.map((group) => {
               const GroupIcon = group.icon
               const isExpanded = expandedGroups.includes(group.id)
@@ -344,6 +348,7 @@ export default function DashboardLayout({ children }) {
                         <Link
                           key={item.name}
                           to={item.href}
+                          data-tour={item.dataTour}
                           className={`
                             group flex items-center justify-between px-3 py-2.5 rounded-lg
                             text-sm font-medium transition-all duration-200
@@ -472,6 +477,7 @@ export default function DashboardLayout({ children }) {
               {/* Theme toggle - always visible */}
               <button
                 onClick={toggleTheme}
+                data-tour="theme-toggle"
                 className="flex p-2.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all duration-200 relative"
                 aria-label="Toggle theme"
                 title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
@@ -624,6 +630,9 @@ export default function DashboardLayout({ children }) {
 
       {/* Spacer for mobile bottom nav */}
       <div className="h-16 lg:hidden" />
+
+      {/* Onboarding Tour */}
+      <OnboardingTour />
     </div>
   )
 }

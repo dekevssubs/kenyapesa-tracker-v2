@@ -3,12 +3,14 @@ import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../utils/supabase'
 import { requestOTP, verifyOTP } from '../services/emailService'
-import { Settings as SettingsIcon, User, DollarSign, AlertCircle, Trash2, Download, Mail, Phone, Calendar, CheckCircle, Bell, Lock, Eye, EyeOff, KeyRound, Loader2, Shield } from 'lucide-react'
+import { Settings as SettingsIcon, User, DollarSign, AlertCircle, Trash2, Download, Mail, Phone, Calendar, CheckCircle, Bell, Lock, Eye, EyeOff, KeyRound, Loader2, Shield, HelpCircle, RotateCcw } from 'lucide-react'
+import { useOnboarding } from '../contexts/OnboardingContext'
 import EmailPreferences from '../components/settings/EmailPreferences'
 
 export default function Settings() {
   const { user, signOut } = useAuth()
   const { showToast } = useToast()
+  const { restartTour, onboardingStatus } = useOnboarding()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
@@ -720,6 +722,67 @@ export default function Settings() {
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete Account
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Help & Support */}
+      <div className="card">
+        <div className="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="bg-blue-500 bg-opacity-10 dark:bg-opacity-20 rounded-xl p-3">
+            <HelpCircle className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Help & Support</h3>
+        </div>
+
+        <div className="space-y-6">
+          {/* Restart Tour */}
+          <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-2xl border-2 border-blue-200 dark:border-blue-700">
+            <div className="flex items-start justify-between gap-6">
+              <div className="flex-1">
+                <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-3">Interactive Tour</h4>
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                  {onboardingStatus.completed
+                    ? 'You completed the onboarding tour. Want to see it again? Restart the tour to learn about all the features.'
+                    : 'Take a guided tour of all the features KenyaPesa Tracker has to offer.'}
+                </p>
+                {onboardingStatus.completedAt && (
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
+                    Completed on {new Date(onboardingStatus.completedAt).toLocaleDateString('en-KE', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={restartTour}
+                className="btn btn-secondary flex items-center flex-shrink-0 whitespace-nowrap"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                {onboardingStatus.completed ? 'Restart Tour' : 'Start Tour'}
+              </button>
+            </div>
+          </div>
+
+          {/* Help Center Link */}
+          <div className="p-6 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 rounded-2xl border-2 border-green-200 dark:border-green-700">
+            <div className="flex items-start justify-between gap-6">
+              <div className="flex-1">
+                <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-3">Help Center</h4>
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                  Find guides, tutorials, and answers to frequently asked questions about using KenyaPesa Tracker.
+                </p>
+              </div>
+              <a
+                href="/help"
+                className="btn btn-primary flex items-center flex-shrink-0 whitespace-nowrap"
+              >
+                <HelpCircle className="h-4 w-4 mr-2" />
+                Visit Help Center
+              </a>
             </div>
           </div>
         </div>

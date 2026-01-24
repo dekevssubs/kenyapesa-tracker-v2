@@ -557,3 +557,61 @@
     box-shadow: none !important;
   }
 }
+
+/* ========================================
+   REACT JOYRIDE OVERRIDES
+   ======================================== */
+/* Ensure spotlight properly reveals the target element */
+.__floater__open {
+  z-index: 10001 !important;
+}
+
+/* Make sure the spotlight cutout is visible */
+.react-joyride__spotlight {
+  background-color: transparent !important;
+  border-radius: 8px !important;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* React Joyride - ensure floater and tooltip are interactive */
+.__floater {
+  z-index: 10001 !important;
+  pointer-events: auto !important;
+}
+
+.__floater__body {
+  pointer-events: auto !important;
+}
+
+.react-joyride__tooltip {
+  z-index: 10002 !important;
+  pointer-events: auto !important;
+}
+
+/* Ensure overlay doesn't block tooltip */
+.react-joyride__overlay {
+  pointer-events: none !important;
+}
+
+/* But allow spotlight area to be clickable if needed */
+.react-joyride__spotlight {
+  pointer-events: none !important;
+}
+
+/* Highlight effect for tour target elements */
+.joyride-target-highlight {
+  outline: 3px solid #16a34a !important;
+  outline-offset: 4px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 0 20px rgba(22, 163, 74, 0.6), 0 0 40px rgba(22, 163, 74, 0.3) !important;
+  animation: pulse-highlight 2s ease-in-out infinite !important;
+}
+
+@keyframes pulse-highlight {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(22, 163, 74, 0.6), 0 0 40px rgba(22, 163, 74, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(22, 163, 74, 0.8), 0 0 60px rgba(22, 163, 74, 0.4);
+  }
+}

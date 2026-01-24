@@ -1,10 +1,12 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { OnboardingProvider } from '../contexts/OnboardingContext'
 import DashboardLayout from './dashboard/DashboardLayout'
 
 /**
  * PrivateRoute - Combines authentication check with dashboard layout
  * Use this for all authenticated pages to reduce boilerplate
+ * Wraps content with OnboardingProvider for first-time user tour
  */
 export default function PrivateRoute({ children }) {
   const { user, loading } = useAuth()
@@ -25,8 +27,10 @@ export default function PrivateRoute({ children }) {
   }
 
   return (
-    <DashboardLayout>
-      {children}
-    </DashboardLayout>
+    <OnboardingProvider>
+      <DashboardLayout>
+        {children}
+      </DashboardLayout>
+    </OnboardingProvider>
   )
 }

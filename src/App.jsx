@@ -29,6 +29,7 @@ const Accounts = lazy(() => import('./pages/Accounts'))
 const AccountHistory = lazy(() => import('./pages/AccountHistory'))
 const MpesaCalculator = lazy(() => import('./pages/MpesaCalculator'))
 const Portfolio = lazy(() => import('./pages/Portfolio'))
+const Help = lazy(() => import('./pages/Help'))
 
 // Suspense wrapper for private routes with skeleton fallback
 function LazyPrivateRoute({ children, skeleton = 'full' }) {
@@ -73,6 +74,9 @@ function App() {
               <Route path="/account-history" element={<LazyPrivateRoute><AccountHistory /></LazyPrivateRoute>} />
               <Route path="/mpesa-calculator" element={<LazyPrivateRoute skeleton="compact"><MpesaCalculator /></LazyPrivateRoute>} />
               <Route path="/portfolio" element={<LazyPrivateRoute><Portfolio /></LazyPrivateRoute>} />
+              <Route path="/help" element={<LazyPrivateRoute><Help /></LazyPrivateRoute>} />
+              <Route path="/help/:categoryId" element={<LazyPrivateRoute><Help /></LazyPrivateRoute>} />
+              <Route path="/help/:categoryId/:articleId" element={<LazyPrivateRoute><Help /></LazyPrivateRoute>} />
 
               {/* Legacy redirects */}
               <Route path="/networth" element={<Navigate to="/portfolio" replace />} />

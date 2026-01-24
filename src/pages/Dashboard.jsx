@@ -177,7 +177,7 @@ export default function Dashboard() {
       <PendingExpensesReview onUpdate={refreshPendingCount} />
 
       {/* Key Metrics - Enhanced Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div data-tour="dashboard-summary" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Income Card */}
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
           <div className="flex items-center justify-between mb-4">
