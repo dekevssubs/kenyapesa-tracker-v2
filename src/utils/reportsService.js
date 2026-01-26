@@ -122,6 +122,8 @@ export class ReportsService {
 
   /**
    * Get income transactions (excludes reversed income)
+   * Includes both regular income AND investment returns (interest, dividends, capital gains)
+   * Note: Capital losses are excluded as they reduce income
    */
   async getIncomeTransactions(startDate, endDate) {
     try {
@@ -135,7 +137,7 @@ export class ReportsService {
 
       const reversedIds = new Set((reversals || []).map(r => r.reference_id).filter(Boolean))
 
-      // Get income transactions
+      // Get income transactions (including investment returns)
       const { data, error } = await this.supabase
         .from('account_transactions')
         .select(`
@@ -143,15 +145,21 @@ export class ReportsService {
           to_account:accounts!account_transactions_to_account_id_fkey(id, name, account_type, category)
         `)
         .eq('user_id', this.userId)
-        .eq('transaction_type', 'income')
+        .in('transaction_type', ['income', 'investment_return'])
         .gte('date', startDate)
         .lte('date', endDate)
         .order('date', { ascending: false })
 
       if (error) throw error
 
-      // Filter out reversed income
-      const transactions = (data || []).filter(txn => !reversedIds.has(txn.reference_id))
+      // Filter out reversed income AND capital losses (losses reduce income)
+      const transactions = (data || []).filter(txn => {
+        // Exclude reversed transactions
+        if (reversedIds.has(txn.reference_id)) return false
+        // Exclude capital losses (they are tracked separately or reduce gains)
+        if (txn.transaction_type === 'investment_return' && txn.category === 'capital_loss') return false
+        return true
+      })
 
       return {
         success: true,
@@ -274,24 +282,27 @@ export class ReportsService {
   /**
    * Get cash flow summary for a period
    * Returns: inflows, outflows, netFlow, daily data
+   * Includes investment returns in inflows and capital losses in outflows
    */
   async getCashFlowSummary(startDate, endDate) {
     try {
-      const [incomeResult, expenseResult, feesResult] = await Promise.all([
+      const [incomeResult, expenseResult, feesResult, capitalLossResult] = await Promise.all([
         this.getIncomeTransactions(startDate, endDate),
         this.getExpenseTransactions(startDate, endDate),
-        this.getTransactionFees(startDate, endDate)
+        this.getTransactionFees(startDate, endDate),
+        this.getCapitalLosses(startDate, endDate)
       ])
 
       const inflows = incomeResult.total
-      const outflows = expenseResult.total + feesResult.total
+      const outflows = expenseResult.total + feesResult.total + capitalLossResult.total
       const netFlow = inflows - outflows
 
       // Combine all transactions for daily breakdown
       const allTransactions = [
         ...incomeResult.transactions.map(t => ({ ...t, flowType: 'inflow', flowAmount: parseFloat(t.amount) })),
         ...expenseResult.transactions.map(t => ({ ...t, flowType: 'outflow', flowAmount: -parseFloat(t.amount) })),
-        ...feesResult.transactions.map(t => ({ ...t, flowType: 'outflow', flowAmount: -parseFloat(t.amount) }))
+        ...feesResult.transactions.map(t => ({ ...t, flowType: 'outflow', flowAmount: -parseFloat(t.amount) })),
+        ...capitalLossResult.transactions.map(t => ({ ...t, flowType: 'outflow', flowAmount: -parseFloat(t.amount) }))
       ].sort((a, b) => new Date(a.date) - new Date(b.date))
 
       // Group by date for daily flow
@@ -384,24 +395,31 @@ export class ReportsService {
 
   /**
    * Get monthly trends data
+   * Includes investment returns in income and capital losses in expenses
    */
   async getMonthlyTrends(startDate, endDate) {
     try {
-      const [incomeResult, expenseResult, feesResult] = await Promise.all([
+      const [incomeResult, expenseResult, feesResult, capitalLossResult] = await Promise.all([
         this.getIncomeTransactions(startDate, endDate),
         this.getExpenseTransactions(startDate, endDate),
-        this.getTransactionFees(startDate, endDate)
+        this.getTransactionFees(startDate, endDate),
+        this.getCapitalLosses(startDate, endDate)
       ])
 
       // Group by month
       const monthlyMap = {}
 
-      // Process income
+      // Helper to ensure month exists in map
+      const ensureMonth = (month) => {
+        if (!monthlyMap[month]) {
+          monthlyMap[month] = { month, income: 0, expenses: 0, fees: 0, capitalLosses: 0, savings: 0, transactions: 0 }
+        }
+      }
+
+      // Process income (includes investment returns like interest, dividends)
       incomeResult.transactions.forEach(txn => {
         const month = txn.date.substring(0, 7) // YYYY-MM
-        if (!monthlyMap[month]) {
-          monthlyMap[month] = { month, income: 0, expenses: 0, fees: 0, savings: 0, transactions: 0 }
-        }
+        ensureMonth(month)
         monthlyMap[month].income += parseFloat(txn.amount || 0)
         monthlyMap[month].transactions += 1
       })
@@ -409,9 +427,7 @@ export class ReportsService {
       // Process expenses
       expenseResult.transactions.forEach(txn => {
         const month = txn.date.substring(0, 7)
-        if (!monthlyMap[month]) {
-          monthlyMap[month] = { month, income: 0, expenses: 0, fees: 0, savings: 0, transactions: 0 }
-        }
+        ensureMonth(month)
         monthlyMap[month].expenses += parseFloat(txn.amount || 0)
         monthlyMap[month].transactions += 1
       })
@@ -419,10 +435,16 @@ export class ReportsService {
       // Process fees
       feesResult.transactions.forEach(txn => {
         const month = txn.date.substring(0, 7)
-        if (!monthlyMap[month]) {
-          monthlyMap[month] = { month, income: 0, expenses: 0, fees: 0, savings: 0, transactions: 0 }
-        }
+        ensureMonth(month)
         monthlyMap[month].fees += parseFloat(txn.amount || 0)
+        monthlyMap[month].transactions += 1
+      })
+
+      // Process capital losses
+      capitalLossResult.transactions.forEach(txn => {
+        const month = txn.date.substring(0, 7)
+        ensureMonth(month)
+        monthlyMap[month].capitalLosses += parseFloat(txn.amount || 0)
         monthlyMap[month].transactions += 1
       })
 
@@ -430,9 +452,9 @@ export class ReportsService {
       const months = Object.values(monthlyMap)
         .map(m => ({
           ...m,
-          totalExpenses: m.expenses + m.fees,
-          savings: m.income - m.expenses - m.fees,
-          savingsRate: m.income > 0 ? (((m.income - m.expenses - m.fees) / m.income) * 100).toFixed(1) : 0,
+          totalExpenses: m.expenses + m.fees + m.capitalLosses,
+          savings: m.income - m.expenses - m.fees - m.capitalLosses,
+          savingsRate: m.income > 0 ? (((m.income - m.expenses - m.fees - m.capitalLosses) / m.income) * 100).toFixed(1) : 0,
           monthLabel: new Date(m.month + '-01').toLocaleDateString('en-KE', { month: 'short', year: 'numeric' })
         }))
         .sort((a, b) => a.month.localeCompare(b.month))
@@ -452,8 +474,9 @@ export class ReportsService {
           income: incomeResult.total,
           expenses: expenseResult.total,
           fees: feesResult.total,
-          totalExpenses: expenseResult.total + feesResult.total,
-          savings: incomeResult.total - expenseResult.total - feesResult.total
+          capitalLosses: capitalLossResult.total,
+          totalExpenses: expenseResult.total + feesResult.total + capitalLossResult.total,
+          savings: incomeResult.total - expenseResult.total - feesResult.total - capitalLossResult.total
         }
       }
     } catch (error) {
@@ -464,13 +487,15 @@ export class ReportsService {
 
   /**
    * Get yearly trends data
+   * Includes investment returns in income and capital losses in expenses
    */
   async getYearlyTrends(startDate, endDate) {
     try {
-      const [incomeResult, expenseResult, feesResult] = await Promise.all([
+      const [incomeResult, expenseResult, feesResult, capitalLossResult] = await Promise.all([
         this.getIncomeTransactions(startDate, endDate),
         this.getExpenseTransactions(startDate, endDate),
-        this.getTransactionFees(startDate, endDate)
+        this.getTransactionFees(startDate, endDate),
+        this.getCapitalLosses(startDate, endDate)
       ])
 
       // Group by year
@@ -481,7 +506,7 @@ export class ReportsService {
         transactions.forEach(txn => {
           const year = txn.date.substring(0, 4) // YYYY
           if (!yearlyMap[year]) {
-            yearlyMap[year] = { year, income: 0, expenses: 0, fees: 0, transactions: 0 }
+            yearlyMap[year] = { year, income: 0, expenses: 0, fees: 0, capitalLosses: 0, transactions: 0 }
           }
           yearlyMap[year][type] += parseFloat(txn.amount || 0)
           yearlyMap[year].transactions += 1
@@ -491,14 +516,15 @@ export class ReportsService {
       processTransactions(incomeResult.transactions, 'income')
       processTransactions(expenseResult.transactions, 'expenses')
       processTransactions(feesResult.transactions, 'fees')
+      processTransactions(capitalLossResult.transactions, 'capitalLosses')
 
       // Calculate totals and format
       const years = Object.values(yearlyMap)
         .map(y => ({
           ...y,
-          totalExpenses: y.expenses + y.fees,
-          savings: y.income - y.expenses - y.fees,
-          savingsRate: y.income > 0 ? (((y.income - y.expenses - y.fees) / y.income) * 100).toFixed(1) : 0
+          totalExpenses: y.expenses + y.fees + y.capitalLosses,
+          savings: y.income - y.expenses - y.fees - y.capitalLosses,
+          savingsRate: y.income > 0 ? (((y.income - y.expenses - y.fees - y.capitalLosses) / y.income) * 100).toFixed(1) : 0
         }))
         .sort((a, b) => a.year.localeCompare(b.year))
 
@@ -522,24 +548,64 @@ export class ReportsService {
   }
 
   /**
+   * Get capital losses from investment returns
+   * These reduce net savings and are tracked separately from regular expenses
+   */
+  async getCapitalLosses(startDate, endDate) {
+    try {
+      const { data, error } = await this.supabase
+        .from('account_transactions')
+        .select(`
+          *,
+          from_account:accounts!account_transactions_from_account_id_fkey(id, name, account_type, category)
+        `)
+        .eq('user_id', this.userId)
+        .eq('transaction_type', 'investment_return')
+        .eq('category', 'capital_loss')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: false })
+
+      if (error) throw error
+
+      const transactions = data || []
+
+      return {
+        success: true,
+        transactions,
+        total: transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
+      }
+    } catch (error) {
+      console.error('Error fetching capital losses:', error)
+      return { success: false, error: error.message, transactions: [], total: 0 }
+    }
+  }
+
+  /**
    * Get report summary for Quick Overview
+   * Includes: income (with investment returns), expenses, fees, and capital losses
    */
   async getReportSummary(startDate, endDate) {
     try {
-      const [incomeResult, expenseResult, feesResult, categoryResult] = await Promise.all([
+      const [incomeResult, expenseResult, feesResult, capitalLossResult, categoryResult] = await Promise.all([
         this.getIncomeTransactions(startDate, endDate),
         this.getExpenseTransactions(startDate, endDate),
         this.getTransactionFees(startDate, endDate),
+        this.getCapitalLosses(startDate, endDate),
         this.getCategoryBreakdown(startDate, endDate)
       ])
 
       const totalIncome = incomeResult.total
-      const totalExpenses = expenseResult.total + feesResult.total
+      // Total expenses now includes regular expenses + fees + capital losses
+      const totalExpenses = expenseResult.total + feesResult.total + capitalLossResult.total
       const netSavings = totalIncome - totalExpenses
       const savingsRate = totalIncome > 0 ? ((netSavings / totalIncome) * 100).toFixed(1) : 0
 
       // Calculate transaction count and average
-      const totalTransactions = incomeResult.transactions.length + expenseResult.transactions.length + feesResult.transactions.length
+      const totalTransactions = incomeResult.transactions.length +
+        expenseResult.transactions.length +
+        feesResult.transactions.length +
+        capitalLossResult.transactions.length
 
       // Get days with expenses for average daily expense
       const expenseDates = new Set([
@@ -547,7 +613,7 @@ export class ReportsService {
         ...feesResult.transactions.map(t => t.date)
       ])
       const daysWithExpenses = expenseDates.size || 1
-      const avgDailyExpense = totalExpenses / daysWithExpenses
+      const avgDailyExpense = (expenseResult.total + feesResult.total) / daysWithExpenses
 
       // Top spending category
       const topCategory = categoryResult.categories[0] || null
@@ -561,6 +627,11 @@ export class ReportsService {
           savingsRate: parseFloat(savingsRate),
           totalTransactions,
           avgDailyExpense,
+          // Investment return breakdown
+          investmentGains: incomeResult.transactions
+            .filter(t => t.transaction_type === 'investment_return')
+            .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0),
+          capitalLosses: capitalLossResult.total,
           topCategory: topCategory ? {
             name: topCategory.category,
             amount: topCategory.total,
@@ -570,6 +641,7 @@ export class ReportsService {
         income: incomeResult,
         expenses: expenseResult,
         fees: feesResult,
+        capitalLosses: capitalLossResult,
         categories: categoryResult
       }
     } catch (error) {

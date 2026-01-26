@@ -302,6 +302,8 @@ export class AccountService {
 
   /**
    * Record investment return (interest, dividend, etc.)
+   * Note: A database trigger (process_return) automatically creates
+   * the corresponding account_transaction entry in the ledger
    */
   async recordInvestmentReturn(returnData) {
     try {

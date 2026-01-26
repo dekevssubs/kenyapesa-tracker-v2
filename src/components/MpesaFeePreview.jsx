@@ -78,11 +78,14 @@ export default function MpesaFeePreview({
   const potentialSavings = currentFee - cheapestMethod.fee
 
   // Notify parent of calculated fee
+  // Note: onFeeCalculated is intentionally not in deps to avoid infinite loops
+  // since it's often an inline function that changes on every render
   useEffect(() => {
     if (onFeeCalculated) {
       onFeeCalculated(currentFee)
     }
-  }, [currentFee, onFeeCalculated])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFee])
 
   // Auto-suggest based on category when component mounts or category changes
   useEffect(() => {

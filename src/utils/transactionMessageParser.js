@@ -61,7 +61,9 @@ export function parseMpesaMessage(message) {
 
     // Determine transaction type
     if (cleanMessage.toLowerCase().includes('paid to')) {
-      result.transactionType = 'payment'
+      // Distinguish between Paybill (has Account Number) and Till/Buy Goods
+      const hasAccountNumber = /account\s*(?:number|no\.?|#)?[\s:]*[\w\d]+/i.test(cleanMessage)
+      result.transactionType = hasAccountNumber ? 'payment_paybill' : 'payment_till'
 
       // Extract recipient
       const recipientMatch = cleanMessage.match(/paid to\s+([^.]+?)(?:\s+on|\.|Ksh)/i)

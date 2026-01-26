@@ -103,29 +103,49 @@ export default function Expenses() {
     if (!account) return { paymentMethod, feeMethod }
 
     const accountType = account.account_type?.toLowerCase()
+    const accountName = account.name?.toLowerCase() || ''
 
-    if (accountType === 'mpesa' || account.name?.toLowerCase().includes('mpesa')) {
+    // Check for mobile money accounts (M-Pesa, Airtel Money, T-Kash)
+    if (ACCOUNT_CATEGORIES.MOBILE_MONEY.includes(accountType) ||
+        accountName.includes('mpesa') || accountName.includes('m-pesa') ||
+        accountName.includes('airtel') || accountName.includes('tkash')) {
       paymentMethod = 'mpesa'
-      feeMethod = FEE_METHODS.MPESA_SEND
-    } else if (accountType === 'checking' || accountType === 'bank' || accountType === 'savings') {
+      feeMethod = accountType === 'airtel_money' ? FEE_METHODS.AIRTEL_MONEY : FEE_METHODS.MPESA_SEND
+    }
+    // Check for bank accounts
+    else if (ACCOUNT_CATEGORIES.BANK.includes(accountType) ||
+             accountName.includes('bank') || accountName.includes('savings') || accountName.includes('checking')) {
       paymentMethod = 'bank'
       feeMethod = FEE_METHODS.BANK_TRANSFER
-    } else if (accountType === 'card' || accountType === 'credit') {
+    }
+    // Check for card accounts
+    else if (accountType === 'card' || accountType === 'credit' ||
+             accountName.includes('card') || accountName.includes('credit')) {
       paymentMethod = 'card'
       feeMethod = FEE_METHODS.MANUAL
-    } else if (accountType === 'cash') {
+    }
+    // Check for cash
+    else if (accountType === 'cash' || ACCOUNT_CATEGORIES.CASH.includes(accountType)) {
       paymentMethod = 'cash'
+      feeMethod = FEE_METHODS.MANUAL
+    }
+    // Investment accounts default to bank transfer method
+    else if (ACCOUNT_CATEGORIES.INVESTMENT.includes(accountType)) {
+      paymentMethod = 'bank'
       feeMethod = FEE_METHODS.MANUAL
     }
 
     return { paymentMethod, feeMethod }
   }
 
-  // Helper function to check if account is M-Pesa
+  // Helper function to check if account is mobile money (M-Pesa, Airtel Money, T-Kash)
   const isMpesaAccount = (account) => {
     if (!account) return false
     const accountType = account.account_type?.toLowerCase()
-    return accountType === 'mpesa' || account.name?.toLowerCase().includes('mpesa')
+    const accountName = account.name?.toLowerCase() || ''
+    return ACCOUNT_CATEGORIES.MOBILE_MONEY.includes(accountType) ||
+           accountName.includes('mpesa') || accountName.includes('m-pesa') ||
+           accountName.includes('airtel') || accountName.includes('tkash')
   }
 
   useEffect(() => {
@@ -664,8 +684,31 @@ export default function Expenses() {
     }
   }
 
+  // Map parsed transaction types to fee methods
+  const getFeeMethodFromTransactionType = (transactionType, bankTransferType) => {
+    // M-Pesa transaction types
+    if (transactionType === 'payment_till') return FEE_METHODS.MPESA_BUY_GOODS
+    if (transactionType === 'payment_paybill') return FEE_METHODS.MPESA_PAYBILL
+    if (transactionType === 'payment') return FEE_METHODS.MPESA_BUY_GOODS // Legacy fallback (most payments are till)
+    if (transactionType === 'send_money') return FEE_METHODS.MPESA_SEND
+    if (transactionType === 'withdraw') return FEE_METHODS.MPESA_WITHDRAW_AGENT
+    if (transactionType === 'airtime_purchase') return FEE_METHODS.MPESA_BUY_GOODS
+
+    // Bank transfer types
+    if (transactionType === 'bank_transfer' || transactionType === 'bank_debit') {
+      if (bankTransferType === 'bank_to_till') return FEE_METHODS.MPESA_BUY_GOODS
+      if (bankTransferType === 'bank_to_paybill') return FEE_METHODS.MPESA_PAYBILL
+      if (bankTransferType === 'bank_to_mpesa') return FEE_METHODS.MPESA_SEND
+      return FEE_METHODS.BANK_TRANSFER
+    }
+
+    // Default
+    return FEE_METHODS.MPESA_SEND
+  }
+
   const handleParsedMessage = (parsedData) => {
     // Parse the date from SMS (format: "5/1/26 1:32 PM" or "23/12/24") to YYYY-MM-DD
+    // Kenya M-Pesa dates are DD/MM/YY format
     let parsedDate = formData.date // Keep current date as fallback
     if (parsedData.transactionDate) {
       try {
@@ -673,7 +716,8 @@ export default function Expenses() {
         const datePart = parsedData.transactionDate.split(' ')[0]
         const parts = datePart.split('/')
         if (parts.length === 3) {
-          let [month, day, year] = parts
+          // Kenya M-Pesa format is DD/MM/YY (not US MM/DD/YY)
+          let [day, month, year] = parts
           // Handle 2-digit year
           if (year.length === 2) {
             year = parseInt(year) > 50 ? `19${year}` : `20${year}`
@@ -688,16 +732,23 @@ export default function Expenses() {
       }
     }
 
-    // Update form data with parsed transaction details including date
+    // Determine the fee method based on transaction type
+    const feeMethod = getFeeMethodFromTransactionType(
+      parsedData.transactionType,
+      parsedData.bankTransferType
+    )
+
+    // Update form data with parsed transaction details including date and fee method
     setFormData(prev => ({
       ...prev,
       amount: parsedData.amount.toString(),
       transaction_fee: parsedData.transactionFee.toString(),
       description: `${parsedData.description}${parsedData.reference ? ' - Ref: ' + parsedData.reference : ''}`.trim(),
-      date: parsedDate
+      date: parsedDate,
+      fee_method: feeMethod
     }))
 
-    // Set fee override since we got it from the message
+    // Set fee override since we got the fee from the message
     setFeeOverride(true)
 
     // Open the main form modal

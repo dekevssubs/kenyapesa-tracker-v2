@@ -26,6 +26,7 @@ export default function TransactionMessageParser({ onParsed, onClose }) {
         description: parsedData.recipient || '',
         reference: parsedData.transactionCode || parsedData.reference || '',
         transactionDate: parsedData.date || null, // Date extracted from message
+        transactionType: parsedData.transactionType || null, // For auto-selecting fee method
         provider: parsedData.provider,
         // Bank transfer specific fields
         isBankTransfer: parsedData.transactionType === 'bank_transfer' || parsedData.transactionType === 'bank_debit',
