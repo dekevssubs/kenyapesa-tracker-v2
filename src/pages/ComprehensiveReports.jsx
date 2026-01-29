@@ -30,6 +30,7 @@ import TransactionExplorerTab from '../components/reports/TransactionExplorerTab
 import BudgetVsActualTab from '../components/reports/BudgetVsActualTab'
 import PortfolioSummaryTab from '../components/reports/PortfolioSummaryTab'
 import GoalsProgressTab from '../components/reports/GoalsProgressTab'
+import CalendarExpenseTab from '../components/reports/CalendarExpenseTab'
 import MpesaFeeAnalytics from '../components/MpesaFeeAnalytics'
 import { openPrintableReport } from '../components/reports/PrintableReport'
 import { ReportsService } from '../utils/reportsService'
@@ -41,7 +42,8 @@ const PRIMARY_TABS = [
   { id: 'transactions', label: 'Transactions', icon: List },
   { id: 'analysis', label: 'Analysis', icon: PieChartIcon },
   { id: 'cashflow', label: 'Cash Flow', icon: ArrowLeftRight },
-  { id: 'portfolio', label: 'Portfolio', icon: Briefcase }
+  { id: 'portfolio', label: 'Portfolio', icon: Briefcase },
+  { id: 'calendar', label: 'Calendar', icon: Calendar }
 ]
 
 // Secondary tabs that appear based on primary selection
@@ -64,7 +66,8 @@ const SECONDARY_TABS = {
   portfolio: [
     { id: 'summary', label: 'Net Worth', icon: Wallet },
     { id: 'goals', label: 'Goals Progress', icon: Flag }
-  ]
+  ],
+  calendar: []
 }
 
 // Default secondary tab for each primary tab
@@ -74,7 +77,8 @@ const DEFAULT_SECONDARY = {
   transactions: 'explorer',
   analysis: 'categories',
   cashflow: null,
-  portfolio: 'summary'
+  portfolio: 'summary',
+  calendar: null
 }
 
 export default function ComprehensiveReports() {
@@ -167,6 +171,9 @@ export default function ComprehensiveReports() {
     }
     if (primaryTab === 'cashflow') {
       return <CashFlowTab dateRange={dateRange} />
+    }
+    if (primaryTab === 'calendar') {
+      return <CalendarExpenseTab />
     }
 
     // Secondary tab content
