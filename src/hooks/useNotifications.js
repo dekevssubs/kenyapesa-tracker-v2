@@ -1,8 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../utils/supabase'
 import { BudgetAlertService } from '../utils/budgetAlertService'
 import { BillReminderService } from '../utils/billReminderService'
+import {
+  queueBudgetExceededEmails,
+  queueBillOverdueEmails,
+  queueGoalAchievedEmail,
+  queueLowBalanceEmail
+} from '../services/emailNotificationService'
 
 // Storage keys for notification state persistence
 const DISMISSED_KEY = 'kenyapesa_dismissed_notifications'
@@ -91,6 +97,9 @@ export function useNotifications() {
   const [loading, setLoading] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
   const [urgentOnly, setUrgentOnly] = useState(true) // Default to urgent only
+
+  // Track last email queue run to avoid queueing too frequently
+  const lastEmailQueueRun = useRef(0)
 
   /**
    * Check if notification should be hidden (actioned)
@@ -197,6 +206,16 @@ export function useNotifications() {
       const filtered = filterNotifications(fetchedNotifications, urgentOnly)
       setNotifications(filtered)
       setUnreadCount(filtered.filter(n => !n.isRead).length)
+
+      // Queue email notifications (fire-and-forget, non-blocking)
+      // Throttle to at most once every 10 minutes to avoid duplicate queueing
+      const now = Date.now()
+      if (now - lastEmailQueueRun.current > 10 * 60 * 1000) {
+        lastEmailQueueRun.current = now
+        queueEmailNotifications(user.id, fetchedNotifications).catch(err =>
+          console.error('Email notification queueing error:', err)
+        )
+      }
     } catch (error) {
       console.error('Error fetching notifications:', error)
     } finally {
@@ -518,6 +537,69 @@ export function useNotifications() {
     } catch (error) {
       console.error('Error fetching lending reminders:', error)
       return []
+    }
+  }
+
+  /**
+   * Queue email notifications based on detected in-app alerts.
+   * Runs in background, non-blocking. Each email service function
+   * handles duplicate prevention internally.
+   */
+  const queueEmailNotifications = async (userId, notifs) => {
+    try {
+      // 1. Budget exceeded → email
+      const budgetExceeded = notifs
+        .filter(n => n.type === 'budget_exceeded')
+        .map(n => ({
+          alertType: 'exceeded',
+          budgetId: n.metadata?.budgetId,
+          category: n.metadata?.category,
+          budgetAmount: parseFloat(n.message?.match(/KES\s[\d,.]+\s.*?KES\s([\d,.]+)/)?.[1]?.replace(/,/g, '') || 0),
+          spent: parseFloat(n.message?.match(/KES\s([\d,.]+)/)?.[1]?.replace(/,/g, '') || 0),
+          percentage: parseFloat(n.message?.match(/([\d.]+)%/)?.[1] || 100)
+        }))
+
+      if (budgetExceeded.length > 0) {
+        await queueBudgetExceededEmails(userId, budgetExceeded)
+      }
+
+      // 2. Overdue bills → email
+      const overdueBills = notifs
+        .filter(n => n.type === 'bill_due_today' || (n.type === 'bill_overdue' && n.priority === 'high'))
+        .map(n => ({
+          id: n.metadata?.billId || n.id,
+          name: n.title?.replace(/^(Bill Overdue|Bill Due Today):\s*/, '') || 'Bill',
+          amount: n.metadata?.amount || 0,
+          daysOverdue: n.metadata?.daysOverdue || 0,
+          next_date: n.metadata?.dueDate || new Date().toISOString()
+        }))
+
+      if (overdueBills.length > 0) {
+        await queueBillOverdueEmails(userId, overdueBills)
+      }
+
+      // 3. Goals achieved → email
+      const goalsAchieved = notifs.filter(n => n.type === 'goal_complete')
+      for (const goalNotif of goalsAchieved) {
+        await queueGoalAchievedEmail(userId, {
+          id: goalNotif.metadata?.goalId,
+          name: goalNotif.title?.replace(/^Goal Achieved:\s*/, '') || 'Goal',
+          target_amount: parseFloat(goalNotif.message?.match(/KES\s([\d,.]+)/)?.[1]?.replace(/,/g, '') || 0)
+        })
+      }
+
+      // 4. Low balance → email
+      const lowBalanceAlerts = notifs.filter(n => n.type === 'low_balance')
+      for (const balanceNotif of lowBalanceAlerts) {
+        const balanceMatch = balanceNotif.message?.match(/KES\s([\d,.]+).*?KES\s([\d,.]+)/)
+        await queueLowBalanceEmail(userId, {
+          id: balanceNotif.metadata?.accountId,
+          name: balanceNotif.title?.replace(/^Low Balance:\s*/, '') || 'Account',
+          current_balance: parseFloat(balanceMatch?.[1]?.replace(/,/g, '') || 0)
+        }, parseFloat(balanceMatch?.[2]?.replace(/,/g, '') || 0))
+      }
+    } catch (error) {
+      console.error('Error queueing email notifications:', error)
     }
   }
 
