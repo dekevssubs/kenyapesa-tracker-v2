@@ -673,6 +673,181 @@ export async function getBudgetableCategories(userId) {
   }
 }
 
+/**
+ * Batch-fetch budgets + spending for multiple months in minimal queries.
+ * @param {UUID} userId - User ID
+ * @param {Date[]} monthDates - Array of Date objects (first day of each month)
+ * @returns {Object} { [monthKey]: { budgets: [...], totalBudget, totalSpent } }
+ */
+export async function getMultiMonthBudgetHistory(userId, monthDates) {
+  try {
+    if (!monthDates || monthDates.length === 0) return {}
+
+    // Build month strings and date range
+    const monthStrings = monthDates.map(d => {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      return `${y}-${m}-01`
+    })
+
+    const sortedDates = [...monthDates].sort((a, b) => a - b)
+    const rangeStart = new Date(sortedDates[0].getFullYear(), sortedDates[0].getMonth(), 1)
+    const lastDate = sortedDates[sortedDates.length - 1]
+    const rangeEnd = new Date(lastDate.getFullYear(), lastDate.getMonth() + 1, 0)
+
+    // 1. One query: all budgets across requested months
+    const { data: allBudgets, error: budgetErr } = await supabase
+      .from('budgets')
+      .select(`
+        id, category_id, monthly_limit, month,
+        expense_categories!category_id ( id, slug, name )
+      `)
+      .eq('user_id', userId)
+      .in('month', monthStrings)
+
+    if (budgetErr) {
+      console.error('Error fetching multi-month budgets:', budgetErr)
+      return {}
+    }
+
+    // 2. One query: all expense transactions across the full date range
+    const { data: allTransactions, error: txErr } = await supabase
+      .from('account_transactions')
+      .select('id, amount, transaction_type, category_id, date, reference_type')
+      .eq('user_id', userId)
+      .in('transaction_type', ['expense', 'transaction_fee'])
+      .gte('date', rangeStart.toISOString().split('T')[0])
+      .lte('date', rangeEnd.toISOString().split('T')[0])
+
+    if (txErr) {
+      console.error('Error fetching multi-month transactions:', txErr)
+      return {}
+    }
+
+    // 3. Exclude reversed transactions
+    const allTxIds = (allTransactions || []).map(t => t.id)
+    const reversedIds = await getReversedTransactionIds(userId, allTxIds)
+
+    const validTransactions = (allTransactions || []).filter(t => {
+      if (reversedIds.has(t.id)) return false
+      if (shouldExcludeFromBudget(t)) return false
+      return true
+    })
+
+    // 4. Group spending by category_id + month
+    const spendingMap = {} // { 'YYYY-MM': { categoryId: amount } }
+    validTransactions.forEach(t => {
+      const txMonth = t.date.substring(0, 7) // 'YYYY-MM'
+      if (!spendingMap[txMonth]) spendingMap[txMonth] = {}
+      if (!spendingMap[txMonth][t.category_id]) spendingMap[txMonth][t.category_id] = 0
+      spendingMap[txMonth][t.category_id] += parseFloat(t.amount || 0)
+    })
+
+    // 5. Build result
+    const result = {}
+    monthStrings.forEach(ms => {
+      const monthKey = ms.substring(0, 7) // 'YYYY-MM'
+      const monthBudgets = (allBudgets || []).filter(b => b.month === ms)
+
+      let totalBudget = 0
+      let totalSpent = 0
+      const enriched = monthBudgets.map(b => {
+        const limit = parseFloat(b.monthly_limit || 0)
+        const spent = spendingMap[monthKey]?.[b.category_id] || 0
+        totalBudget += limit
+        totalSpent += spent
+        return {
+          id: b.id,
+          category_id: b.category_id,
+          categorySlug: b.expense_categories?.slug,
+          categoryName: b.expense_categories?.name,
+          monthly_limit: b.monthly_limit,
+          spent,
+          percentage: limit > 0 ? (spent / limit) * 100 : 0,
+          status: spent > limit ? 'over' : spent >= limit * 0.8 ? 'warning' : 'good'
+        }
+      })
+
+      result[monthKey] = { budgets: enriched, totalBudget, totalSpent }
+    })
+
+    return result
+  } catch (err) {
+    console.error('Error in getMultiMonthBudgetHistory:', err)
+    return {}
+  }
+}
+
+/**
+ * Get spending in categories that have no budget for the given month.
+ * @param {UUID} userId - User ID
+ * @param {string} monthStr - 'YYYY-MM' format
+ * @param {UUID[]} budgetedCategoryIds - IDs of categories that already have budgets
+ * @returns {Array} [{ categoryId, categoryName, categorySlug, spent }]
+ */
+export async function getUnbudgetedSpending(userId, monthStr, budgetedCategoryIds) {
+  try {
+    const [yearStr, monthNumStr] = monthStr.split('-')
+    const year = parseInt(yearStr, 10)
+    const monthNum = parseInt(monthNumStr, 10)
+    const startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`
+    const endDate = new Date(year, monthNum, 0) // last day of month
+    const endDateStr = endDate.toISOString().split('T')[0]
+
+    // Get all expense transactions for the month
+    const { data: transactions, error } = await supabase
+      .from('account_transactions')
+      .select('id, amount, transaction_type, category_id, date, reference_type')
+      .eq('user_id', userId)
+      .in('transaction_type', ['expense', 'transaction_fee'])
+      .gte('date', startDate)
+      .lte('date', endDateStr)
+
+    if (error || !transactions) return []
+
+    // Exclude reversed
+    const reversedIds = await getReversedTransactionIds(userId, transactions.map(t => t.id))
+    const valid = transactions.filter(t => {
+      if (reversedIds.has(t.id)) return false
+      if (shouldExcludeFromBudget(t)) return false
+      return true
+    })
+
+    // Group by category_id, excluding budgeted ones
+    const budgetedSet = new Set(budgetedCategoryIds || [])
+    const categorySpending = {}
+    valid.forEach(t => {
+      if (!t.category_id || budgetedSet.has(t.category_id)) return
+      if (!categorySpending[t.category_id]) categorySpending[t.category_id] = 0
+      categorySpending[t.category_id] += parseFloat(t.amount || 0)
+    })
+
+    const categoryIds = Object.keys(categorySpending)
+    if (categoryIds.length === 0) return []
+
+    // Fetch category names
+    const { data: cats } = await supabase
+      .from('expense_categories')
+      .select('id, name, slug')
+      .in('id', categoryIds)
+
+    const catMap = {}
+    ;(cats || []).forEach(c => { catMap[c.id] = c })
+
+    return categoryIds
+      .map(cid => ({
+        categoryId: cid,
+        categoryName: catMap[cid]?.name || 'Unknown',
+        categorySlug: catMap[cid]?.slug || 'other',
+        spent: categorySpending[cid]
+      }))
+      .sort((a, b) => b.spent - a.spent)
+  } catch (err) {
+    console.error('Error in getUnbudgetedSpending:', err)
+    return []
+  }
+}
+
 export default {
   getCategoryActualSpending,
   getTotalActualSpending,
@@ -686,5 +861,7 @@ export default {
   getWarningBudgets,
   getCategoryBySlug,
   getAllCategories,
-  getBudgetableCategories
+  getBudgetableCategories,
+  getMultiMonthBudgetHistory,
+  getUnbudgetedSpending
 }

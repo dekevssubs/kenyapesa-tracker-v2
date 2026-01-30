@@ -6,14 +6,16 @@ import { formatCurrency } from '../utils/calculations'
 import { getCategoryIcon, getCategoryColor } from '../utils/iconMappings'
 import {
   Plus, Edit2, Trash2, X, ChevronDown, ChevronRight,
-  AlertTriangle, CheckCircle, Lightbulb, Target, TrendingUp,
-  Calendar, Wallet, PiggyBank
+  AlertTriangle, Target,
+  Calendar, Wallet, PiggyBank, Copy
 } from 'lucide-react'
 import ConfirmationModal from '../components/ConfirmationModal'
 import { useConfirmation } from '../hooks/useConfirmation'
 import budgetService from '../utils/budgetService'
 import { ensureUserHasCategories, getAllExpenseCategories } from '../utils/categoryService'
 import CategorySelector from '../components/categories/CategorySelector'
+import SpendingTrendsPanel from '../components/budget/SpendingTrendsPanel'
+import CategoryIntelligencePanel from '../components/budget/CategoryIntelligencePanel'
 
 export default function Budget() {
   const { user } = useAuth()
@@ -30,10 +32,12 @@ export default function Budget() {
   const [showModal, setShowModal] = useState(false)
   const [editingBudget, setEditingBudget] = useState(null)
   const [expandedGroups, setExpandedGroups] = useState({})
+  const [copying, setCopying] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
+  const [earliestYear, setEarliestYear] = useState(() => new Date().getFullYear() - 3)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -69,6 +73,21 @@ export default function Budget() {
       setBudgets(budgetsData)
       setBudgetSummary(summaryData)
       setCategories(categoriesData.hierarchy || [])
+
+      // Determine earliest year from budgets
+      try {
+        const { data: earliest } = await supabase
+          .from('budgets')
+          .select('month')
+          .eq('user_id', user.id)
+          .order('month', { ascending: true })
+          .limit(1)
+          .single()
+        if (earliest?.month) {
+          const ey = parseInt(earliest.month.split('-')[0], 10)
+          if (ey < earliestYear) setEarliestYear(ey)
+        }
+      } catch { /* no budgets yet, keep default */ }
 
       // Auto-expand groups that have budgets
       const groupsWithBudgets = {}
@@ -137,32 +156,6 @@ export default function Budget() {
       overBudget: budgets.filter(b => b.status === 'over').length
     }
   }, [budgets])
-
-  // Budget tip based on status
-  const budgetTip = useMemo(() => {
-    if (statusCounts.overBudget > 0) {
-      return {
-        type: 'warning',
-        message: `You've exceeded ${statusCounts.overBudget} budget${statusCounts.overBudget > 1 ? 's' : ''}. Review your spending to get back on track.`
-      }
-    }
-    if (statusCounts.nearLimit > 0) {
-      return {
-        type: 'caution',
-        message: `${statusCounts.nearLimit} budget${statusCounts.nearLimit > 1 ? 's are' : ' is'} approaching the limit. Consider adjusting your spending.`
-      }
-    }
-    if (budgets.length === 0) {
-      return {
-        type: 'info',
-        message: 'Start by creating budgets for your expense categories to track your spending effectively.'
-      }
-    }
-    return {
-      type: 'success',
-      message: 'Great job! All your budgets are on track. Keep up the good spending habits!'
-    }
-  }, [statusCounts, budgets.length])
 
   const toggleGroup = (groupId) => {
     setExpandedGroups(prev => ({
@@ -282,6 +275,21 @@ export default function Budget() {
     })
   }
 
+  const handleQuickCreateBudget = (categoryId) => {
+    const allCats = categories.flatMap(cat => [cat, ...(cat.subcategories || [])])
+    const cat = allCats.find(c => c.id === categoryId)
+    if (cat) {
+      setSelectedCategory({ id: cat.id, name: cat.name, slug: cat.slug })
+      setFormData({
+        category_id: cat.id,
+        monthly_limit: '',
+        month: selectedMonth + '-01'
+      })
+      setEditingBudget(null)
+      setShowModal(true)
+    }
+  }
+
   const getProgressColor = (status) => {
     switch (status) {
       case 'over': return 'bg-red-500'
@@ -291,16 +299,113 @@ export default function Budget() {
     }
   }
 
-  const getMonthOptions = () => {
-    const options = []
-    const now = new Date()
-    for (let i = -3; i <= 3; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
-      const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      const label = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-      options.push({ value, label })
+  // Derive selected year/month from selectedMonth string
+  const selYear = parseInt(selectedMonth.split('-')[0], 10)
+  const selMonthNum = parseInt(selectedMonth.split('-')[1], 10)
+
+  const currentYear = new Date().getFullYear()
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ]
+
+  const yearOptions = []
+  for (let y = currentYear + 1; y >= earliestYear; y--) {
+    yearOptions.push(y)
+  }
+
+  const copyFromPreviousMonth = async () => {
+    setCopying(true)
+    try {
+      const [year, month] = selectedMonth.split('-').map(Number)
+      const currentMonthStr = `${year}-${String(month).padStart(2, '0')}-01`
+
+      // Find the most recent month with budgets before the selected month
+      const { data: previousBudgets, error: fetchError } = await supabase
+        .from('budgets')
+        .select('category_id, monthly_limit')
+        .eq('user_id', user.id)
+        .lt('month', currentMonthStr)
+        .order('month', { ascending: false })
+
+      if (fetchError) throw fetchError
+
+      if (!previousBudgets || previousBudgets.length === 0) {
+        toast.warning('No previous budgets found to copy from')
+        return
+      }
+
+      // Get the month of the most recent budget to only copy from that month
+      // We need to re-query to get the month value
+      const { data: latestBudget } = await supabase
+        .from('budgets')
+        .select('month')
+        .eq('user_id', user.id)
+        .lt('month', currentMonthStr)
+        .order('month', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (!latestBudget) {
+        toast.warning('No previous budgets found to copy from')
+        return
+      }
+
+      const sourceMonth = latestBudget.month
+
+      // Fetch all budgets from that source month
+      const { data: sourceBudgets, error: sourceError } = await supabase
+        .from('budgets')
+        .select('category_id, monthly_limit')
+        .eq('user_id', user.id)
+        .eq('month', sourceMonth)
+
+      if (sourceError) throw sourceError
+
+      if (!sourceBudgets || sourceBudgets.length === 0) {
+        toast.warning('No budgets found in the previous month')
+        return
+      }
+
+      // Get existing budgets for current month to avoid duplicates
+      const { data: existingBudgets } = await supabase
+        .from('budgets')
+        .select('category_id')
+        .eq('user_id', user.id)
+        .eq('month', currentMonthStr)
+
+      const existingCategoryIds = new Set((existingBudgets || []).map(b => b.category_id))
+
+      // Filter out categories that already have budgets this month
+      const newBudgets = sourceBudgets
+        .filter(b => !existingCategoryIds.has(b.category_id))
+        .map(b => ({
+          user_id: user.id,
+          category_id: b.category_id,
+          monthly_limit: b.monthly_limit,
+          month: currentMonthStr
+        }))
+
+      if (newBudgets.length === 0) {
+        toast.info('All categories from the previous month already have budgets this month')
+        return
+      }
+
+      const { error: insertError } = await supabase
+        .from('budgets')
+        .insert(newBudgets)
+
+      if (insertError) throw insertError
+
+      const sourceLabel = new Date(sourceMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      toast.success(`Copied ${newBudgets.length} budget${newBudgets.length !== 1 ? 's' : ''} from ${sourceLabel}`)
+      loadData()
+    } catch (error) {
+      console.error('Error copying budgets:', error)
+      toast.error('Failed to copy budgets from previous month')
+    } finally {
+      setCopying(false)
     }
-    return options
   }
 
   if (loading) {
@@ -324,19 +429,44 @@ export default function Budget() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Month Selector */}
+          {/* Month/Year Selector */}
           <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
             <Calendar size={18} className="text-slate-400" />
             <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent border-none focus:outline-none text-sm font-medium text-slate-900 dark:text-slate-100"
+              value={selMonthNum}
+              onChange={(e) => {
+                const m = String(e.target.value).padStart(2, '0')
+                setSelectedMonth(`${selYear}-${m}`)
+              }}
+              className="bg-transparent border-none focus:outline-none text-sm font-medium text-slate-900 dark:text-slate-100 dark:[color-scheme:dark]"
             >
-              {getMonthOptions().map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              {monthNames.map((name, i) => (
+                <option key={i + 1} value={i + 1} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">{name}</option>
+              ))}
+            </select>
+            <select
+              value={selYear}
+              onChange={(e) => {
+                const m = String(selMonthNum).padStart(2, '0')
+                setSelectedMonth(`${e.target.value}-${m}`)
+              }}
+              className="bg-transparent border-none focus:outline-none text-sm font-medium text-slate-900 dark:text-slate-100 dark:[color-scheme:dark]"
+            >
+              {yearOptions.map(y => (
+                <option key={y} value={y} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">{y}</option>
               ))}
             </select>
           </div>
+
+          {/* Copy from Previous Month */}
+          <button
+            onClick={copyFromPreviousMonth}
+            disabled={copying}
+            className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            <Copy size={18} className={copying ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">{copying ? 'Copying...' : 'Copy Last Month'}</span>
+          </button>
 
           {/* Add Budget Button */}
           <button
@@ -426,13 +556,23 @@ export default function Budget() {
               <p className="text-slate-500 dark:text-slate-400 mb-6">
                 Start by creating budgets for your expense categories
               </p>
-              <button
-                onClick={() => setShowModal(true)}
-                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-              >
-                <Plus size={18} />
-                Create Your First Budget
-              </button>
+              <div className="flex items-center gap-3 justify-center">
+                <button
+                  onClick={copyFromPreviousMonth}
+                  disabled={copying}
+                  className="inline-flex items-center gap-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
+                >
+                  <Copy size={18} />
+                  {copying ? 'Copying...' : 'Copy Last Month'}
+                </button>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                >
+                  <Plus size={18} />
+                  Create New Budget
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -675,62 +815,21 @@ export default function Budget() {
             </div>
           </div>
 
-          {/* Budget Tip */}
-          <div className={`rounded-xl p-5 border ${
-            budgetTip.type === 'warning'
-              ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-              : budgetTip.type === 'caution'
-              ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
-              : budgetTip.type === 'success'
-              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-              : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-          }`}>
-            <div className="flex items-start gap-3">
-              <div className={`p-2 rounded-lg ${
-                budgetTip.type === 'warning'
-                  ? 'bg-red-100 dark:bg-red-900/30'
-                  : budgetTip.type === 'caution'
-                  ? 'bg-yellow-100 dark:bg-yellow-900/30'
-                  : budgetTip.type === 'success'
-                  ? 'bg-green-100 dark:bg-green-900/30'
-                  : 'bg-blue-100 dark:bg-blue-900/30'
-              }`}>
-                {budgetTip.type === 'warning' ? (
-                  <AlertTriangle size={18} className="text-red-600 dark:text-red-400" />
-                ) : budgetTip.type === 'caution' ? (
-                  <AlertTriangle size={18} className="text-yellow-600 dark:text-yellow-400" />
-                ) : budgetTip.type === 'success' ? (
-                  <CheckCircle size={18} className="text-green-600 dark:text-green-400" />
-                ) : (
-                  <Lightbulb size={18} className="text-blue-600 dark:text-blue-400" />
-                )}
-              </div>
-              <div>
-                <h4 className={`font-medium mb-1 ${
-                  budgetTip.type === 'warning'
-                    ? 'text-red-900 dark:text-red-100'
-                    : budgetTip.type === 'caution'
-                    ? 'text-yellow-900 dark:text-yellow-100'
-                    : budgetTip.type === 'success'
-                    ? 'text-green-900 dark:text-green-100'
-                    : 'text-blue-900 dark:text-blue-100'
-                }`}>
-                  Budget Tip
-                </h4>
-                <p className={`text-sm ${
-                  budgetTip.type === 'warning'
-                    ? 'text-red-700 dark:text-red-300'
-                    : budgetTip.type === 'caution'
-                    ? 'text-yellow-700 dark:text-yellow-300'
-                    : budgetTip.type === 'success'
-                    ? 'text-green-700 dark:text-green-300'
-                    : 'text-blue-700 dark:text-blue-300'
-                }`}>
-                  {budgetTip.message}
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Spending Trends */}
+          <SpendingTrendsPanel
+            budgets={budgets}
+            budgetSummary={budgetSummary}
+            selectedMonth={selectedMonth}
+            userId={user.id}
+          />
+
+          {/* Category Intelligence */}
+          <CategoryIntelligencePanel
+            budgets={budgets}
+            selectedMonth={selectedMonth}
+            userId={user.id}
+            onCreateBudget={handleQuickCreateBudget}
+          />
         </div>
       </div>
 
