@@ -18,6 +18,9 @@ import CreateRenewalReminderModal from '../components/reminders/CreateRenewalRem
 import { SubscriptionService } from '../utils/subscriptionService'
 import { BillReminderService } from '../utils/newBillReminderService'
 import ConvertToRecurringModal from '../components/subscriptions/ConvertToRecurringModal'
+import SpendingVelocityPanel from '../components/expenses/SpendingVelocityPanel'
+import PaymentAndFeesPanel from '../components/expenses/PaymentAndFeesPanel'
+import MonthComparisonPanel from '../components/expenses/MonthComparisonPanel'
 
 const PAYMENT_METHODS = ['mpesa', 'cash', 'bank', 'card']
 
@@ -958,6 +961,15 @@ export default function Expenses() {
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* Insight Panels */}
+      {expenses.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <SpendingVelocityPanel expenses={expenses} />
+          <PaymentAndFeesPanel expenses={expenses} />
+          <MonthComparisonPanel expenses={expenses} />
         </div>
       )}
 
