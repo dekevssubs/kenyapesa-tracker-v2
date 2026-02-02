@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Zap, ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Calendar } from 'lucide-react'
+import { Zap, ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Calendar, Info } from 'lucide-react'
 import { formatCurrency } from '../../utils/calculations'
 
 export default function SpendingVelocityPanel({ expenses }) {
@@ -28,8 +28,10 @@ export default function SpendingVelocityPanel({ expenses }) {
       return d.getMonth() === prevMonthDate.getMonth() && d.getFullYear() === prevMonthDate.getFullYear()
     })
 
-    const thisMonthTotal = thisMonthExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0) + parseFloat(e.transaction_fee || 0), 0)
-    const lastMonthTotal = lastMonthExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0) + parseFloat(e.transaction_fee || 0), 0)
+    const getExpenseTotal = (e) => parseFloat(e.amount || 0) + parseFloat(e.transaction_fee || 0)
+
+    const thisMonthTotal = thisMonthExpenses.reduce((sum, e) => sum + getExpenseTotal(e), 0)
+    const lastMonthTotal = lastMonthExpenses.reduce((sum, e) => sum + getExpenseTotal(e), 0)
 
     // Daily spending rate
     const dailyRate = daysPassed > 0 ? thisMonthTotal / daysPassed : 0
@@ -38,16 +40,61 @@ export default function SpendingVelocityPanel({ expenses }) {
       ? ((dailyRate - lastMonthDailyRate) / lastMonthDailyRate) * 100
       : 0
 
-    // Monthly projection
-    const projection = dailyRate * daysInMonth
+    // Historical pace calculation — gather up to 6 prior months
+    const priorMonthsMap = {}
+    const nonReversedExpenses = expenses.filter(e => !e.is_reversed)
+    for (const e of nonReversedExpenses) {
+      const d = new Date(e.date)
+      const mKey = `${d.getFullYear()}-${d.getMonth()}`
+      // Skip current month
+      if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) continue
+      if (!priorMonthsMap[mKey]) {
+        priorMonthsMap[mKey] = { monthTotal: 0, totalByDayN: 0, year: d.getFullYear(), month: d.getMonth() }
+      }
+      const amount = getExpenseTotal(e)
+      priorMonthsMap[mKey].monthTotal += amount
+      if (d.getDate() <= daysPassed) {
+        priorMonthsMap[mKey].totalByDayN += amount
+      }
+    }
+
+    // Sort by date descending and take up to 6
+    const priorMonths = Object.values(priorMonthsMap)
+      .sort((a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month))
+      .slice(0, 6)
+
+    const historicalMonthCount = priorMonths.length
+    const historicalAvgByDayN = historicalMonthCount > 0
+      ? priorMonths.reduce((sum, m) => sum + m.totalByDayN, 0) / historicalMonthCount
+      : 0
+    const historicalAvgMonthTotal = historicalMonthCount > 0
+      ? priorMonths.reduce((sum, m) => sum + m.monthTotal, 0) / historicalMonthCount
+      : 0
+    const paceRatio = historicalAvgByDayN > 0 ? thisMonthTotal / historicalAvgByDayN : null
+
+    // Early month flag
+    const isEarlyMonth = daysPassed < 7
+
+    // Monthly projection (improved)
+    let projection
+    if (isEarlyMonth) {
+      if (historicalMonthCount > 0) {
+        projection = historicalAvgMonthTotal
+      } else {
+        projection = lastMonthTotal
+      }
+    } else {
+      projection = dailyRate * daysInMonth
+    }
+
     const projectionExceedsLast = lastMonthTotal > 0 && projection > lastMonthTotal
     const excessAmount = projectionExceedsLast ? projection - lastMonthTotal : 0
 
     // Biggest expense this month
     const biggest = thisMonthExpenses.length > 0
       ? thisMonthExpenses.reduce((max, e) => {
-          const total = parseFloat(e.amount || 0) + parseFloat(e.transaction_fee || 0)
-          return total > (parseFloat(max.amount || 0) + parseFloat(max.transaction_fee || 0)) ? e : max
+          const total = getExpenseTotal(e)
+          return total > getExpenseTotal(max) ? e : max
         }, thisMonthExpenses[0])
       : null
 
@@ -66,11 +113,29 @@ export default function SpendingVelocityPanel({ expenses }) {
       excessAmount,
       biggest,
       activeDays,
-      daysPassed
+      daysPassed,
+      isEarlyMonth,
+      historicalAvgByDayN,
+      historicalAvgMonthTotal,
+      historicalMonthCount,
+      paceRatio,
     }
   }, [expenses, currentMonth, currentYear, daysPassed, daysInMonth, daysInLastMonth])
 
   const hasContent = insights.thisMonthTotal > 0
+
+  const EarlyMonthDisclaimer = () => (
+    <div className="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg mt-2">
+      <Info size={14} className="text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+      <p className="text-xs text-blue-600 dark:text-blue-400">
+        Early in the month — rates are based on limited data and may reflect recurring bills.
+      </p>
+    </div>
+  )
+
+  const pacePercent = insights.paceRatio !== null
+    ? ((insights.paceRatio - 1) * 100)
+    : null
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -115,7 +180,32 @@ export default function SpendingVelocityPanel({ expenses }) {
                       )}
                     </div>
                   </div>
-                  {insights.lastMonthDailyRate > 0 && (
+
+                  {/* Historical pace comparison */}
+                  {insights.historicalMonthCount > 0 && (
+                    <>
+                      <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                        <span>By day {daysPassed}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span>{formatCurrency(insights.thisMonthTotal)} vs typical {formatCurrency(insights.historicalAvgByDayN)}</span>
+                          {pacePercent !== null && (
+                            <span className={`font-medium ${pacePercent > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                              {pacePercent > 0 ? '+' : ''}{pacePercent.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="h-2 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${pacePercent !== null && pacePercent > 0 ? 'bg-red-500' : 'bg-green-500'}`}
+                          style={{ width: `${Math.min((insights.thisMonthTotal / Math.max(insights.thisMonthTotal, insights.historicalAvgByDayN)) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Fallback: show last month daily rate comparison when no historical data */}
+                  {insights.historicalMonthCount === 0 && insights.lastMonthDailyRate > 0 && (
                     <>
                       <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
                         <span>Last month avg</span>
@@ -129,13 +219,17 @@ export default function SpendingVelocityPanel({ expenses }) {
                       </div>
                     </>
                   )}
+
+                  {insights.isEarlyMonth && <EarlyMonthDisclaimer />}
                 </div>
               </div>
 
               {/* Monthly Projection */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  {insights.projectionExceedsLast ? (
+                  {insights.isEarlyMonth ? (
+                    <Info size={14} className="text-blue-500" />
+                  ) : insights.projectionExceedsLast ? (
                     <AlertTriangle size={14} className="text-amber-500" />
                   ) : (
                     <TrendingDown size={14} className="text-green-500" />
@@ -144,32 +238,67 @@ export default function SpendingVelocityPanel({ expenses }) {
                     Monthly Projection
                   </span>
                 </div>
-                <div className={`p-3 rounded-lg border ${
-                  insights.projectionExceedsLast
-                    ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
-                    : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                }`}>
-                  <p className={`text-sm font-semibold ${
+
+                {insights.isEarlyMonth ? (
+                  // Early month projection — neutral blue styling
+                  <div className="p-3 rounded-lg border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                    {insights.historicalMonthCount > 0 ? (
+                      <>
+                        <p className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                          {formatCurrency(insights.historicalAvgMonthTotal)}
+                        </p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                          Based on {insights.historicalMonthCount}-month average. So far this month: {formatCurrency(insights.thisMonthTotal)}.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                          {insights.lastMonthTotal > 0 ? formatCurrency(insights.lastMonthTotal) : formatCurrency(insights.thisMonthTotal)}
+                        </p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                          {insights.lastMonthTotal > 0
+                            ? `Last month you spent ${formatCurrency(insights.lastMonthTotal)}. So far this month: ${formatCurrency(insights.thisMonthTotal)}.`
+                            : 'Based on current daily rate'}
+                        </p>
+                      </>
+                    )}
+                    <EarlyMonthDisclaimer />
+                  </div>
+                ) : (
+                  // Normal projection (day 7+)
+                  <div className={`p-3 rounded-lg border ${
                     insights.projectionExceedsLast
-                      ? 'text-amber-800 dark:text-amber-200'
-                      : 'text-green-800 dark:text-green-200'
+                      ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+                      : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
                   }`}>
-                    {formatCurrency(insights.projection)}
-                  </p>
-                  {insights.projectionExceedsLast ? (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                      Projected to exceed last month by {formatCurrency(insights.excessAmount)}
+                    <p className={`text-sm font-semibold ${
+                      insights.projectionExceedsLast
+                        ? 'text-amber-800 dark:text-amber-200'
+                        : 'text-green-800 dark:text-green-200'
+                    }`}>
+                      {formatCurrency(insights.projection)}
                     </p>
-                  ) : insights.lastMonthTotal > 0 ? (
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      On track to spend less than last month ({formatCurrency(insights.lastMonthTotal)})
-                    </p>
-                  ) : (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Based on current daily rate
-                    </p>
-                  )}
-                </div>
+                    {insights.projectionExceedsLast ? (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        Projected to exceed last month by {formatCurrency(insights.excessAmount)}
+                      </p>
+                    ) : insights.lastMonthTotal > 0 ? (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                        On track to spend less than last month ({formatCurrency(insights.lastMonthTotal)})
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Based on current daily rate
+                      </p>
+                    )}
+                    {insights.historicalMonthCount > 0 && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Avg month: {formatCurrency(insights.historicalAvgMonthTotal)}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Biggest Expense */}
