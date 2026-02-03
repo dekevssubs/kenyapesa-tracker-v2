@@ -198,8 +198,8 @@ export default function CategorySelector({
       )
 
       return (
-        <div className="flex items-center gap-2">
-          <div className={`p-1 rounded ${colorClasses}`}>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={`p-1 rounded flex-shrink-0 ${colorClasses}`}>
             <IconComponent size={16} />
           </div>
           <span className="truncate">
@@ -224,7 +224,7 @@ export default function CategorySelector({
         onClick={toggleDropdown}
         disabled={disabled}
         className={`
-          w-full flex items-center justify-between px-3 py-2.5
+          w-full flex items-center justify-between px-3 py-2.5 min-w-0
           bg-white dark:bg-slate-800
           border border-slate-200 dark:border-slate-700
           rounded-lg text-left
@@ -236,7 +236,7 @@ export default function CategorySelector({
         {renderSelectedDisplay()}
         <ChevronDown
           size={18}
-          className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`text-slate-400 transition-transform flex-shrink-0 ml-1 ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
