@@ -45,16 +45,23 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const SUPABASE_URL = 'https://ojigypxfwwxlcpuyjjlw.supabase.co'
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
+
+if (!SUPABASE_URL) {
+  console.error('\n❌ ERROR: SUPABASE_URL environment variable not set!\n')
+  console.log('Please set the Supabase URL:')
+  console.log('  Windows: set SUPABASE_URL=https://your-project.supabase.co')
+  console.log('  Linux/Mac: export SUPABASE_URL=https://your-project.supabase.co\n')
+  process.exit(1)
+}
 
 if (!SERVICE_KEY) {
   console.error('\n❌ ERROR: SUPABASE_SERVICE_KEY environment variable not set!\n')
   console.log('Please set the service role key:')
   console.log('  Windows: set SUPABASE_SERVICE_KEY=your_service_role_key')
   console.log('  Linux/Mac: export SUPABASE_SERVICE_KEY=your_service_role_key\n')
-  console.log('Get your service role key from:')
-  console.log('  https://supabase.com/dashboard/project/ojigypxfwwxlcpuyjjlw/settings/api\n')
+  console.log('Get your service role key from your Supabase dashboard under Settings > API\n')
   process.exit(1)
 }
 
