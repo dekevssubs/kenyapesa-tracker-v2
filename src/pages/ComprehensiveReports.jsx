@@ -218,13 +218,13 @@ export default function ComprehensiveReports() {
   return (
     <div className="space-y-6">
       {/* Header with Export Buttons */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
-            <BarChart3 className="h-8 w-8 mr-3 text-blue-500 dark:text-blue-400" />
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
+            <BarChart3 className="h-7 sm:h-8 w-7 sm:w-8 mr-2 sm:mr-3 text-blue-500 dark:text-blue-400" />
             Financial Reports
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base">
             Comprehensive financial analytics and insights
           </p>
         </div>
@@ -252,7 +252,7 @@ export default function ComprehensiveReports() {
       <div className="card bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border border-gray-200 dark:border-gray-700">
         <div className="flex flex-col items-center justify-center py-2">
           {/* Main Date Display with Navigation */}
-          <div className="flex items-center space-x-4 mb-3">
+          <div className="flex items-center space-x-2 sm:space-x-4 mb-3">
             <button
               onClick={() => {
                 const from = new Date(dateRange.from)
@@ -265,23 +265,23 @@ export default function ComprehensiveReports() {
                   to: to.toISOString().split('T')[0]
                 })
               }}
-              className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
               title="Previous period"
             >
               <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
             </button>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-1 sm:space-x-3 min-w-0">
               <input
                 type="date"
-                className="input text-sm py-1.5 px-3 bg-white dark:bg-gray-800"
+                className="input text-xs sm:text-sm py-1.5 px-1.5 sm:px-3 bg-white dark:bg-gray-800 min-w-0"
                 value={dateRange.from}
                 onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })}
               />
-              <span className="text-lg font-medium text-gray-500 dark:text-gray-400">—</span>
+              <span className="text-sm sm:text-lg font-medium text-gray-500 dark:text-gray-400 flex-shrink-0">—</span>
               <input
                 type="date"
-                className="input text-sm py-1.5 px-3 bg-white dark:bg-gray-800"
+                className="input text-xs sm:text-sm py-1.5 px-1.5 sm:px-3 bg-white dark:bg-gray-800 min-w-0"
                 value={dateRange.to}
                 onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })}
               />
@@ -299,7 +299,7 @@ export default function ComprehensiveReports() {
                   to: to.toISOString().split('T')[0]
                 })
               }}
-              className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
               title="Next period"
             >
               <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-400" />
@@ -307,7 +307,7 @@ export default function ComprehensiveReports() {
           </div>
 
           {/* Quick Presets - Centered */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 overflow-x-auto">
             <button
               onClick={() => setDateRange({
                 from: new Date(new Date().setMonth(new Date().getMonth() - 6)).toISOString().split('T')[0],
@@ -340,8 +340,8 @@ export default function ComprehensiveReports() {
       </div>
 
       {/* Primary Tab Navigation - Tier 1 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <nav className="flex" aria-label="Primary Tabs">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <nav className="flex overflow-x-auto scrollbar-hide" aria-label="Primary Tabs">
           {PRIMARY_TABS.map((tab) => {
             const Icon = tab.icon
             const isActive = primaryTab === tab.id
@@ -350,15 +350,15 @@ export default function ComprehensiveReports() {
                 key={tab.id}
                 onClick={() => handlePrimaryTabChange(tab.id)}
                 className={`
-                  flex-1 flex items-center justify-center py-4 px-4 font-medium text-sm transition-all relative
+                  flex-1 min-w-0 flex items-center justify-center py-3 sm:py-4 px-2 sm:px-4 font-medium text-xs sm:text-sm transition-all relative whitespace-nowrap
                   ${isActive
                     ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                   }
                 `}
               >
-                <Icon className={`h-5 w-5 mr-2 ${isActive ? 'text-blue-500 dark:text-blue-400' : ''}`} />
-                {tab.label}
+                <Icon className={`h-5 w-5 sm:mr-2 flex-shrink-0 ${isActive ? 'text-blue-500 dark:text-blue-400' : ''}`} />
+                <span className="hidden sm:inline">{tab.label}</span>
                 {/* Active indicator bar */}
                 {isActive && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 dark:bg-blue-400" />
@@ -371,7 +371,7 @@ export default function ComprehensiveReports() {
 
       {/* Secondary Tab Navigation - Tier 2 (Contextual) */}
       {currentSecondaryTabs.length > 0 && (
-        <div className="flex items-center justify-center space-x-2">
+        <div className="flex items-center justify-start sm:justify-center space-x-2 overflow-x-auto pb-1">
           {currentSecondaryTabs.map((tab) => {
             const Icon = tab.icon
             const isActive = secondaryTab === tab.id
@@ -380,7 +380,7 @@ export default function ComprehensiveReports() {
                 key={tab.id}
                 onClick={() => setSecondaryTab(tab.id)}
                 className={`
-                  flex items-center py-2 px-4 rounded-full font-medium text-sm transition-all
+                  flex items-center py-2 px-3 sm:px-4 rounded-full font-medium text-xs sm:text-sm transition-all whitespace-nowrap flex-shrink-0
                   ${isActive
                     ? 'bg-blue-500 text-white shadow-md'
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-gray-200'
