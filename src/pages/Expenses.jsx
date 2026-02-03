@@ -887,7 +887,7 @@ export default function Expenses() {
           </p>
         </div>
 
-        <div className="card flex flex-col sm:flex-row items-center justify-center gap-4">
+        <div className="card flex flex-col items-center justify-center gap-3 sm:gap-4">
           <button
             onClick={() => {
               // Auto-select first budgeted category if available, otherwise default to first database category
@@ -911,18 +911,27 @@ export default function Expenses() {
               setBalanceCheck(null)
               setShowModal(true)
             }}
-            className="btn btn-primary py-4 px-8 text-lg flex items-center"
+            className="btn btn-primary py-3 sm:py-4 px-6 sm:px-8 text-base sm:text-lg flex items-center w-full sm:w-auto justify-center"
           >
-            <Plus className="h-6 w-6 mr-2" />
+            <Plus className="h-5 sm:h-6 w-5 sm:w-6 mr-2" />
             Add New Expense
           </button>
-          <button
-            onClick={() => setShowImportWizard(true)}
-            className="btn btn-secondary py-4 px-6 flex items-center"
-          >
-            <Upload className="h-5 w-5 mr-2" />
-            Import CSV
-          </button>
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto justify-center">
+            <button
+              onClick={() => setShowMessageParser(true)}
+              className="btn btn-secondary py-2 px-4 flex items-center whitespace-nowrap text-sm"
+            >
+              <MessageSquare className="h-4 w-4 mr-1.5" />
+              Parse SMS
+            </button>
+            <button
+              onClick={() => setShowImportWizard(true)}
+              className="btn btn-secondary py-2 px-4 flex items-center whitespace-nowrap text-sm"
+            >
+              <Upload className="h-4 w-4 mr-1.5" />
+              Import CSV
+            </button>
+          </div>
         </div>
       </div>
 

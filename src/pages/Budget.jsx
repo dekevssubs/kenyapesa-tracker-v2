@@ -428,7 +428,7 @@ export default function Budget() {
             Track and manage your monthly spending limits
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           {/* Month/Year Selector */}
           <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
             <Calendar size={18} className="text-slate-400" />
@@ -462,7 +462,7 @@ export default function Budget() {
           <button
             onClick={copyFromPreviousMonth}
             disabled={copying}
-            className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 w-full sm:w-auto justify-center whitespace-nowrap text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
           >
             <Copy size={18} className={copying ? 'animate-spin' : ''} />
             <span className="hidden sm:inline">{copying ? 'Copying...' : 'Copy Last Month'}</span>
@@ -474,7 +474,7 @@ export default function Budget() {
               resetForm()
               setShowModal(true)
             }}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+            className="flex items-center gap-2 w-full sm:w-auto justify-center bg-green-600 hover:bg-green-700 text-white py-2.5 sm:py-3 px-4 sm:px-6 text-sm sm:text-base rounded-lg font-medium transition-colors"
           >
             <Plus size={18} />
             <span className="hidden sm:inline">Create Budget</span>
@@ -487,7 +487,7 @@ export default function Budget() {
         {/* Left Column - Budgets */}
         <div className="lg:col-span-2 space-y-6">
           {/* Summary Cards */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
@@ -676,13 +676,13 @@ export default function Budget() {
                                 <div className="flex items-center gap-2">
                                   <button
                                     onClick={() => handleEdit(budget)}
-                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                                   >
                                     <Edit2 size={16} />
                                   </button>
                                   <button
                                     onClick={() => handleDelete(budget.id)}
-                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                                   >
                                     <Trash2 size={16} />
                                   </button>

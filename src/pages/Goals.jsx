@@ -909,8 +909,8 @@ export default function Goals() {
       {/* Goal Details Modal */}
       {showDetailsModal && selectedGoal && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full my-8 animate-slideIn shadow-2xl">
-            <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 rounded-t-xl z-10">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg sm:max-w-2xl w-full my-8 animate-slideIn shadow-2xl">
+            <div className="flex items-center justify-between p-4 sm:p-6 pb-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 rounded-t-xl z-10">
               <div className="flex items-center">
                 <DollarSign className="h-6 w-6 text-blue-500 dark:text-blue-400 mr-2" />
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Goal Details</h3>
@@ -923,7 +923,7 @@ export default function Goals() {
               </button>
             </div>
 
-            <div className="p-6 pt-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+            <div className="p-4 sm:p-6 pt-4 max-h-[calc(100vh-200px)] overflow-y-auto">
               {/* Goal Summary */}
               <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-6 mb-6 border border-blue-200 dark:border-blue-800">
                 <h4 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">{selectedGoal.name}</h4>

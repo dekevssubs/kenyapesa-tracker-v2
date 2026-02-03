@@ -810,13 +810,13 @@ export default function Lending() {
 
       {/* Header Stats - Lending Tab */}
       {activeTab === 'lending' && (
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 dark:from-amber-600 dark:to-amber-700 rounded-xl p-5 text-white">
           <div className="flex items-center justify-between mb-2">
             <p className="text-amber-100 text-sm">Total Lent</p>
             <HandCoins className="h-5 w-5 text-amber-200" />
           </div>
-          <p className="text-3xl font-bold">{formatCurrency(summary?.totalLent || 0)}</p>
+          <p className="text-xl sm:text-3xl font-bold">{formatCurrency(summary?.totalLent || 0)}</p>
           <p className="text-xs text-amber-100 mt-1">Lifetime lending</p>
         </div>
 
@@ -825,7 +825,7 @@ export default function Lending() {
             <p className="text-red-100 text-sm">Outstanding</p>
             <AlertTriangle className="h-5 w-5 text-red-200" />
           </div>
-          <p className="text-3xl font-bold">{formatCurrency(summary?.totalOutstanding || 0)}</p>
+          <p className="text-xl sm:text-3xl font-bold">{formatCurrency(summary?.totalOutstanding || 0)}</p>
           <p className="text-xs text-red-100 mt-1">Open receivables</p>
         </div>
 
@@ -834,7 +834,7 @@ export default function Lending() {
             <p className="text-orange-100 text-sm">Overdue</p>
             <Clock className="h-5 w-5 text-orange-200" />
           </div>
-          <p className="text-3xl font-bold">{formatCurrency(summary?.totalOverdueAmount || 0)}</p>
+          <p className="text-xl sm:text-3xl font-bold">{formatCurrency(summary?.totalOverdueAmount || 0)}</p>
           <p className="text-xs text-orange-100 mt-1">{summary?.overdueCounterparties || 0} borrower(s)</p>
         </div>
 
@@ -843,7 +843,7 @@ export default function Lending() {
             <p className="text-blue-100 text-sm">Active Borrowers</p>
             <Users className="h-5 w-5 text-blue-200" />
           </div>
-          <p className="text-3xl font-bold">{summary?.activeCounterparties || 0}</p>
+          <p className="text-xl sm:text-3xl font-bold">{summary?.activeCounterparties || 0}</p>
           <p className="text-xs text-blue-100 mt-1">of {summary?.totalCounterparties || 0} total</p>
         </div>
       </div>
@@ -851,13 +851,13 @@ export default function Lending() {
 
       {/* Header Stats - Borrowing Tab */}
       {activeTab === 'borrowing' && (
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 dark:from-purple-600 dark:to-purple-700 rounded-xl p-5 text-white">
           <div className="flex items-center justify-between mb-2">
             <p className="text-purple-100 text-sm">Total Borrowed</p>
             <Wallet className="h-5 w-5 text-purple-200" />
           </div>
-          <p className="text-3xl font-bold">{formatCurrency(borrowingSummary?.totalBorrowed || 0)}</p>
+          <p className="text-xl sm:text-3xl font-bold">{formatCurrency(borrowingSummary?.totalBorrowed || 0)}</p>
           <p className="text-xs text-purple-100 mt-1">Lifetime borrowing</p>
         </div>
 
@@ -866,7 +866,7 @@ export default function Lending() {
             <p className="text-red-100 text-sm">Outstanding</p>
             <AlertTriangle className="h-5 w-5 text-red-200" />
           </div>
-          <p className="text-3xl font-bold">{formatCurrency(borrowingSummary?.totalOutstanding || 0)}</p>
+          <p className="text-xl sm:text-3xl font-bold">{formatCurrency(borrowingSummary?.totalOutstanding || 0)}</p>
           <p className="text-xs text-red-100 mt-1">Amount you owe</p>
         </div>
 
@@ -875,7 +875,7 @@ export default function Lending() {
             <p className="text-orange-100 text-sm">Overdue</p>
             <Clock className="h-5 w-5 text-orange-200" />
           </div>
-          <p className="text-3xl font-bold">{formatCurrency(borrowingSummary?.totalOverdueAmount || 0)}</p>
+          <p className="text-xl sm:text-3xl font-bold">{formatCurrency(borrowingSummary?.totalOverdueAmount || 0)}</p>
           <p className="text-xs text-orange-100 mt-1">{borrowingSummary?.overdueLenders || 0} lender(s)</p>
         </div>
 
@@ -884,7 +884,7 @@ export default function Lending() {
             <p className="text-blue-100 text-sm">Active Lenders</p>
             <Users className="h-5 w-5 text-blue-200" />
           </div>
-          <p className="text-3xl font-bold">{borrowingSummary?.activeLenders || 0}</p>
+          <p className="text-xl sm:text-3xl font-bold">{borrowingSummary?.activeLenders || 0}</p>
           <p className="text-xs text-blue-100 mt-1">of {borrowingSummary?.totalLenders || 0} total</p>
         </div>
       </div>
@@ -1037,25 +1037,25 @@ export default function Lending() {
                   onClick={() => openCounterpartyDrawer(cp)}
                   className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center flex-shrink-0">
-                        <User className="h-6 w-6 text-white" />
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center flex-shrink-0">
+                        <User className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                       </div>
-                      <div>
-                        <div className="flex items-center space-x-2 mb-1">
-                          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
+                          <p className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
                             {cp.personName}
                           </p>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig?.color}`}>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${statusConfig?.color}`}>
                             <StatusIcon className="h-3 w-3 mr-1" />
                             {statusConfig?.label}
                           </span>
                         </div>
-                        <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-600 dark:text-gray-400">
                           <span>{cp.activeLoans} active loan{cp.activeLoans !== 1 ? 's' : ''}</span>
                           {cp.nearestDueDate && (
-                            <span className="flex items-center">
+                            <span className="flex items-center whitespace-nowrap">
                               <Calendar className="h-3 w-3 mr-1" />
                               Due: {new Date(cp.nearestDueDate).toLocaleDateString('en-KE', {
                                 month: 'short',
@@ -1064,7 +1064,7 @@ export default function Lending() {
                             </span>
                           )}
                           {cp.isOverdue && (
-                            <span className="text-red-600 dark:text-red-400">
+                            <span className="text-red-600 dark:text-red-400 whitespace-nowrap">
                               {cp.maxDaysOverdue} days overdue
                             </span>
                           )}
@@ -1072,16 +1072,16 @@ export default function Lending() {
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-4">
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    <div className="flex items-center justify-between sm:justify-end space-x-4 pl-13 sm:pl-0">
+                      <div className="text-left sm:text-right">
+                        <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
                           {formatCurrency(cp.totalOutstanding)}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-500">
                           outstanding
                         </p>
                       </div>
-                      <ChevronRight className="h-5 w-5 text-gray-400" />
+                      <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
                     </div>
                   </div>
 
@@ -1152,30 +1152,30 @@ export default function Lending() {
                   key={lender.lenderName}
                   className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center flex-shrink-0">
-                        <User className="h-6 w-6 text-white" />
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center flex-shrink-0">
+                        <User className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                       </div>
-                      <div>
-                        <div className="flex items-center space-x-2 mb-1">
-                          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
+                          <p className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
                             {lender.lenderName}
                           </p>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${statusColor}`}>
                             <StatusIcon className="h-3 w-3 mr-1" />
                             {statusLabel}
                           </span>
                           {lender.lenderType && lender.lenderType !== 'other' && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 capitalize">
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 capitalize whitespace-nowrap">
                               {lender.lenderType}
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-600 dark:text-gray-400">
                           <span>{lender.activeLoans} active loan{lender.activeLoans !== 1 ? 's' : ''}</span>
                           {lender.isOverdue && (
-                            <span className="text-red-600 dark:text-red-400">
+                            <span className="text-red-600 dark:text-red-400 whitespace-nowrap">
                               {lender.maxDaysOverdue} days overdue
                             </span>
                           )}
@@ -1183,9 +1183,9 @@ export default function Lending() {
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-4">
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    <div className="flex items-center justify-between sm:justify-end space-x-4 pl-13 sm:pl-0">
+                      <div className="text-left sm:text-right">
+                        <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
                           {formatCurrency(lender.totalOutstanding)}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-500">
@@ -1205,7 +1205,7 @@ export default function Lending() {
                             }))
                             setShowBorrowingRepaymentModal(true)
                           }}
-                          className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700"
+                          className="w-full sm:w-auto justify-center whitespace-nowrap px-4 py-2 sm:px-3 sm:py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700"
                         >
                           Pay
                         </button>
@@ -1451,15 +1451,15 @@ export default function Lending() {
                 />
               </div>
 
-              <div className="flex space-x-3 pt-4">
+              <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="flex-1 btn btn-secondary py-3"
+                  className="w-full sm:w-auto sm:flex-1 justify-center btn btn-secondary py-3 whitespace-nowrap"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="flex-1 btn btn-primary py-3">
+                <button type="submit" className="w-full sm:w-auto sm:flex-1 justify-center btn btn-primary py-3 whitespace-nowrap">
                   Lend Money
                 </button>
               </div>
@@ -1574,18 +1574,18 @@ export default function Lending() {
                 />
               </div>
 
-              <div className="flex space-x-3 pt-4">
+              <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => {
                     setShowRepaymentModal(false)
                     setSelectedLending(null)
                   }}
-                  className="flex-1 btn btn-secondary py-3"
+                  className="w-full sm:w-auto sm:flex-1 justify-center btn btn-secondary py-3 whitespace-nowrap"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="flex-1 btn btn-primary py-3">
+                <button type="submit" className="w-full sm:w-auto sm:flex-1 justify-center btn btn-primary py-3 whitespace-nowrap">
                   Record Repayment
                 </button>
               </div>
@@ -1759,15 +1759,15 @@ export default function Lending() {
                 />
               </div>
 
-              <div className="flex space-x-3 pt-4">
+              <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setShowBorrowingModal(false)}
-                  className="flex-1 btn btn-secondary py-3"
+                  className="w-full sm:w-auto sm:flex-1 justify-center btn btn-secondary py-3 whitespace-nowrap"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="flex-1 btn btn-primary py-3 bg-purple-600 hover:bg-purple-700">
+                <button type="submit" className="w-full sm:w-auto sm:flex-1 justify-center btn btn-primary py-3 bg-purple-600 hover:bg-purple-700 whitespace-nowrap">
                   Record Loan
                 </button>
               </div>
@@ -1853,18 +1853,18 @@ export default function Lending() {
                 />
               </div>
 
-              <div className="flex space-x-3 pt-4">
+              <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => {
                     setShowBorrowingRepaymentModal(false)
                     setSelectedBorrowing(null)
                   }}
-                  className="flex-1 btn btn-secondary py-3"
+                  className="w-full sm:w-auto sm:flex-1 justify-center btn btn-secondary py-3 whitespace-nowrap"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="flex-1 btn btn-primary py-3 bg-purple-600 hover:bg-purple-700">
+                <button type="submit" className="w-full sm:w-auto sm:flex-1 justify-center btn btn-primary py-3 bg-purple-600 hover:bg-purple-700 whitespace-nowrap">
                   Make Payment
                 </button>
               </div>

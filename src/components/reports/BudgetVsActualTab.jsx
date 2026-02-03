@@ -265,7 +265,8 @@ export default function BudgetVsActualTab({ dateRange }) {
       {/* Budget vs Actual Chart */}
       <div className="card">
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Budget vs Actual by Category</h3>
-        <ResponsiveContainer width="100%" height={400}>
+        <div className="h-[280px] sm:h-[400px]">
+        <ResponsiveContainer width="100%" height="100%">
           <BarChart data={budgetData.slice(0, 10)} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
             <XAxis type="number" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
@@ -280,20 +281,107 @@ export default function BudgetVsActualTab({ dateRange }) {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+        </div>
       </div>
 
-      {/* Detailed Category Table */}
+      {/* Detailed Category Breakdown */}
       <div className="card overflow-x-auto">
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Category Breakdown</h3>
+
+        {/* Mobile Card Layout */}
+        <div className="space-y-3 md:hidden">
+          {budgetData.map((item, index) => (
+            <div key={index} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{item.category}</span>
+                {getStatusIcon(item.status)}
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Budget</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatCurrency(item.budgeted)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Actual</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatCurrency(item.actual)}</p>
+                </div>
+              </div>
+              <div className="mb-3">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Variance</p>
+                <span className={`text-sm font-semibold ${
+                  item.variance >= 0
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-red-600 dark:text-red-400'
+                }`}>
+                  {item.variance >= 0 ? '+' : ''}{formatCurrency(item.variance)}
+                </span>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">% Used</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                    {item.budgeted > 0 ? ((item.actual / item.budgeted) * 100).toFixed(0) : 0}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full ${
+                      item.actual > item.budgeted ? 'bg-red-500' :
+                      item.actual > item.budgeted * 0.8 ? 'bg-blue-500' :
+                      'bg-green-500'
+                    }`}
+                    style={{ width: `${Math.min((item.actual / item.budgeted) * 100, 100)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Mobile Total Summary Card */}
+          <div className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 p-4">
+            <p className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">Total</p>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Budget</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(summary.totalBudget)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Actual</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(summary.totalSpent)}</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Variance</p>
+                <span className={`text-sm font-semibold ${
+                  summary.variance >= 0
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-red-600 dark:text-red-400'
+                }`}>
+                  {summary.variance >= 0 ? '+' : ''}{formatCurrency(summary.variance)}
+                </span>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500 dark:text-gray-400">% Used</p>
+                <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                  {summary.totalBudget > 0 ? ((summary.totalSpent / summary.totalBudget) * 100).toFixed(0) : 0}%
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Table Layout */}
+        <div className="hidden md:block">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Category</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Budgeted</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actual</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Variance</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">% Used</th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+              <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Category</th>
+              <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Budgeted</th>
+              <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actual</th>
+              <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Variance</th>
+              <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">% Used</th>
+              <th className="px-3 py-2 md:px-6 md:py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
@@ -359,6 +447,7 @@ export default function BudgetVsActualTab({ dateRange }) {
             </tr>
           </tfoot>
         </table>
+        </div>
       </div>
 
       {/* Alerts Section */}

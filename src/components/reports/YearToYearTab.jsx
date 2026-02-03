@@ -271,129 +271,212 @@ export default function YearToYearTab() {
       {/* Year-over-Year Growth Chart */}
       <div className="card">
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Annual Financial Comparison</h3>
-        <ResponsiveContainer width="100%" height={400}>
-          <BarChart data={[...yearlyData].reverse()}>
-            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
-            <XAxis dataKey="year" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
-            <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
-            <Tooltip content={<CustomTooltip isDark={isDark} />} cursor={false} />
-            <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
-            <Bar dataKey="income" fill="#10B981" name="Income" />
-            <Bar dataKey="expenses" fill="#EF4444" name="Expenses" />
-            <Bar dataKey="savings" fill="#3B82F6" name="Savings" />
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="h-[280px] sm:h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={[...yearlyData].reverse()}>
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+              <XAxis dataKey="year" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Tooltip content={<CustomTooltip isDark={isDark} />} cursor={false} />
+              <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
+              <Bar dataKey="income" fill="#10B981" name="Income" />
+              <Bar dataKey="expenses" fill="#EF4444" name="Expenses" />
+              <Bar dataKey="savings" fill="#3B82F6" name="Savings" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Growth Trends Chart */}
       {yearlyData.length > 1 && (
         <div className="card">
           <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Year-over-Year Growth Rates</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={[...yearlyData].reverse().filter((_, idx) => idx > 0)}>
-              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
-              <XAxis dataKey="year" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
-              <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
-              <Tooltip
-                formatter={(value) => `${value.toFixed(1)}%`}
-                contentStyle={{
-                  backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
-                  borderColor: isDark ? '#374151' : '#E5E7EB',
-                  color: isDark ? '#F3F4F6' : '#111827',
-                  borderRadius: '8px'
-                }}
-              />
-              <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
-              <Line type="monotone" dataKey="incomeGrowth" stroke="#10B981" strokeWidth={2} name="Income Growth %" />
-              <Line type="monotone" dataKey="expenseGrowth" stroke="#EF4444" strokeWidth={2} name="Expense Growth %" />
-              <Line type="monotone" dataKey="savingsGrowth" stroke="#3B82F6" strokeWidth={2} name="Savings Growth %" />
-            </LineChart>
-          </ResponsiveContainer>
+          <div className="h-[240px] sm:h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={[...yearlyData].reverse().filter((_, idx) => idx > 0)}>
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+                <XAxis dataKey="year" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+                <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+                <Tooltip
+                  formatter={(value) => `${value.toFixed(1)}%`}
+                  contentStyle={{
+                    backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+                    borderColor: isDark ? '#374151' : '#E5E7EB',
+                    color: isDark ? '#F3F4F6' : '#111827',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
+                <Line type="monotone" dataKey="incomeGrowth" stroke="#10B981" strokeWidth={2} name="Income Growth %" />
+                <Line type="monotone" dataKey="expenseGrowth" stroke="#EF4444" strokeWidth={2} name="Expense Growth %" />
+                <Line type="monotone" dataKey="savingsGrowth" stroke="#3B82F6" strokeWidth={2} name="Savings Growth %" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 
       {/* Detailed Yearly Table */}
-      <div className="card overflow-x-auto">
+      <div className="card">
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Detailed Year-by-Year Breakdown</h3>
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-800">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Year</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Income</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">YoY Growth</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Expenses</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">YoY Growth</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Savings</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Savings Rate</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Transactions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-            {yearlyData.map((year) => (
-              <tr key={year.year} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-gray-100">
-                  {year.year}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100">
-                  {formatCurrency(year.income)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                  {year.incomeGrowth === 0 ? (
-                    <span className="text-gray-400 dark:text-gray-500">—</span>
-                  ) : (
-                    <div className="flex items-center justify-end">
+
+        {/* Mobile Card Layout */}
+        <div className="space-y-3 md:hidden">
+          {yearlyData.map((year) => (
+            <div key={year.year} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{year.year}</span>
+                <span className={`text-sm font-semibold ${
+                  year.savingsRate >= 20 ? 'text-green-600 dark:text-green-400' :
+                  year.savingsRate >= 10 ? 'text-blue-600 dark:text-blue-400' :
+                  year.savingsRate >= 0 ? 'text-amber-600 dark:text-amber-400' :
+                  'text-red-600 dark:text-red-400'
+                }`}>
+                  {year.savingsRate}% saved
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs">Income</p>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(year.income)}</p>
+                  {year.incomeGrowth !== 0 && (
+                    <div className="flex items-center mt-0.5">
                       {year.incomeGrowth > 0 ? (
-                        <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400 mr-1" />
+                        <TrendingUp className="h-3 w-3 text-green-600 dark:text-green-400 mr-0.5" />
                       ) : (
-                        <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400 mr-1" />
+                        <TrendingDown className="h-3 w-3 text-red-600 dark:text-red-400 mr-0.5" />
                       )}
-                      <span className={year.incomeGrowth >= 0 ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-red-600 dark:text-red-400 font-semibold'}>
-                        {year.incomeGrowth > 0 ? '+' : ''}{year.incomeGrowth}%
+                      <span className={`text-xs font-medium ${year.incomeGrowth >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {year.incomeGrowth > 0 ? '+' : ''}{year.incomeGrowth}% YoY
                       </span>
                     </div>
                   )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100">
-                  {formatCurrency(year.expenses)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                  {year.expenseGrowth === 0 ? (
-                    <span className="text-gray-400 dark:text-gray-500">—</span>
-                  ) : (
-                    <div className="flex items-center justify-end">
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs">Expenses</p>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(year.expenses)}</p>
+                  {year.expenseGrowth !== 0 && (
+                    <div className="flex items-center mt-0.5">
                       {year.expenseGrowth > 0 ? (
-                        <TrendingUp className="h-4 w-4 text-red-600 dark:text-red-400 mr-1" />
+                        <TrendingUp className="h-3 w-3 text-red-600 dark:text-red-400 mr-0.5" />
                       ) : (
-                        <TrendingDown className="h-4 w-4 text-green-600 dark:text-green-400 mr-1" />
+                        <TrendingDown className="h-3 w-3 text-green-600 dark:text-green-400 mr-0.5" />
                       )}
-                      <span className={year.expenseGrowth <= 0 ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-red-600 dark:text-red-400 font-semibold'}>
-                        {year.expenseGrowth > 0 ? '+' : ''}{year.expenseGrowth}%
+                      <span className={`text-xs font-medium ${year.expenseGrowth <= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {year.expenseGrowth > 0 ? '+' : ''}{year.expenseGrowth}% YoY
                       </span>
                     </div>
                   )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                  <span className={year.savings >= 0 ? 'text-green-700 dark:text-green-400 font-bold' : 'text-red-700 dark:text-red-400 font-bold'}>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs">Savings</p>
+                  <p className={`font-bold ${year.savings >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
                     {formatCurrency(year.savings)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                  <span className={`font-semibold ${
-                    year.savingsRate >= 20 ? 'text-green-600 dark:text-green-400' :
-                    year.savingsRate >= 10 ? 'text-blue-600 dark:text-blue-400' :
-                    year.savingsRate >= 0 ? 'text-amber-600 dark:text-amber-400' :
-                    'text-red-600 dark:text-red-400'
-                  }`}>
-                    {year.savingsRate}%
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100">
-                  {year.transactionCount}
-                </td>
+                  </p>
+                  {year.savingsGrowth !== 0 && (
+                    <div className="flex items-center mt-0.5">
+                      {year.savingsGrowth > 0 ? (
+                        <TrendingUp className="h-3 w-3 text-green-600 dark:text-green-400 mr-0.5" />
+                      ) : (
+                        <TrendingDown className="h-3 w-3 text-red-600 dark:text-red-400 mr-0.5" />
+                      )}
+                      <span className={`text-xs font-medium ${year.savingsGrowth >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {year.savingsGrowth > 0 ? '+' : ''}{year.savingsGrowth}% YoY
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs">Transactions</p>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{year.transactionCount}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
+              <tr>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Year</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Income</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">YoY Growth</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Expenses</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">YoY Growth</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Savings</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Savings Rate</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Transactions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+              {yearlyData.map((year) => (
+                <tr key={year.year} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-gray-100">
+                    {year.year}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100">
+                    {formatCurrency(year.income)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    {year.incomeGrowth === 0 ? (
+                      <span className="text-gray-400 dark:text-gray-500">—</span>
+                    ) : (
+                      <div className="flex items-center justify-end">
+                        {year.incomeGrowth > 0 ? (
+                          <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400 mr-1" />
+                        ) : (
+                          <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400 mr-1" />
+                        )}
+                        <span className={year.incomeGrowth >= 0 ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-red-600 dark:text-red-400 font-semibold'}>
+                          {year.incomeGrowth > 0 ? '+' : ''}{year.incomeGrowth}%
+                        </span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100">
+                    {formatCurrency(year.expenses)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    {year.expenseGrowth === 0 ? (
+                      <span className="text-gray-400 dark:text-gray-500">—</span>
+                    ) : (
+                      <div className="flex items-center justify-end">
+                        {year.expenseGrowth > 0 ? (
+                          <TrendingUp className="h-4 w-4 text-red-600 dark:text-red-400 mr-1" />
+                        ) : (
+                          <TrendingDown className="h-4 w-4 text-green-600 dark:text-green-400 mr-1" />
+                        )}
+                        <span className={year.expenseGrowth <= 0 ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-red-600 dark:text-red-400 font-semibold'}>
+                          {year.expenseGrowth > 0 ? '+' : ''}{year.expenseGrowth}%
+                        </span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    <span className={year.savings >= 0 ? 'text-green-700 dark:text-green-400 font-bold' : 'text-red-700 dark:text-red-400 font-bold'}>
+                      {formatCurrency(year.savings)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    <span className={`font-semibold ${
+                      year.savingsRate >= 20 ? 'text-green-600 dark:text-green-400' :
+                      year.savingsRate >= 10 ? 'text-blue-600 dark:text-blue-400' :
+                      year.savingsRate >= 0 ? 'text-amber-600 dark:text-amber-400' :
+                      'text-red-600 dark:text-red-400'
+                    }`}>
+                      {year.savingsRate}%
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100">
+                    {year.transactionCount}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Annual Highlights */}

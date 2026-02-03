@@ -220,9 +220,9 @@ export default function CalendarExpenseTab() {
     <div className="space-y-6">
       {/* Year/Month Selector */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
-            <button onClick={goToPrevMonth} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <button onClick={goToPrevMonth} className="p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
             </button>
             <div className="flex items-center space-x-2">
@@ -245,7 +245,7 @@ export default function CalendarExpenseTab() {
                 ))}
               </select>
             </div>
-            <button onClick={goToNextMonth} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <button onClick={goToNextMonth} className="p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-400" />
             </button>
           </div>
@@ -280,30 +280,30 @@ export default function CalendarExpenseTab() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
           <div className="flex items-center space-x-2 mb-1">
             <DollarSign className="h-4 w-4 text-red-500" />
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Month Total</span>
           </div>
-          <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+          <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">
             {loading ? '...' : formatCurrency(monthTotal)}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
           <div className="flex items-center space-x-2 mb-1">
             <TrendingDown className="h-4 w-4 text-amber-500" />
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Daily Average</span>
           </div>
-          <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+          <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">
             {loading ? '...' : formatCurrency(dailyAvg)}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
           <div className="flex items-center space-x-2 mb-1">
             <TrendingUp className="h-4 w-4 text-red-600" />
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Highest Day</span>
           </div>
-          <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+          <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">
             {loading ? '...' : highestDay
               ? new Date(highestDay).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })
               : '-'}
@@ -312,12 +312,12 @@ export default function CalendarExpenseTab() {
             <p className="text-xs text-gray-500 dark:text-gray-400">{formatCurrency(maxDailyAmount)}</p>
           )}
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
           <div className="flex items-center space-x-2 mb-1">
             <CalendarDays className="h-4 w-4 text-blue-500" />
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Expense Days</span>
           </div>
-          <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+          <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">
             {loading ? '...' : expenseDaysCount}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -350,7 +350,7 @@ export default function CalendarExpenseTab() {
                 <div className="grid grid-cols-7 border-b border-gray-100 dark:border-gray-700/50">
                   {week.map((day, di) => {
                     if (day === null) {
-                      return <div key={di} className="min-h-[80px] bg-gray-50 dark:bg-gray-900/30" />
+                      return <div key={di} className="min-h-[60px] sm:min-h-[80px] bg-gray-50 dark:bg-gray-900/30" />
                     }
                     const dateStr = getDayDateStr(day)
                     const dayInfo = dailyData[dateStr]
@@ -363,7 +363,7 @@ export default function CalendarExpenseTab() {
                       <button
                         key={di}
                         onClick={() => setSelectedDay(isSelected ? null : day)}
-                        className={`min-h-[80px] p-2 text-left border-r border-gray-100 dark:border-gray-700/50 last:border-r-0 transition-all hover:bg-blue-50 dark:hover:bg-blue-900/10 ${intensity} ${
+                        className={`min-h-[60px] sm:min-h-[80px] p-1.5 sm:p-2 text-left border-r border-gray-100 dark:border-gray-700/50 last:border-r-0 transition-all hover:bg-blue-50 dark:hover:bg-blue-900/10 ${intensity} ${
                           isSelected ? 'ring-2 ring-inset ring-blue-500 dark:ring-blue-400' : ''
                         }`}
                       >

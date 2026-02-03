@@ -299,113 +299,202 @@ export default function MonthToMonthTab({ dateRange }) {
       {/* Monthly Trend Chart */}
       <div className="card">
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Monthly Financial Trends</h3>
-        <ResponsiveContainer width="100%" height={400}>
-          <LineChart data={monthlyData}>
-            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
-            <XAxis dataKey="monthShort" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
-            <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
-            <Tooltip content={<CustomTooltip isDark={isDark} />} />
-            <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
-            <Line type="monotone" dataKey="income" stroke="#10B981" strokeWidth={2} name="Income" />
-            <Line type="monotone" dataKey="expenses" stroke="#EF4444" strokeWidth={2} name="Expenses" />
-            <Line type="monotone" dataKey="savings" stroke="#3B82F6" strokeWidth={2} name="Savings" />
-          </LineChart>
-        </ResponsiveContainer>
+        <div className="h-[280px] sm:h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={monthlyData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+              <XAxis dataKey="monthShort" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Tooltip content={<CustomTooltip isDark={isDark} />} />
+              <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
+              <Line type="monotone" dataKey="income" stroke="#10B981" strokeWidth={2} name="Income" />
+              <Line type="monotone" dataKey="expenses" stroke="#EF4444" strokeWidth={2} name="Expenses" />
+              <Line type="monotone" dataKey="savings" stroke="#3B82F6" strokeWidth={2} name="Savings" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Monthly Comparison Bar Chart */}
       <div className="card">
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Income vs Expenses by Month</h3>
-        <ResponsiveContainer width="100%" height={400}>
-          <BarChart data={monthlyData}>
-            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
-            <XAxis dataKey="monthShort" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
-            <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
-            <Tooltip content={<CustomTooltip isDark={isDark} />} cursor={false} />
-            <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
-            <Bar dataKey="income" fill="#10B981" name="Income" />
-            <Bar dataKey="expenses" fill="#EF4444" name="Expenses" />
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="h-[280px] sm:h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={monthlyData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#E5E7EB'} />
+              <XAxis dataKey="monthShort" stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <YAxis stroke={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Tooltip content={<CustomTooltip isDark={isDark} />} cursor={false} />
+              <Legend wrapperStyle={{ color: isDark ? '#D1D5DB' : '#374151' }} />
+              <Bar dataKey="income" fill="#10B981" name="Income" />
+              <Bar dataKey="expenses" fill="#EF4444" name="Expenses" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
-      {/* Detailed Monthly Table */}
-      <div className="card overflow-x-auto">
+      {/* Detailed Monthly Breakdown */}
+      <div className="card">
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Month-by-Month Breakdown</h3>
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-800">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Month</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Income</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">vs Prev</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Expenses</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">vs Prev</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Savings</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Savings Rate</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-            {monthlyData.map((month, index) => (
-              <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {month.monthName}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100">
-                  {formatCurrency(month.income)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                  {index === 0 ? (
-                    <span className="text-gray-400 dark:text-gray-500">—</span>
-                  ) : (
-                    <span className={month.incomeChange >= 0 ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-red-600 dark:text-red-400 font-semibold'}>
-                      {month.incomeChange > 0 ? '+' : ''}{month.incomeChange}%
+
+        {/* Mobile Card Layout */}
+        <div className="space-y-3 md:hidden">
+          {monthlyData.map((month, index) => (
+            <div key={index} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4">
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">{month.monthName}</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Income</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(month.income)}</span>
+                    {index > 0 && (
+                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                        month.incomeChange >= 0
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
+                          : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                      }`}>
+                        {month.incomeChange > 0 ? '+' : ''}{month.incomeChange}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Expenses</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(month.expenses)}</span>
+                    {index > 0 && (
+                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                        month.expenseChange <= 0
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
+                          : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                      }`}>
+                        {month.expenseChange > 0 ? '+' : ''}{month.expenseChange}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Savings</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold ${month.savings >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+                      {formatCurrency(month.savings)}
                     </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100">
-                  {formatCurrency(month.expenses)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                  {index === 0 ? (
-                    <span className="text-gray-400 dark:text-gray-500">—</span>
-                  ) : (
-                    <span className={month.expenseChange <= 0 ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-red-600 dark:text-red-400 font-semibold'}>
-                      {month.expenseChange > 0 ? '+' : ''}{month.expenseChange}%
+                    <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                      month.savingsRate >= 20 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' :
+                      month.savingsRate >= 10 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400' :
+                      month.savingsRate >= 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' :
+                      'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                    }`}>
+                      {month.savingsRate}%
                     </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                  <span className={month.savings >= 0 ? 'text-green-700 dark:text-green-400 font-bold' : 'text-red-700 dark:text-red-400 font-bold'}>
-                    {formatCurrency(month.savings)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Average Summary Card */}
+          <div className="rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4">
+            <p className="text-sm font-bold text-blue-900 dark:text-blue-100 mb-3">Average (per month)</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-blue-700 dark:text-blue-300">Income</span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(insights.avgIncome)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-blue-700 dark:text-blue-300">Expenses</span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(insights.avgExpenses)}</span>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-blue-200 dark:border-blue-700">
+                <span className="text-xs text-blue-700 dark:text-blue-300">Savings</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-green-700 dark:text-green-400">{formatCurrency(insights.avgSavings)}</span>
+                  <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
+                    {insights.avgIncome > 0 ? ((insights.avgSavings / insights.avgIncome) * 100).toFixed(1) : 0}%
                   </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                  <span className={`font-semibold ${
-                    month.savingsRate >= 20 ? 'text-green-600 dark:text-green-400' :
-                    month.savingsRate >= 10 ? 'text-blue-600 dark:text-blue-400' :
-                    month.savingsRate >= 0 ? 'text-amber-600 dark:text-amber-400' :
-                    'text-red-600 dark:text-red-400'
-                  }`}>
-                    {month.savingsRate}%
-                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Table Layout */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
+              <tr>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Month</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Income</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">vs Prev</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Expenses</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">vs Prev</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Savings</th>
+                <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Savings Rate</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+              {monthlyData.map((month, index) => (
+                <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {month.monthName}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100">
+                    {formatCurrency(month.income)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    {index === 0 ? (
+                      <span className="text-gray-400 dark:text-gray-500">—</span>
+                    ) : (
+                      <span className={month.incomeChange >= 0 ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-red-600 dark:text-red-400 font-semibold'}>
+                        {month.incomeChange > 0 ? '+' : ''}{month.incomeChange}%
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100">
+                    {formatCurrency(month.expenses)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    {index === 0 ? (
+                      <span className="text-gray-400 dark:text-gray-500">—</span>
+                    ) : (
+                      <span className={month.expenseChange <= 0 ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-red-600 dark:text-red-400 font-semibold'}>
+                        {month.expenseChange > 0 ? '+' : ''}{month.expenseChange}%
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    <span className={month.savings >= 0 ? 'text-green-700 dark:text-green-400 font-bold' : 'text-red-700 dark:text-red-400 font-bold'}>
+                      {formatCurrency(month.savings)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    <span className={`font-semibold ${
+                      month.savingsRate >= 20 ? 'text-green-600 dark:text-green-400' :
+                      month.savingsRate >= 10 ? 'text-blue-600 dark:text-blue-400' :
+                      month.savingsRate >= 0 ? 'text-amber-600 dark:text-amber-400' :
+                      'text-red-600 dark:text-red-400'
+                    }`}>
+                      {month.savingsRate}%
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-gray-50 dark:bg-gray-800 font-semibold">
+              <tr>
+                <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">Average</td>
+                <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-gray-100">{formatCurrency(insights.avgIncome)}</td>
+                <td className="px-6 py-4"></td>
+                <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-gray-100">{formatCurrency(insights.avgExpenses)}</td>
+                <td className="px-6 py-4"></td>
+                <td className="px-6 py-4 text-sm text-right text-green-700 dark:text-green-400">{formatCurrency(insights.avgSavings)}</td>
+                <td className="px-6 py-4 text-sm text-right text-blue-600 dark:text-blue-400">
+                  {insights.avgIncome > 0 ? ((insights.avgSavings / insights.avgIncome) * 100).toFixed(1) : 0}%
                 </td>
               </tr>
-            ))}
-          </tbody>
-          <tfoot className="bg-gray-50 dark:bg-gray-800 font-semibold">
-            <tr>
-              <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">Average</td>
-              <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-gray-100">{formatCurrency(insights.avgIncome)}</td>
-              <td className="px-6 py-4"></td>
-              <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-gray-100">{formatCurrency(insights.avgExpenses)}</td>
-              <td className="px-6 py-4"></td>
-              <td className="px-6 py-4 text-sm text-right text-green-700 dark:text-green-400">{formatCurrency(insights.avgSavings)}</td>
-              <td className="px-6 py-4 text-sm text-right text-blue-600 dark:text-blue-400">
-                {insights.avgIncome > 0 ? ((insights.avgSavings / insights.avgIncome) * 100).toFixed(1) : 0}%
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+            </tfoot>
+          </table>
+        </div>
       </div>
     </div>
   )

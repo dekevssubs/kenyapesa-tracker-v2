@@ -259,7 +259,7 @@ export default function AccountHistory() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
             <History className="h-8 w-8 mr-3 text-blue-500 dark:text-blue-400" />
@@ -422,78 +422,135 @@ export default function AccountHistory() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Description</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">From</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">To</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Amount</th>
-                  {selectedAccount !== 'all' && (
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Balance</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {(txWithBalance || filteredTransactions).map((tx) => {
-                  const Icon = getTransactionIcon(tx.transaction_type)
-                  const colors = getTransactionColor(tx.transaction_type)
-                  const isDebit = tx.from_account_id === selectedAccount
+          <>
+            {/* Mobile Card Layout */}
+            <div className="space-y-3 md:hidden">
+              {(txWithBalance || filteredTransactions).map((tx) => {
+                const Icon = getTransactionIcon(tx.transaction_type)
+                const colors = getTransactionColor(tx.transaction_type)
+                const isDebit = tx.from_account_id === selectedAccount
 
-                  return (
-                    <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-900">
-                      <td className="px-4 py-4 text-sm text-gray-900 dark:text-gray-100">
+                return (
+                  <div key={tx.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
                         {new Date(tx.date).toLocaleDateString('en-KE', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric'
                         })}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className={`inline-flex items-center px-3 py-1 rounded-full ${colors.bg}`}>
-                          <Icon className={`h-4 w-4 mr-1 ${colors.text}`} />
-                          <span className={`text-xs font-medium ${colors.text} capitalize`}>
-                            {tx.transaction_type.replace(/_/g, ' ')}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {tx.description || '-'}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-900 dark:text-gray-100">
-                        {getAccountDisplayName(tx.from_account, tx.description, true) || (
-                          <span className="text-gray-400 dark:text-gray-500">-</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-900 dark:text-gray-100">
-                        {getAccountDisplayName(tx.to_account, tx.description, false) || (
-                          <span className="text-gray-400 dark:text-gray-500">-</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        <span className={`font-semibold ${
-                          selectedAccount !== 'all'
-                            ? (isDebit ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400')
-                            : 'text-gray-900 dark:text-gray-100'
-                        }`}>
-                          {selectedAccount !== 'all' && (isDebit ? '-' : '+')}
-                          {formatCurrency(tx.amount)}
+                      </span>
+                      <div className={`inline-flex items-center px-3 py-1 rounded-full ${colors.bg}`}>
+                        <Icon className={`h-4 w-4 mr-1 ${colors.text}`} />
+                        <span className={`text-xs font-medium ${colors.text} capitalize`}>
+                          {tx.transaction_type.replace(/_/g, ' ')}
                         </span>
-                      </td>
+                      </div>
+                    </div>
+                    {tx.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{tx.description}</p>
+                    )}
+                    <div className="text-sm text-gray-700 dark:text-gray-300">
+                      <span>{getAccountDisplayName(tx.from_account, tx.description, true) || '-'}</span>
+                      <span className="mx-2 text-gray-400">&rarr;</span>
+                      <span>{getAccountDisplayName(tx.to_account, tx.description, false) || '-'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      {selectedAccount !== 'all' && tx.running_balance !== undefined && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          Bal: {formatCurrency(tx.running_balance)}
+                        </span>
+                      )}
+                      <span className={`ml-auto font-semibold ${
+                        selectedAccount !== 'all'
+                          ? (isDebit ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400')
+                          : 'text-gray-900 dark:text-gray-100'
+                      }`}>
+                        {selectedAccount !== 'all' && (isDebit ? '-' : '+')}
+                        {formatCurrency(tx.amount)}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Desktop Table Layout */}
+            <div className="hidden md:block">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Description</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">From</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">To</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Amount</th>
                       {selectedAccount !== 'all' && (
-                        <td className="px-4 py-4 text-right text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {formatCurrency(tx.running_balance)}
-                        </td>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Balance</th>
                       )}
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {(txWithBalance || filteredTransactions).map((tx) => {
+                      const Icon = getTransactionIcon(tx.transaction_type)
+                      const colors = getTransactionColor(tx.transaction_type)
+                      const isDebit = tx.from_account_id === selectedAccount
+
+                      return (
+                        <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-900">
+                          <td className="px-4 py-4 text-sm text-gray-900 dark:text-gray-100">
+                            {new Date(tx.date).toLocaleDateString('en-KE', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className={`inline-flex items-center px-3 py-1 rounded-full ${colors.bg}`}>
+                              <Icon className={`h-4 w-4 mr-1 ${colors.text}`} />
+                              <span className={`text-xs font-medium ${colors.text} capitalize`}>
+                                {tx.transaction_type.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">
+                            {tx.description || '-'}
+                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-900 dark:text-gray-100">
+                            {getAccountDisplayName(tx.from_account, tx.description, true) || (
+                              <span className="text-gray-400 dark:text-gray-500">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-900 dark:text-gray-100">
+                            {getAccountDisplayName(tx.to_account, tx.description, false) || (
+                              <span className="text-gray-400 dark:text-gray-500">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <span className={`font-semibold ${
+                              selectedAccount !== 'all'
+                                ? (isDebit ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400')
+                                : 'text-gray-900 dark:text-gray-100'
+                            }`}>
+                              {selectedAccount !== 'all' && (isDebit ? '-' : '+')}
+                              {formatCurrency(tx.amount)}
+                            </span>
+                          </td>
+                          {selectedAccount !== 'all' && (
+                            <td className="px-4 py-4 text-right text-sm font-medium text-gray-900 dark:text-gray-100">
+                              {formatCurrency(tx.running_balance)}
+                            </td>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

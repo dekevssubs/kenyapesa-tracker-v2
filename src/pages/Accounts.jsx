@@ -475,30 +475,32 @@ export default function Accounts() {
 
       {/* Quick Actions */}
       <div className="card">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="flex flex-col items-center justify-center gap-3">
           <button
             onClick={() => setShowAddModal(true)}
-            className="btn btn-primary py-4 flex items-center justify-center"
+            className="btn btn-primary py-3 sm:py-4 px-6 sm:px-8 text-base sm:text-lg flex items-center w-full sm:w-auto justify-center"
           >
             <Plus className="h-5 w-5 mr-2" />
             Add New Account
           </button>
-          <button
-            onClick={() => setShowTransferModal(true)}
-            className="btn btn-secondary py-4 flex items-center justify-center"
-            disabled={accounts.length < 2}
-          >
-            <ArrowRightLeft className="h-5 w-5 mr-2" />
-            Transfer Money
-          </button>
-          <button
-            onClick={() => setShowReturnModal(true)}
-            className="btn btn-secondary py-4 flex items-center justify-center"
-            disabled={accounts.filter(a => a.account_type === 'investment').length === 0}
-          >
-            <TrendingUp className="h-5 w-5 mr-2" />
-            Record Investment Return
-          </button>
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto justify-center">
+            <button
+              onClick={() => setShowTransferModal(true)}
+              className="btn btn-secondary py-2 px-4 flex items-center whitespace-nowrap text-sm"
+              disabled={accounts.length < 2}
+            >
+              <ArrowRightLeft className="h-5 w-5 mr-2" />
+              Transfer Money
+            </button>
+            <button
+              onClick={() => setShowReturnModal(true)}
+              className="btn btn-secondary py-2 px-4 flex items-center whitespace-nowrap text-sm"
+              disabled={accounts.filter(a => a.account_type === 'investment').length === 0}
+            >
+              <TrendingUp className="h-5 w-5 mr-2" />
+              Record Investment Return
+            </button>
+          </div>
         </div>
       </div>
 

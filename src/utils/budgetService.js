@@ -16,6 +16,18 @@
 import { supabase } from './supabase'
 
 /**
+ * Format a local Date to YYYY-MM-DD string without timezone conversion.
+ * Using toISOString() shifts dates in timezones ahead of UTC (e.g., Kenya UTC+3),
+ * causing midnight local time to become the previous day in UTC.
+ */
+function formatLocalDate(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+/**
  * Get actual spending for a category (ledger-first)
  * @param {UUID} userId - User ID
  * @param {string} categorySlug - Category slug (e.g., 'food', 'transport')
@@ -60,8 +72,8 @@ export async function getCategoryActualSpending(userId, categorySlug, startDate,
       .eq('user_id', userId)
       .eq('category_id', categoryId)
       .in('transaction_type', ['expense', 'transaction_fee'])
-      .gte('date', startDate.toISOString().split('T')[0])
-      .lte('date', endDate.toISOString().split('T')[0])
+      .gte('date', formatLocalDate(startDate))
+      .lte('date', formatLocalDate(endDate))
 
     if (error) {
       console.error('Error fetching category spending:', error)
@@ -146,8 +158,8 @@ export async function getTotalActualSpending(userId, startDate, endDate) {
       `)
       .eq('user_id', userId)
       .in('transaction_type', ['expense', 'transaction_fee'])
-      .gte('date', startDate.toISOString().split('T')[0])
-      .lte('date', endDate.toISOString().split('T')[0])
+      .gte('date', formatLocalDate(startDate))
+      .lte('date', formatLocalDate(endDate))
 
     if (error) {
       console.error('Error fetching total spending:', error)
@@ -203,8 +215,8 @@ export async function getCategoryForecastedSpending(userId, categorySlug, foreca
       .eq('user_id', userId)
       .eq('category_slug', categorySlug)
       .eq('status', 'active')
-      .gte('next_due_date', monthStart.toISOString().split('T')[0])
-      .lte('next_due_date', monthEnd.toISOString().split('T')[0])
+      .gte('next_due_date', formatLocalDate(monthStart))
+      .lte('next_due_date', formatLocalDate(monthEnd))
 
     const pending = reminders && !remindersError
       ? reminders.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0)
@@ -716,8 +728,8 @@ export async function getMultiMonthBudgetHistory(userId, monthDates) {
       .select('id, amount, transaction_type, category_id, date, reference_type')
       .eq('user_id', userId)
       .in('transaction_type', ['expense', 'transaction_fee'])
-      .gte('date', rangeStart.toISOString().split('T')[0])
-      .lte('date', rangeEnd.toISOString().split('T')[0])
+      .gte('date', formatLocalDate(rangeStart))
+      .lte('date', formatLocalDate(rangeEnd))
 
     if (txErr) {
       console.error('Error fetching multi-month transactions:', txErr)
@@ -792,7 +804,7 @@ export async function getUnbudgetedSpending(userId, monthStr, budgetedCategoryId
     const monthNum = parseInt(monthNumStr, 10)
     const startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`
     const endDate = new Date(year, monthNum, 0) // last day of month
-    const endDateStr = endDate.toISOString().split('T')[0]
+    const endDateStr = formatLocalDate(endDate)
 
     // Get all expense transactions for the month
     const { data: transactions, error } = await supabase

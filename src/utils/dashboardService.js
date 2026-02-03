@@ -14,6 +14,16 @@
 import { ReportsService } from './reportsService'
 import { PortfolioService } from './portfolioService'
 
+/**
+ * Format a local Date to YYYY-MM-DD without timezone conversion.
+ */
+function formatLocalDate(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export class DashboardService {
   constructor(supabase, userId) {
     this.reports = new ReportsService(supabase, userId)
@@ -167,8 +177,8 @@ export class DashboardService {
     startDate.setMonth(startDate.getMonth() - 12)
 
     const trends = await this.reports.getMonthlyTrends(
-      startDate.toISOString().split('T')[0],
-      endDate.toISOString().split('T')[0]
+      formatLocalDate(startDate),
+      formatLocalDate(endDate)
     )
 
     if (!trends.success) {

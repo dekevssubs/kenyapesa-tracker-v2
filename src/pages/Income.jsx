@@ -779,7 +779,7 @@ export default function Income() {
           </p>
         </div>
 
-        <div className="card bg-white dark:bg-gray-800 flex items-center justify-center">
+        <div className="card bg-white dark:bg-gray-800 flex flex-col items-center justify-center gap-3">
           <button
             onClick={() => {
               const primaryAccount = accounts.find(a => a.is_primary)
@@ -796,11 +796,20 @@ export default function Income() {
               setCalculatedSalary(null)
               setShowModal(true)
             }}
-            className="btn btn-primary py-4 px-8 text-lg flex items-center"
+            className="btn btn-primary py-3 sm:py-4 px-6 sm:px-8 text-base sm:text-lg flex items-center w-full sm:w-auto justify-center"
           >
-            <Plus className="h-6 w-6 mr-2" />
+            <Plus className="h-5 sm:h-6 w-5 sm:w-6 mr-2" />
             Add New Income
           </button>
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto justify-center">
+            <button
+              onClick={() => setShowMessageParser(true)}
+              className="btn btn-secondary py-2 px-4 flex items-center whitespace-nowrap text-sm"
+            >
+              <MessageSquare className="h-4 w-4 mr-1.5" />
+              Parse SMS
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1148,7 +1157,7 @@ export default function Income() {
       {/* Add Income Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full p-8 animate-slideIn max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg sm:max-w-2xl w-full p-4 sm:p-8 animate-slideIn max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 Add New Income
@@ -1923,7 +1932,7 @@ export default function Income() {
       {/* Recurring Income Modal */}
       {showRecurringModal && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full p-8 animate-slideIn max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg sm:max-w-2xl w-full p-4 sm:p-8 animate-slideIn max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {editingRecurring ? 'Edit Recurring Income' : 'Add Recurring Income'}

@@ -258,7 +258,7 @@ export default function SubscriptionsAndBills() {
           ? 'border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20'
           : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
       }`}>
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start space-x-3 flex-1">
             <div className={`p-2 rounded-lg ${
               isOverdue ? 'bg-red-100 dark:bg-red-900/40' :
@@ -331,7 +331,7 @@ export default function SubscriptionsAndBills() {
           </div>
 
           {/* Actions */}
-          <div className="flex flex-col space-y-2 ml-4">
+          <div className="flex flex-row sm:flex-col space-x-2 sm:space-x-0 sm:space-y-2 mt-3 sm:mt-0 sm:ml-4">
             <button
               onClick={() => openMarkPaidModal(item, type)}
               className="px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm rounded-lg transition-colors flex items-center"
@@ -597,14 +597,14 @@ export default function SubscriptionsAndBills() {
             <RefreshCw className="h-8 w-8 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Subscriptions & Bills</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">Subscriptions & Bills</h1>
             <p className="text-indigo-100 mt-1">Track and manage your recurring payments</p>
           </div>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -650,7 +650,7 @@ export default function SubscriptionsAndBills() {
 
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="flex space-x-8">
+        <nav className="flex space-x-2 sm:space-x-8 overflow-x-auto">
           <button
             onClick={() => handleTabChange('subscriptions')}
             className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${

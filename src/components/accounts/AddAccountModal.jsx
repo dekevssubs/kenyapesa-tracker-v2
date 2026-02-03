@@ -132,9 +132,9 @@ export default function AddAccountModal({ isOpen, onClose, onSubmit }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideIn">
+      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg sm:max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideIn">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {step === 1 ? 'Add New Account' : `Set Up ${selectedPreset?.name || 'Custom Account'}`}
@@ -152,7 +152,7 @@ export default function AddAccountModal({ isOpen, onClose, onSubmit }) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {step === 1 ? (
             <>
               {/* Search */}

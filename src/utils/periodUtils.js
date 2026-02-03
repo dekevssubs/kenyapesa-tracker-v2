@@ -3,6 +3,18 @@
  * Supports month-to-month, year-to-year, and custom period analysis
  */
 
+/**
+ * Format a local Date to YYYY-MM-DD string without timezone conversion.
+ * Using toISOString() shifts dates in timezones ahead of UTC (e.g., Kenya UTC+3),
+ * causing midnight local time to become the previous day in UTC.
+ */
+function formatLocalDate(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export const PERIOD_TYPES = {
   THIS_MONTH: 'this_month',
   LAST_MONTH: 'last_month',
@@ -29,8 +41,8 @@ export function getPeriodRange(periodType, customRange = null) {
       const startDate = new Date(currentYear, currentMonth, 1)
       const endDate = new Date(currentYear, currentMonth + 1, 0)
       return {
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
+        startDate: formatLocalDate(startDate),
+        endDate: formatLocalDate(endDate),
         label: now.toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
       }
     }
@@ -39,8 +51,8 @@ export function getPeriodRange(periodType, customRange = null) {
       const startDate = new Date(currentYear, currentMonth - 1, 1)
       const endDate = new Date(currentYear, currentMonth, 0)
       return {
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
+        startDate: formatLocalDate(startDate),
+        endDate: formatLocalDate(endDate),
         label: startDate.toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
       }
     }
@@ -51,8 +63,8 @@ export function getPeriodRange(periodType, customRange = null) {
       const endDate = new Date(currentYear, quarterStartMonth + 3, 0)
       const quarter = Math.floor(currentMonth / 3) + 1
       return {
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
+        startDate: formatLocalDate(startDate),
+        endDate: formatLocalDate(endDate),
         label: `Q${quarter} ${currentYear}`
       }
     }
@@ -65,8 +77,8 @@ export function getPeriodRange(periodType, customRange = null) {
       const endDate = new Date(year, startMonth + 3, 0)
       const quarter = Math.floor(startMonth / 3) + 1
       return {
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
+        startDate: formatLocalDate(startDate),
+        endDate: formatLocalDate(endDate),
         label: `Q${quarter} ${year}`
       }
     }
@@ -75,8 +87,8 @@ export function getPeriodRange(periodType, customRange = null) {
       const startDate = new Date(currentYear, 0, 1)
       const endDate = new Date(currentYear, 11, 31)
       return {
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
+        startDate: formatLocalDate(startDate),
+        endDate: formatLocalDate(endDate),
         label: `${currentYear}`
       }
     }
@@ -85,8 +97,8 @@ export function getPeriodRange(periodType, customRange = null) {
       const startDate = new Date(currentYear - 1, 0, 1)
       const endDate = new Date(currentYear - 1, 11, 31)
       return {
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
+        startDate: formatLocalDate(startDate),
+        endDate: formatLocalDate(endDate),
         label: `${currentYear - 1}`
       }
     }
@@ -122,8 +134,8 @@ export function getComparisonPeriod(periodType) {
       const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1)
       const twoMonthsAgoEnd = new Date(now.getFullYear(), now.getMonth() - 1, 0)
       return {
-        startDate: twoMonthsAgo.toISOString().split('T')[0],
-        endDate: twoMonthsAgoEnd.toISOString().split('T')[0],
+        startDate: formatLocalDate(twoMonthsAgo),
+        endDate: formatLocalDate(twoMonthsAgoEnd),
         label: twoMonthsAgo.toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
       }
     }
@@ -153,8 +165,8 @@ export function getYoYPeriod(startDate, endDate) {
   const yoyEnd = new Date(end.getFullYear() - 1, end.getMonth(), end.getDate())
 
   return {
-    startDate: yoyStart.toISOString().split('T')[0],
-    endDate: yoyEnd.toISOString().split('T')[0],
+    startDate: formatLocalDate(yoyStart),
+    endDate: formatLocalDate(yoyEnd),
     label: `${yoyStart.toLocaleDateString('en-KE', { month: 'short', year: 'numeric' })} - ${yoyEnd.toLocaleDateString('en-KE', { month: 'short', year: 'numeric' })}`
   }
 }
@@ -190,8 +202,8 @@ export function getMonthlyRanges(months = 12) {
       month: monthDate.toLocaleDateString('en-KE', { month: 'short', year: 'numeric' }),
       monthShort: monthDate.toLocaleDateString('en-KE', { month: 'short' }),
       monthLong: monthDate.toLocaleDateString('en-KE', { month: 'long', year: 'numeric' }),
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
+      startDate: formatLocalDate(startDate),
+      endDate: formatLocalDate(endDate),
       year: monthDate.getFullYear(),
       monthIndex: monthDate.getMonth()
     })
@@ -209,8 +221,8 @@ export function getYTDRange() {
   const startDate = new Date(now.getFullYear(), 0, 1)
 
   return {
-    startDate: startDate.toISOString().split('T')[0],
-    endDate: now.toISOString().split('T')[0],
+    startDate: formatLocalDate(startDate),
+    endDate: formatLocalDate(now),
     label: `YTD ${now.getFullYear()}`,
     daysElapsed: Math.floor((now - startDate) / (1000 * 60 * 60 * 24)),
     daysInYear: isLeapYear(now.getFullYear()) ? 366 : 365
@@ -241,8 +253,8 @@ export function getQuarterInfo(date = new Date()) {
     label: `Q${quarter} ${date.getFullYear()}`,
     startMonth: quarterStartMonth,
     endMonth: quarterStartMonth + 2,
-    startDate: new Date(date.getFullYear(), quarterStartMonth, 1).toISOString().split('T')[0],
-    endDate: new Date(date.getFullYear(), quarterStartMonth + 3, 0).toISOString().split('T')[0]
+    startDate: formatLocalDate(new Date(date.getFullYear(), quarterStartMonth, 1)),
+    endDate: formatLocalDate(new Date(date.getFullYear(), quarterStartMonth + 3, 0))
   }
 }
 

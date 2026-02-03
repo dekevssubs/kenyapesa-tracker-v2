@@ -239,9 +239,9 @@ export default function ImportWizard({
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
 
-        <div className="relative bg-[var(--bg-primary)] rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+        <div className="relative bg-[var(--bg-primary)] rounded-2xl shadow-xl w-full max-w-lg sm:max-w-3xl max-h-[90vh] overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-[var(--border-primary)]">
+          <div className="flex items-center justify-between p-4 sm:p-6 border-b border-[var(--border-primary)]">
             <div>
               <h2 className="text-xl font-bold text-[var(--text-primary)]">
                 Import {type === 'expense' ? 'Expenses' : 'Income'} from CSV
@@ -288,7 +288,7 @@ export default function ImportWizard({
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[50vh]">
+          <div className="p-4 sm:p-6 overflow-y-auto max-h-[50vh]">
             {/* Step 1: Upload */}
             {currentStep === 1 && (
               <div className="text-center py-8">
@@ -490,7 +490,7 @@ export default function ImportWizard({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between p-6 border-t border-[var(--border-primary)] bg-[var(--bg-secondary)]">
+          <div className="flex items-center justify-between p-4 sm:p-6 border-t border-[var(--border-primary)] bg-[var(--bg-secondary)]">
             <button
               onClick={currentStep === 1 ? handleClose : () => setCurrentStep(prev => prev - 1)}
               className="btn btn-secondary flex items-center gap-2"

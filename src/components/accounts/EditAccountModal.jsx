@@ -46,9 +46,9 @@ export default function EditAccountModal({ isOpen, onClose, onSubmit, account })
 
   return (
     <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideIn shadow-2xl">
+      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg sm:max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideIn shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Edit Account</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -64,7 +64,7 @@ export default function EditAccountModal({ isOpen, onClose, onSubmit, account })
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* Account Info (Read-only) */}
           <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Account Type</p>
@@ -162,7 +162,7 @@ export default function EditAccountModal({ isOpen, onClose, onSubmit, account })
         </form>
 
         {/* Footer */}
-        <div className="flex items-center justify-end space-x-4 p-6 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-end space-x-4 p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700">
           <button
             type="button"
             onClick={handleClose}
